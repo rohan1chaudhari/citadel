@@ -133,6 +133,7 @@ export function GymTrackerClient({ initialEntries, recentExercises }: { initialE
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [historyPage, setHistoryPage] = useState(1);
+  const [tab, setTab] = useState<'log' | 'history'>('log');
   const SESSIONS_PER_PAGE = 10;
 
   const suggestedCategory = useMemo(() => nextCategory(initialEntries[0]?.category), [initialEntries]);
@@ -363,7 +364,12 @@ export function GymTrackerClient({ initialEntries, recentExercises }: { initialE
 
   return (
     <div className="grid gap-6">
-      {!session ? (
+      <div className="flex items-center gap-2">
+        <Button type="button" variant={tab === 'log' ? 'primary' : 'secondary'} onClick={() => setTab('log')}>Log</Button>
+        <Button type="button" variant={tab === 'history' ? 'primary' : 'secondary'} onClick={() => setTab('history')}>History</Button>
+      </div>
+
+      {tab === 'log' ? !session ? (
         <Card>
           <h2 className="text-sm font-semibold text-zinc-900">Start session</h2>
           <p className="mt-1 text-sm text-zinc-600">Choose category first (suggested order: Push → Cardio → Pull → Leg).</p>
@@ -453,8 +459,9 @@ export function GymTrackerClient({ initialEntries, recentExercises }: { initialE
             </div>
           )}
         </Card>
-      )}
+      ) : null}
 
+      {tab === 'history' ? (
       <div>
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-semibold text-zinc-900">History</h2>
@@ -472,7 +479,7 @@ export function GymTrackerClient({ initialEntries, recentExercises }: { initialE
           {pagedSessions.map((group) => {
             const exerciseNames = Array.from(new Set(group.entries.map((e) => e.exercise)));
             return (
-              <details key={group.id} className="rounded-xl border border-zinc-200 bg-white p-3" open>
+              <details key={group.id} className="rounded-xl border border-zinc-200 bg-white p-3">
                 <summary className="cursor-pointer list-none">
                   <div className="flex items-center justify-between gap-3">
                     <div className="text-sm font-semibold text-zinc-900">{group.label}</div>
@@ -517,6 +524,7 @@ export function GymTrackerClient({ initialEntries, recentExercises }: { initialE
           })}
         </div>
       </div>
+      ) : null}
 
       {error ? <p className="text-xs text-red-600">{error}</p> : null}
     </div>
