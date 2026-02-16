@@ -1,24 +1,24 @@
 import { notFound } from 'next/navigation';
+import { listApps } from '@/lib/registry';
 
-const ALLOWED = new Set(['smart-notes', 'gym-tracker']);
+export const runtime = 'nodejs';
 
 export default async function AppPage({ params }: { params: Promise<{ appId: string }> }) {
   const { appId } = await params;
-  if (!ALLOWED.has(appId)) return notFound();
+  const apps = await listApps();
+  const app = apps.find((a) => a.id === appId);
+  if (!app) return notFound();
 
   return (
     <main>
-      <h1>App: {appId}</h1>
+      <h1>{app.name}</h1>
+      <p style={{ opacity: 0.7 }}>appId: {app.id}</p>
       <p>
-        <a href={`/api/apps/${appId}/health`} target="_blank" rel="noreferrer">
-          health
-        </a>
+        <a href={`/api/apps/${app.id}/health`} target="_blank" rel="noreferrer">health</a>
         {' | '}
-        <a href={`/api/apps/${appId}/selftest`} target="_blank" rel="noreferrer">
-          selftest (db + storage)
-        </a>
+        <a href={`/api/apps/${app.id}/selftest`} target="_blank" rel="noreferrer">selftest (db + storage)</a>
       </p>
-      <p>This is a minimal shell to validate isolation + orchestration. UI will come later.</p>
+      <p>This is the generic shell. Prefer per-app pages under <code>/apps/{app.id}</code> when present.</p>
     </main>
   );
 }
