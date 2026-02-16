@@ -71,6 +71,17 @@ function formatDateTime(iso: string) {
   return d.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
+function rangeDays(r: '3d' | '7d' | '30d' | '90d') {
+  if (r === '3d') return 3;
+  if (r === '7d') return 7;
+  if (r === '30d') return 30;
+  return 90;
+}
+
+function dayKey(iso: string) {
+  return iso.slice(0, 10);
+}
+
 function sameExercise(a: string, b: string) {
   return a.trim().toLowerCase() === b.trim().toLowerCase();
 }
@@ -133,7 +144,7 @@ export function GymTrackerClient({ initialEntries, recentExercises }: { initialE
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [historyPage, setHistoryPage] = useState(1);
-  const [tab, setTab] = useState<'log' | 'history'>('log');
+  const [tab, setTab] = useState<'log' | 'history' | 'analytics'>('log');
   const SESSIONS_PER_PAGE = 10;
 
   const suggestedCategory = useMemo(() => nextCategory(initialEntries[0]?.category), [initialEntries]);
@@ -147,6 +158,10 @@ export function GymTrackerClient({ initialEntries, recentExercises }: { initialE
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editingWeight, setEditingWeight] = useState('');
   const [editingReps, setEditingReps] = useState('');
+
+  const [range, setRange] = useState<'3d' | '7d' | '30d' | '90d'>('30d');
+  const [analyticsCategory, setAnalyticsCategory] = useState<'all' | DayCategory>('all');
+  const [analyticsExercise, setAnalyticsExercise] = useState<string>('all');
 
   useEffect(() => {
     try {
@@ -212,6 +227,62 @@ export function GymTrackerClient({ initialEntries, recentExercises }: { initialE
   const totalHistoryPages = Math.max(1, Math.ceil(groupedSessions.length / SESSIONS_PER_PAGE));
   const currentHistoryPage = Math.min(historyPage, totalHistoryPages);
   const pagedSessions = groupedSessions.slice((currentHistoryPage - 1) * SESSIONS_PER_PAGE, currentHistoryPage * SESSIONS_PER_PAGE);
+
+  const rangeStartMs = Date.now() - rangeDays(range) * 24 * 60 * 60 * 1000;
+  const analyticsEntries = entries.filter((e) => {
+    const t = Date.parse(e.created_at);
+    if (!Number.isFinite(t) || t < rangeStartMs) return false;
+    if (analyticsCategory !== 'all' && e.category !== analyticsCategory) return false;
+    if (analyticsExercise !== 'all' && e.exercise !== analyticsExercise) return false;
+    return true;
+  });
+
+  const analyticsSessions = (() => {
+    const map = new Map<string, Entry[]>();
+    for (const e of analyticsEntries) {
+      const key = e.session_id || `single-${e.id}`;
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(e);
+    }
+    return Array.from(map.values());
+  })();
+
+  const totalVolume = analyticsEntries.reduce((sum, e) => sum + (e.weight ?? 0) * (e.reps ?? 0), 0);
+  const avgReps = analyticsEntries.length ? analyticsEntries.reduce((s, e) => s + (e.reps ?? 0), 0) / analyticsEntries.length : 0;
+  const heaviest = analyticsEntries.reduce((m, e) => Math.max(m, e.weight ?? 0), 0);
+
+  const byDay = (() => {
+    const m = new Map<string, { date: string; sets: number; volume: number; avgWeight: number; reps: number; weightSum: number }>();
+    for (const e of analyticsEntries) {
+      const k = dayKey(e.created_at);
+      if (!m.has(k)) m.set(k, { date: k, sets: 0, volume: 0, avgWeight: 0, reps: 0, weightSum: 0 });
+      const row = m.get(k)!;
+      row.sets += 1;
+      row.reps += e.reps ?? 0;
+      row.weightSum += e.weight ?? 0;
+      row.volume += (e.weight ?? 0) * (e.reps ?? 0);
+    }
+    const arr = Array.from(m.values()).sort((a, b) => a.date.localeCompare(b.date));
+    return arr.map((r) => ({ ...r, avgWeight: r.sets ? r.weightSum / r.sets : 0 }));
+  })();
+
+  const maxVolumeDay = byDay.reduce((m, d) => Math.max(m, d.volume), 0);
+
+  const categoryCounts = DAY_CATEGORIES.map((c) => ({
+    category: c,
+    count: analyticsEntries.filter((e) => e.category === c).length
+  }));
+
+  const activeDays = Array.from(new Set(analyticsEntries.map((e) => dayKey(e.created_at)))).sort();
+  let streak = 0;
+  {
+    let cursor = new Date();
+    cursor.setHours(0, 0, 0, 0);
+    while (activeDays.includes(cursor.toISOString().slice(0, 10))) {
+      streak += 1;
+      cursor = new Date(cursor.getTime() - 24 * 60 * 60 * 1000);
+    }
+  }
 
   const startSession = () => {
     setError(null);
@@ -367,6 +438,7 @@ export function GymTrackerClient({ initialEntries, recentExercises }: { initialE
       <div className="flex items-center gap-2">
         <Button type="button" variant={tab === 'log' ? 'primary' : 'secondary'} onClick={() => setTab('log')}>Log</Button>
         <Button type="button" variant={tab === 'history' ? 'primary' : 'secondary'} onClick={() => setTab('history')}>History</Button>
+        <Button type="button" variant={tab === 'analytics' ? 'primary' : 'secondary'} onClick={() => setTab('analytics')}>Analytics</Button>
       </div>
 
       {tab === 'log' ? !session ? (
@@ -524,6 +596,81 @@ export function GymTrackerClient({ initialEntries, recentExercises }: { initialE
           })}
         </div>
       </div>
+      ) : null}
+
+      {tab === 'analytics' ? (
+        <div className="grid gap-4">
+          <Card>
+            <div className="grid gap-3 md:grid-cols-4">
+              <div>
+                <Label>Range</Label>
+                <select value={range} onChange={(e) => setRange(e.target.value as any)} className="mt-1 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm">
+                  <option value="3d">3d</option>
+                  <option value="7d">7d</option>
+                  <option value="30d">30d</option>
+                  <option value="90d">3mo</option>
+                </select>
+              </div>
+              <div>
+                <Label>Category</Label>
+                <select value={analyticsCategory} onChange={(e) => setAnalyticsCategory(e.target.value as any)} className="mt-1 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm">
+                  <option value="all">All</option>
+                  {DAY_CATEGORIES.map((c) => <option key={c} value={c}>{titleCase(c)}</option>)}
+                </select>
+              </div>
+              <div className="md:col-span-2">
+                <Label>Exercise</Label>
+                <select value={analyticsExercise} onChange={(e) => setAnalyticsExercise(e.target.value)} className="mt-1 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm">
+                  <option value="all">All exercises</option>
+                  {exerciseOptions.map((ex) => <option key={ex} value={ex}>{ex}</option>)}
+                </select>
+              </div>
+            </div>
+          </Card>
+
+          <div className="grid gap-3 md:grid-cols-5">
+            <Card><div className="text-xs text-zinc-500">Sessions</div><div className="mt-1 text-xl font-semibold">{analyticsSessions.length}</div></Card>
+            <Card><div className="text-xs text-zinc-500">Sets</div><div className="mt-1 text-xl font-semibold">{analyticsEntries.length}</div></Card>
+            <Card><div className="text-xs text-zinc-500">Volume</div><div className="mt-1 text-xl font-semibold">{Math.round(totalVolume)}</div></Card>
+            <Card><div className="text-xs text-zinc-500">Avg reps</div><div className="mt-1 text-xl font-semibold">{avgReps.toFixed(1)}</div></Card>
+            <Card><div className="text-xs text-zinc-500">Heaviest</div><div className="mt-1 text-xl font-semibold">{heaviest || 0} kg</div></Card>
+          </div>
+
+          <Card>
+            <div className="text-sm font-semibold text-zinc-900">Volume trend</div>
+            <div className="mt-3 grid gap-2">
+              {byDay.length === 0 ? <div className="text-sm text-zinc-500">No data in selected range.</div> : byDay.map((d) => (
+                <div key={d.date} className="grid grid-cols-[80px_1fr_100px] items-center gap-2">
+                  <div className="text-xs text-zinc-500">{d.date.slice(5)}</div>
+                  <div className="h-2 rounded bg-zinc-100"><div className="h-2 rounded bg-zinc-900" style={{ width: `${maxVolumeDay ? (d.volume / maxVolumeDay) * 100 : 0}%` }} /></div>
+                  <div className="text-right text-xs text-zinc-600">{Math.round(d.volume)}</div>
+                </div>
+              ))}
+            </div>
+          </Card>
+
+          <Card>
+            <div className="text-sm font-semibold text-zinc-900">Consistency insights</div>
+            <div className="mt-3 grid gap-2 text-sm text-zinc-700">
+              <div>Current active-day streak: <span className="font-semibold">{streak} day(s)</span></div>
+              <div>Days with training in range: <span className="font-semibold">{activeDays.length}</span></div>
+              <div className="flex flex-wrap gap-2">
+                {categoryCounts.map((c) => (
+                  <span key={c.category} className="rounded border border-zinc-200 bg-zinc-50 px-2 py-1 text-xs">{titleCase(c.category)}: {c.count}</span>
+                ))}
+              </div>
+            </div>
+          </Card>
+
+          <Card>
+            <div className="text-sm font-semibold text-zinc-900">Filtered sets</div>
+            <div className="mt-3 grid gap-2">
+              {analyticsEntries.slice(0, 100).map((e) => (
+                <div key={e.id} className="text-sm text-zinc-700">{e.date || dayKey(e.created_at)} · {titleCase(e.category)} · {e.exercise} · set {e.sets ?? '-'} · {e.weight ?? '-'} kg × {e.reps ?? '-'}</div>
+              ))}
+            </div>
+          </Card>
+        </div>
       ) : null}
 
       {error ? <p className="text-xs text-red-600">{error}</p> : null}
