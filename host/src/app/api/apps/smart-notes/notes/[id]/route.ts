@@ -1,10 +1,25 @@
 import { NextResponse } from 'next/server';
-import { dbQuery } from '@/lib/db';
+import { dbExec, dbQuery } from '@/lib/db';
 
 export const runtime = 'nodejs';
 const APP_ID = 'smart-notes';
 
+function ensureSchema() {
+  dbExec(
+    APP_ID,
+    `CREATE TABLE IF NOT EXISTS notes (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      title TEXT,
+      body TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT
+    )`
+  );
+}
+
 export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
+  ensureSchema();
+
   const { id } = await ctx.params;
   const noteId = Number(id);
   if (!Number.isFinite(noteId)) return NextResponse.json({ ok: false, error: 'bad id' }, { status: 400 });
