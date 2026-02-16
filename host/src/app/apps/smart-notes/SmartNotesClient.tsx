@@ -91,6 +91,7 @@ export function SmartNotesClient({ initialNotes }: { initialNotes: Note[] }) {
   const [saveState, setSaveState] = useState<SaveState>('idle');
   const [view, setView] = useState<'list' | 'editor'>('list');
   const [mobileTab, setMobileTab] = useState<'edit' | 'preview'>('edit');
+  const [isMobile, setIsMobile] = useState(false);
 
   const debounceRef = useRef<any>(null);
   const lastSavedRef = useRef<{ title: string; body: string }>({ title: '', body: '' });
@@ -124,8 +125,10 @@ export function SmartNotesClient({ initialNotes }: { initialNotes: Note[] }) {
 
   useEffect(() => {
     const onResize = () => {
-      // On large screens, always show editor view (split pane). On small, keep current view.
-      if (window.innerWidth >= 768) setView('editor');
+      const mobile = window.innerWidth < 768;
+      setIsMobile(mobile);
+      // On large screens, show editor view (split pane).
+      if (!mobile) setView('editor');
     };
     onResize();
     window.addEventListener('resize', onResize);
@@ -186,7 +189,7 @@ export function SmartNotesClient({ initialNotes }: { initialNotes: Note[] }) {
 
   const onSelect = (id: number) => {
     setSelectedId(id);
-    if (window.innerWidth < 768) setView('editor');
+    if (isMobile) setView('editor');
   };
 
   const onDelete = async () => {
@@ -198,7 +201,7 @@ export function SmartNotesClient({ initialNotes }: { initialNotes: Note[] }) {
       const remaining = notes.filter((n) => n.id !== selectedId);
       setNotes(remaining);
       setSelectedId(remaining[0]?.id ?? null);
-      if (window.innerWidth < 768) setView('list');
+      if (isMobile) setView('list');
     } catch {
       setSaveState('error');
     }
@@ -274,7 +277,7 @@ export function SmartNotesClient({ initialNotes }: { initialNotes: Note[] }) {
       <div className="sticky top-0 z-10 -mx-4 border-b border-zinc-200 bg-zinc-50/80 px-4 py-2 backdrop-blur md:static md:mx-0 md:border-0 md:bg-transparent md:px-0 md:py-0">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            {window?.innerWidth < 768 ? (
+            {isMobile ? (
               <Button type="button" variant="secondary" onClick={() => setView('list') as any}>
                 Back
               </Button>
@@ -350,8 +353,8 @@ export function SmartNotesClient({ initialNotes }: { initialNotes: Note[] }) {
 
   return (
     <div className="grid gap-6 md:grid-cols-[320px_1fr]">
-      <div className={view === 'editor' && typeof window !== 'undefined' && window.innerWidth < 768 ? 'hidden' : ''}>{ListPane}</div>
-      <div className={view === 'list' && typeof window !== 'undefined' && window.innerWidth < 768 ? 'hidden' : ''}>{EditorPane}</div>
+      <div className={view === 'editor' && isMobile ? 'hidden' : ''}>{ListPane}</div>
+      <div className={view === 'list' && isMobile ? 'hidden' : ''}>{EditorPane}</div>
     </div>
   );
 }
