@@ -303,8 +303,24 @@ export function SmartNotesClient({ initialNotes }: { initialNotes: Note[] }) {
               <div className="flex items-center justify-between">
                 <Label>Markdown</Label>
                 <div className="flex items-center gap-2 md:hidden">
-                  <button type="button" onClick={() => setMobileTab('edit')} className="rounded-md px-2 py-1 text-xs font-medium border " + (mobileTab === 'edit' ? 'border-zinc-900 text-zinc-900' : 'border-zinc-200 text-zinc-600')>Edit</button>
-                  <button type="button" onClick={() => setMobileTab('preview')} className="rounded-md px-2 py-1 text-xs font-medium border " + (mobileTab === 'preview' ? 'border-zinc-900 text-zinc-900' : 'border-zinc-200 text-zinc-600')>Preview</button>
+                  <button
+                    type="button"
+                    onClick={() => setMobileTab('edit')}
+                    className={`rounded-md border px-2 py-1 text-xs font-medium ${
+                      mobileTab === 'edit' ? 'border-zinc-900 text-zinc-900' : 'border-zinc-200 text-zinc-600'
+                    }`}
+                  >
+                    Edit
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMobileTab('preview')}
+                    className={`rounded-md border px-2 py-1 text-xs font-medium ${
+                      mobileTab === 'preview' ? 'border-zinc-900 text-zinc-900' : 'border-zinc-200 text-zinc-600'
+                    }`}
+                  >
+                    Preview
+                  </button>
                 </div>
               </div>
               <textarea
