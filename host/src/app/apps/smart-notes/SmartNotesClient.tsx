@@ -87,9 +87,25 @@ function highlight(text: string, q: string) {
   );
 }
 
+function sortNotes(list: Note[]) {
+  const ts = (n: Note) => {
+    const t = (n.updated_at ?? n.created_at) as string;
+    const ms = Date.parse(t);
+    return Number.isFinite(ms) ? ms : 0;
+  };
+  return [...list].sort((a, b) => {
+    const ap = a.pinned ? 1 : 0;
+    const bp = b.pinned ? 1 : 0;
+    if (bp !== ap) return bp - ap;
+    const dt = ts(b) - ts(a);
+    if (dt !== 0) return dt;
+    return (b.id ?? 0) - (a.id ?? 0);
+  });
+}
+
 export function SmartNotesClient({ initialNotes }: { initialNotes: Note[] }) {
   const [q, setQ] = useState('');
-  const [notes, setNotes] = useState<Note[]>(initialNotes);
+  const [notes, setNotes] = useState<Note[]>(sortNotes(initialNotes));
   const [selectedId, setSelectedId] = useState<number | null>(initialNotes[0]?.id ?? null);
   const [current, setCurrent] = useState<Note | null>(null);
   const [title, setTitle] = useState('');
@@ -161,7 +177,7 @@ export function SmartNotesClient({ initialNotes }: { initialNotes: Note[] }) {
         lastSavedRef.current = { title: nextTitle, body: nextBody };
         setSaveState('saved');
         setNotes((prev) =>
-          prev.map((n) => (n.id === selectedId ? { ...n, title: nextTitle, body: nextBody, updated_at: new Date().toISOString() } : n))
+          sortNotes(prev.map((n) => (n.id === selectedId ? { ...n, title: nextTitle, body: nextBody, updated_at: new Date().toISOString() } : n)))
         );
         setTimeout(() => setSaveState('idle'), 800);
       } catch (e: any) {
@@ -183,20 +199,20 @@ export function SmartNotesClient({ initialNotes }: { initialNotes: Note[] }) {
 
   const refreshList = async () => {
     const list = await apiList(q);
-    setNotes(list);
-    if (!selectedId && list[0]?.id) setSelectedId(list[0].id);
+    const sorted = sortNotes(list);
+    setNotes(sorted);
+    if (!selectedId && sorted[0]?.id) setSelectedId(sorted[0].id);
   };
 
   const onSearch = async () => {
     const list = await apiList(q);
-    setNotes(list);
+    setNotes(sortNotes(list));
   };
 
   const onNew = async () => {
     const id = await apiCreate();
     const note = await apiGet(id);
-    // put on top
-    setNotes((prev) => [note as any, ...prev]);
+    setNotes((prev) => sortNotes([note as any, ...prev]));
     setSelectedId(id);
     setView('editor');
   };
@@ -370,8 +386,15 @@ export function SmartNotesClient({ initialNotes }: { initialNotes: Note[] }) {
             >
               <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0">
-                  <div className="truncate text-sm font-semibold text-zinc-900">
-                    {n.title?.trim() ? highlight(n.title, q) : 'Untitled'}
+                  <div className="flex items-center gap-2">
+                    <div className="truncate text-sm font-semibold text-zinc-900">
+                      {n.title?.trim() ? highlight(n.title, q) : 'Untitled'}
+                    </div>
+                    {n.pinned ? (
+                      <span className="inline-flex shrink-0 items-center rounded-md border border-zinc-200 bg-zinc-50 px-1.5 py-0.5 text-[11px] font-medium text-zinc-700">
+                        Pinned
+                      </span>
+                    ) : null}
                   </div>
                   <div className="mt-1 truncate text-xs text-zinc-500">
                     {highlight(clampPreview(n.body ?? ''), q)}
@@ -430,8 +453,11 @@ export function SmartNotesClient({ initialNotes }: { initialNotes: Note[] }) {
                 const next = !(current?.pinned ? true : false);
                 try {
                   await apiUpdate(selectedId, { title, body, pinned: next });
-                  setNotes((prev) => prev.map((n) => (n.id === selectedId ? { ...n, pinned: next ? 1 : 0 } : n)));
-                  setCurrent((c) => (c ? { ...c, pinned: next ? 1 : 0 } : c));
+                  const now = new Date().toISOString();
+                  setNotes((prev) =>
+                    sortNotes(prev.map((n) => (n.id === selectedId ? { ...n, pinned: next ? 1 : 0, updated_at: now } : n)))
+                  );
+                  setCurrent((c) => (c ? { ...c, pinned: next ? 1 : 0, updated_at: now } : c));
                 } catch (e: any) {
                   setSaveState('error');
                   setSaveError(String(e?.message ?? e));
