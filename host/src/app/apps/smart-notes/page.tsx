@@ -25,16 +25,21 @@ function ensureSchema() {
   } catch {
     // ignore
   }
+  try {
+    dbExec(APP_ID, `ALTER TABLE notes ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0`);
+  } catch {
+    // ignore
+  }
 }
 
 export default async function SmartNotesPage() {
   ensureSchema();
   const rows = dbQuery<any>(
     APP_ID,
-    `SELECT id, title, body, created_at, updated_at
+    `SELECT id, title, body, created_at, updated_at, pinned
      FROM notes
      WHERE deleted_at IS NULL
-     ORDER BY COALESCE(updated_at, created_at) DESC, id DESC
+     ORDER BY pinned DESC, COALESCE(updated_at, created_at) DESC, id DESC
      LIMIT 50`
   );
 
@@ -45,7 +50,8 @@ export default async function SmartNotesPage() {
     title: r.title ?? null,
     body: r.body ?? null,
     created_at: String(r.created_at),
-    updated_at: r.updated_at ?? null
+    updated_at: r.updated_at ?? null,
+    pinned: Number(r.pinned ?? 0)
   }));
 
   return (

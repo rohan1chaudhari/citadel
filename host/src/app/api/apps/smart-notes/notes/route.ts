@@ -29,9 +29,15 @@ function ensureSchema() {
   } catch {
     // ignore
   }
+  try {
+    dbExec(APP_ID, `ALTER TABLE notes ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0`);
+  } catch {
+    // ignore
+  }
 
   dbExec(APP_ID, `CREATE INDEX IF NOT EXISTS idx_notes_created_at ON notes(created_at)`);
   dbExec(APP_ID, `CREATE INDEX IF NOT EXISTS idx_notes_deleted_at ON notes(deleted_at)`);
+  dbExec(APP_ID, `CREATE INDEX IF NOT EXISTS idx_notes_pinned ON notes(pinned)`);
 }
 
 export async function GET(req: Request) {
@@ -44,18 +50,18 @@ export async function GET(req: Request) {
     const like = `%${q}%`;
     notes = dbQuery(
       APP_ID,
-      `SELECT id, title, body, created_at, updated_at FROM notes
+      `SELECT id, title, body, created_at, updated_at, pinned FROM notes
        WHERE deleted_at IS NULL AND (title LIKE ? OR body LIKE ?)
-       ORDER BY COALESCE(updated_at, created_at) DESC, id DESC
+       ORDER BY pinned DESC, COALESCE(updated_at, created_at) DESC, id DESC
        LIMIT 50`,
       [like, like]
     );
   } else {
     notes = dbQuery(
       APP_ID,
-      `SELECT id, title, body, created_at, updated_at FROM notes
+      `SELECT id, title, body, created_at, updated_at, pinned FROM notes
        WHERE deleted_at IS NULL
-       ORDER BY COALESCE(updated_at, created_at) DESC, id DESC
+       ORDER BY pinned DESC, COALESCE(updated_at, created_at) DESC, id DESC
        LIMIT 50`
     );
   }

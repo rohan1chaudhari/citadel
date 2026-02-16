@@ -11,9 +11,15 @@ type Note = {
   body: string | null;
   created_at: string;
   updated_at?: string | null;
+  pinned?: number;
 };
 
 type SaveState = 'idle' | 'dirty' | 'saving' | 'saved' | 'error';
+
+function isOnline() {
+  if (typeof navigator === 'undefined') return true;
+  return navigator.onLine;
+}
 
 async function apiList(q: string): Promise<Note[]> {
   const url = new URL('/api/apps/smart-notes/notes', window.location.origin);
@@ -42,14 +48,14 @@ async function apiGet(id: number): Promise<Note> {
   return data.note as Note;
 }
 
-async function apiUpdate(id: number, patch: { title: string; body: string }) {
+async function apiUpdate(id: number, patch: { title: string; body: string; pinned?: boolean; restore?: boolean }) {
   const res = await fetch(`/api/apps/smart-notes/notes/${id}`, {
     method: 'PATCH',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(patch)
   });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data?.error ?? `HTTP ${res.status}`);
+  const data = await res.json().catch(() => null);
+  if (!res.ok) throw new Error((data as any)?.error ?? `HTTP ${res.status}`);
 }
 
 async function apiDelete(id: number) {
@@ -89,9 +95,11 @@ export function SmartNotesClient({ initialNotes }: { initialNotes: Note[] }) {
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
   const [saveState, setSaveState] = useState<SaveState>('idle');
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [view, setView] = useState<'list' | 'editor'>('list');
   const [mobileTab, setMobileTab] = useState<'edit' | 'preview'>('edit');
   const [isMobile, setIsMobile] = useState(false);
+  const [snack, setSnack] = useState<{ msg: string; action?: { label: string; onClick: () => void } } | null>(null);
 
   const debounceRef = useRef<any>(null);
   const lastSavedRef = useRef<{ title: string; body: string }>({ title: '', body: '' });
@@ -112,9 +120,13 @@ export function SmartNotesClient({ initialNotes }: { initialNotes: Note[] }) {
         setTitle(note.title ?? '');
         setBody(note.body ?? '');
         lastSavedRef.current = { title: note.title ?? '', body: note.body ?? '' };
+        setSaveError(null);
         setSaveState('idle');
-      } catch {
-        if (!cancelled) setSaveState('error');
+      } catch (e: any) {
+        if (!cancelled) {
+          setSaveState('error');
+          setSaveError(String(e?.message ?? e));
+        }
       }
     }
     load();
@@ -139,20 +151,22 @@ export function SmartNotesClient({ initialNotes }: { initialNotes: Note[] }) {
     if (!selectedId) return;
     if (debounceRef.current) clearTimeout(debounceRef.current);
 
+    setSaveError(null);
     setSaveState('dirty');
     debounceRef.current = setTimeout(async () => {
       try {
+        if (!isOnline()) throw new Error('Offline');
         setSaveState('saving');
         await apiUpdate(selectedId, { title: nextTitle, body: nextBody });
         lastSavedRef.current = { title: nextTitle, body: nextBody };
         setSaveState('saved');
-        // refresh list titles/previews
         setNotes((prev) =>
           prev.map((n) => (n.id === selectedId ? { ...n, title: nextTitle, body: nextBody, updated_at: new Date().toISOString() } : n))
         );
         setTimeout(() => setSaveState('idle'), 800);
-      } catch {
+      } catch (e: any) {
         setSaveState('error');
+        setSaveError(String(e?.message ?? e));
       }
     }, 600);
   };
@@ -249,16 +263,37 @@ export function SmartNotesClient({ initialNotes }: { initialNotes: Note[] }) {
 
   const onDelete = async () => {
     if (!selectedId) return;
-    const ok = window.confirm('Move this note to trash?');
-    if (!ok) return;
     try {
-      await apiDelete(selectedId);
-      const remaining = notes.filter((n) => n.id !== selectedId);
+      const deletedId = selectedId;
+      await apiDelete(deletedId);
+
+      // Optimistic remove from list
+      const remaining = notes.filter((n) => n.id !== deletedId);
       setNotes(remaining);
       setSelectedId(remaining[0]?.id ?? null);
       if (isMobile) setView('list');
-    } catch {
+
+      setSnack({
+        msg: 'Moved to Trash',
+        action: {
+          label: 'Undo',
+          onClick: async () => {
+            try {
+              await apiUpdate(deletedId, { title: title, body: body, restore: true });
+              setSnack({ msg: 'Restored' });
+              await refreshList();
+              setSelectedId(deletedId);
+              if (isMobile) setView('editor');
+            } catch (e) {
+              setSnack({ msg: 'Failed to restore' });
+            }
+          }
+        }
+      });
+      setTimeout(() => setSnack(null), 4000);
+    } catch (e: any) {
       setSaveState('error');
+      setSaveError(String(e?.message ?? e));
     }
   };
 
@@ -268,10 +303,24 @@ export function SmartNotesClient({ initialNotes }: { initialNotes: Note[] }) {
       : saveState === 'saved'
         ? 'Saved'
         : saveState === 'error'
-          ? 'Error'
+          ? 'Save failed'
           : saveState === 'dirty'
             ? 'Unsaved changes'
             : '';
+
+  const retrySave = async () => {
+    if (!selectedId) return;
+    try {
+      setSaveState('saving');
+      setSaveError(null);
+      await apiUpdate(selectedId, { title, body });
+      setSaveState('saved');
+      setTimeout(() => setSaveState('idle'), 800);
+    } catch (e: any) {
+      setSaveState('error');
+      setSaveError(String(e?.message ?? e));
+    }
+  };
 
   const ListPane = (
     <div className="space-y-3">
@@ -345,6 +394,17 @@ export function SmartNotesClient({ initialNotes }: { initialNotes: Note[] }) {
 
   const EditorPane = (
     <div className="space-y-3">
+      {saveError ? (
+        <Card>
+          <p className="text-sm font-medium text-zinc-900">Couldn’t save</p>
+          <p className="mt-1 text-xs text-zinc-600">{saveError}</p>
+          <div className="mt-3">
+            <Button type="button" variant="secondary" onClick={retrySave as any}>
+              Retry
+            </Button>
+          </div>
+        </Card>
+      ) : null}
       <div className="sticky top-0 z-10 -mx-4 border-b border-zinc-200 bg-zinc-50/80 px-4 py-2 backdrop-blur md:static md:mx-0 md:border-0 md:bg-transparent md:px-0 md:py-0">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -357,6 +417,29 @@ export function SmartNotesClient({ initialNotes }: { initialNotes: Note[] }) {
           </div>
           <div className="flex items-center gap-2">
             <div className="text-xs text-zinc-500">{statusText}</div>
+            {saveState === 'error' ? (
+              <Button type="button" variant="secondary" onClick={retrySave as any}>
+                Retry
+              </Button>
+            ) : null}
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={async () => {
+                if (!selectedId) return;
+                const next = !(current?.pinned ? true : false);
+                try {
+                  await apiUpdate(selectedId, { title, body, pinned: next });
+                  setNotes((prev) => prev.map((n) => (n.id === selectedId ? { ...n, pinned: next ? 1 : 0 } : n)));
+                  setCurrent((c) => (c ? { ...c, pinned: next ? 1 : 0 } : c));
+                } catch (e: any) {
+                  setSaveState('error');
+                  setSaveError(String(e?.message ?? e));
+                }
+              }}
+            >
+              {current?.pinned ? 'Unpin' : 'Pin'}
+            </Button>
             <Button type="button" variant="danger" onClick={onDelete as any}>
               Delete
             </Button>
@@ -423,9 +506,25 @@ export function SmartNotesClient({ initialNotes }: { initialNotes: Note[] }) {
   );
 
   return (
-    <div className="grid gap-6 md:grid-cols-[320px_1fr]">
-      <div className={view === 'editor' && isMobile ? 'hidden' : ''}>{ListPane}</div>
-      <div className={view === 'list' && isMobile ? 'hidden' : ''}>{EditorPane}</div>
-    </div>
+    <>
+      <div className="grid gap-6 md:grid-cols-[320px_1fr]">
+        <div className={view === 'editor' && isMobile ? 'hidden' : ''}>{ListPane}</div>
+        <div className={view === 'list' && isMobile ? 'hidden' : ''}>{EditorPane}</div>
+      </div>
+
+      {snack ? (
+        <div className="fixed inset-x-0 bottom-4 z-50 mx-auto flex max-w-md items-center justify-between gap-3 rounded-xl border border-zinc-200 bg-white px-4 py-3 shadow-lg">
+          <div className="text-sm text-zinc-900">{snack.msg}</div>
+          {snack.action ? (
+            <button
+              className="rounded-lg border border-zinc-200 px-3 py-1.5 text-sm font-medium text-zinc-900 hover:bg-zinc-50"
+              onClick={() => snack.action?.onClick()}
+            >
+              {snack.action.label}
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+    </>
   );
 }

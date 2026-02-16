@@ -25,6 +25,11 @@ function ensureSchema() {
   } catch {
     // ignore
   }
+  try {
+    dbExec(APP_ID, `ALTER TABLE notes ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0`);
+  } catch {
+    // ignore
+  }
 }
 
 export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
@@ -37,7 +42,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
 
     const rows = dbQuery<any>(
       APP_ID,
-      `SELECT id, title, body, created_at, updated_at, deleted_at FROM notes WHERE id = ? LIMIT 1`,
+      `SELECT id, title, body, created_at, updated_at, deleted_at, pinned FROM notes WHERE id = ? LIMIT 1`,
       [noteId]
     );
     const note = rows[0];
@@ -57,12 +62,32 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
     const noteId = Number(id);
     if (!Number.isFinite(noteId)) return NextResponse.json({ ok: false, error: 'bad id' }, { status: 400 });
 
-    const body = await req.json().catch(() => ({}));
+    const body = await req.json().catch(() => ({} as any));
+
+    // Restore from trash
+    if (body && body.restore === true) {
+      dbExec(APP_ID, `UPDATE notes SET deleted_at = NULL, updated_at = ? WHERE id = ?`, [new Date().toISOString(), noteId]);
+      audit(APP_ID, 'notes.restore', { id: noteId, mode: 'json' });
+      return NextResponse.json({ ok: true });
+    }
+
     const title = typeof body.title === 'string' ? body.title.slice(0, 200) : '';
     const text = typeof body.body === 'string' ? body.body : '';
+    const pinned = typeof body.pinned === 'boolean' ? (body.pinned ? 1 : 0) : null;
 
-    dbExec(APP_ID, `UPDATE notes SET title = ?, body = ?, updated_at = ? WHERE id = ?`, [title, text, new Date().toISOString(), noteId]);
-    audit(APP_ID, 'notes.update', { id: noteId, titleLen: title.length, bodyLen: text.length, mode: 'json' });
+    if (pinned === null) {
+      dbExec(APP_ID, `UPDATE notes SET title = ?, body = ?, updated_at = ? WHERE id = ?`, [title, text, new Date().toISOString(), noteId]);
+    } else {
+      dbExec(APP_ID, `UPDATE notes SET title = ?, body = ?, pinned = ?, updated_at = ? WHERE id = ?`, [
+        title,
+        text,
+        pinned,
+        new Date().toISOString(),
+        noteId
+      ]);
+    }
+
+    audit(APP_ID, 'notes.update', { id: noteId, titleLen: title.length, bodyLen: text.length, pinned, mode: 'json' });
 
     return NextResponse.json({ ok: true });
   } catch (e: any) {
