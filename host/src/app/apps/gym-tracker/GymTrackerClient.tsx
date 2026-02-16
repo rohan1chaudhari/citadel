@@ -3,9 +3,13 @@
 import { useMemo, useState } from 'react';
 import { Button, Card, Input, Label } from '@/components/Shell';
 
+const DAY_CATEGORIES = ['push', 'cardio', 'pull', 'leg'] as const;
+type DayCategory = (typeof DAY_CATEGORIES)[number];
+
 type Entry = {
   id: number;
   date: string | null;
+  category: string | null;
   exercise: string;
   sets: number | null;
   reps: number | null;
@@ -19,6 +23,7 @@ type Entry = {
 
 type FormState = {
   date: string;
+  category: DayCategory;
   exercise: string;
   sets: string;
   reps: string;
@@ -32,8 +37,25 @@ function today() {
   return new Date().toISOString().slice(0, 10);
 }
 
-function emptyForm(): FormState {
-  return { date: today(), exercise: '', sets: '', reps: '', weight: '', rpe: '', rest_seconds: '', notes: '' };
+function emptyForm(category: DayCategory = 'push'): FormState {
+  return { date: today(), category, exercise: '', sets: '', reps: '', weight: '', rpe: '', rest_seconds: '', notes: '' };
+}
+
+function normalizeCategory(v: string | null | undefined): DayCategory | null {
+  const c = String(v ?? '').toLowerCase();
+  return (DAY_CATEGORIES as readonly string[]).includes(c) ? (c as DayCategory) : null;
+}
+
+function nextCategory(prev: string | null | undefined): DayCategory {
+  const current = normalizeCategory(prev);
+  if (!current) return DAY_CATEGORIES[0];
+  const idx = DAY_CATEGORIES.indexOf(current);
+  return DAY_CATEGORIES[(idx + 1) % DAY_CATEGORIES.length];
+}
+
+function titleCase(s: string | null | undefined) {
+  if (!s) return '-';
+  return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
 function asInput(v: number | null | undefined) {
@@ -73,10 +95,11 @@ async function deleteEntry(id: number) {
 
 export function GymTrackerClient({ initialEntries, recentExercises }: { initialEntries: Entry[]; recentExercises: string[] }) {
   const [entries, setEntries] = useState<Entry[]>(initialEntries);
-  const [form, setForm] = useState<FormState>(emptyForm());
+  const suggestedCategory = nextCategory(initialEntries[0]?.category);
+  const [form, setForm] = useState<FormState>(emptyForm(suggestedCategory));
   const [busy, setBusy] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
-  const [editing, setEditing] = useState<FormState>(emptyForm());
+  const [editing, setEditing] = useState<FormState>(emptyForm(suggestedCategory));
   const [error, setError] = useState<string | null>(null);
 
   const lastEntry = entries[0] ?? null;
@@ -91,6 +114,7 @@ export function GymTrackerClient({ initialEntries, recentExercises }: { initialE
   const fillFrom = (e: Entry) => {
     setForm({
       date: today(),
+      category: normalizeCategory(e.category) ?? form.category,
       exercise: e.exercise,
       sets: asInput(e.sets),
       reps: asInput(e.reps),
@@ -121,6 +145,7 @@ export function GymTrackerClient({ initialEntries, recentExercises }: { initialE
       const newEntry: Entry = {
         id: created.id,
         date: form.date || null,
+        category: form.category,
         exercise: form.exercise.trim(),
         sets: form.sets ? Number(form.sets) : null,
         reps: form.reps ? Number(form.reps) : null,
@@ -133,7 +158,17 @@ export function GymTrackerClient({ initialEntries, recentExercises }: { initialE
       };
 
       setEntries((prev) => [newEntry, ...prev]);
-      setForm((prev) => ({ ...prev, notes: '' }));
+      setForm((prev) => ({
+        ...prev,
+        category: nextCategory(prev.category),
+        exercise: '',
+        sets: '',
+        reps: '',
+        weight: '',
+        rpe: '',
+        rest_seconds: '',
+        notes: ''
+      }));
     } catch (e: any) {
       setError(String(e?.message ?? e));
     } finally {
@@ -145,6 +180,7 @@ export function GymTrackerClient({ initialEntries, recentExercises }: { initialE
     setEditingId(e.id);
     setEditing({
       date: e.date || today(),
+      category: normalizeCategory(e.category) ?? 'push',
       exercise: e.exercise,
       sets: asInput(e.sets),
       reps: asInput(e.reps),
@@ -167,6 +203,7 @@ export function GymTrackerClient({ initialEntries, recentExercises }: { initialE
             ? {
                 ...e,
                 date: editing.date || null,
+                category: editing.category,
                 exercise: editing.exercise.trim(),
                 sets: editing.sets ? Number(editing.sets) : null,
                 reps: editing.reps ? Number(editing.reps) : null,
@@ -222,19 +259,34 @@ export function GymTrackerClient({ initialEntries, recentExercises }: { initialE
             <Input type="date" value={form.date} onChange={(e) => setForm((p) => ({ ...p, date: e.target.value }))} />
           </div>
 
-          <div>
-            <Label>Exercise</Label>
-            <Input
-              list="exercise-suggestions"
-              value={form.exercise}
-              placeholder="Bench press"
-              onChange={(e) => setForm((p) => ({ ...p, exercise: e.target.value }))}
-            />
-            <datalist id="exercise-suggestions">
-              {exerciseOptions.map((x) => (
-                <option key={x} value={x} />
-              ))}
-            </datalist>
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            <div>
+              <Label>Category (suggested order)</Label>
+              <select
+                value={form.category}
+                onChange={(e) => setForm((p) => ({ ...p, category: e.target.value as DayCategory }))}
+                className="mt-1 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-zinc-900/15"
+              >
+                {DAY_CATEGORIES.map((c) => (
+                  <option key={c} value={c}>{titleCase(c)}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <Label>Exercise</Label>
+              <Input
+                list="exercise-suggestions"
+                value={form.exercise}
+                placeholder="Bench press"
+                onChange={(e) => setForm((p) => ({ ...p, exercise: e.target.value }))}
+              />
+              <datalist id="exercise-suggestions">
+                {exerciseOptions.map((x) => (
+                  <option key={x} value={x} />
+                ))}
+              </datalist>
+            </div>
           </div>
 
           <div className="grid grid-cols-3 gap-2 md:grid-cols-6">
@@ -292,7 +344,10 @@ export function GymTrackerClient({ initialEntries, recentExercises }: { initialE
                   <>
                     <div className="flex items-start justify-between gap-3">
                       <div>
-                        <div className="text-sm font-semibold text-zinc-900">{e.exercise}</div>
+                        <div className="flex items-center gap-2">
+                          <div className="text-sm font-semibold text-zinc-900">{e.exercise}</div>
+                          <span className="rounded-md border border-zinc-200 bg-zinc-50 px-2 py-0.5 text-xs text-zinc-700">{titleCase(e.category)}</span>
+                        </div>
                         <div className="mt-1 text-xs text-zinc-500">#{e.id} · {displayDate(e.date)} · {e.created_at}</div>
                       </div>
                       <div className="flex gap-2">
@@ -308,6 +363,15 @@ export function GymTrackerClient({ initialEntries, recentExercises }: { initialE
                 ) : (
                   <div className="grid gap-2">
                     <Input type="date" value={editing.date} onChange={(ev) => setEditing((p) => ({ ...p, date: ev.target.value }))} />
+                    <select
+                      value={editing.category}
+                      onChange={(ev) => setEditing((p) => ({ ...p, category: ev.target.value as DayCategory }))}
+                      className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-zinc-900/15"
+                    >
+                      {DAY_CATEGORIES.map((c) => (
+                        <option key={c} value={c}>{titleCase(c)}</option>
+                      ))}
+                    </select>
                     <Input value={editing.exercise} onChange={(ev) => setEditing((p) => ({ ...p, exercise: ev.target.value }))} placeholder="Exercise" />
                     <div className="grid grid-cols-2 gap-2 md:grid-cols-5">
                       <Input inputMode="numeric" type="number" value={editing.sets} onChange={(ev) => setEditing((p) => ({ ...p, sets: ev.target.value }))} placeholder="Sets" />

@@ -8,6 +8,7 @@ const APP_ID = 'gym-tracker';
 type Entry = {
   id: number;
   date: string | null;
+  category: string | null;
   exercise: string;
   sets: number | null;
   reps: number | null;
@@ -26,6 +27,7 @@ function ensureSchema() {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       date TEXT,
       exercise TEXT NOT NULL,
+      category TEXT,
       sets INTEGER,
       reps INTEGER,
       weight REAL,
@@ -40,6 +42,7 @@ function ensureSchema() {
   try { dbExec(APP_ID, `ALTER TABLE entries ADD COLUMN rest_seconds INTEGER`); } catch {}
   try { dbExec(APP_ID, `ALTER TABLE entries ADD COLUMN notes TEXT`); } catch {}
   try { dbExec(APP_ID, `ALTER TABLE entries ADD COLUMN updated_at TEXT`); } catch {}
+  try { dbExec(APP_ID, `ALTER TABLE entries ADD COLUMN category TEXT`); } catch {}
 
   dbExec(APP_ID, `CREATE INDEX IF NOT EXISTS idx_entries_created_at ON entries(created_at)`);
   dbExec(APP_ID, `CREATE INDEX IF NOT EXISTS idx_entries_exercise ON entries(exercise)`);
@@ -49,7 +52,7 @@ async function fetchEntries() {
   ensureSchema();
   const entries = dbQuery<Entry>(
     APP_ID,
-    `SELECT id, date, exercise, sets, reps, weight, rpe, rest_seconds, notes, created_at, updated_at
+    `SELECT id, date, category, exercise, sets, reps, weight, rpe, rest_seconds, notes, created_at, updated_at
      FROM entries
      ORDER BY id DESC
      LIMIT 200`

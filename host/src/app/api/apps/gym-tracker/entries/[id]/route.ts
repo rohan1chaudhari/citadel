@@ -4,6 +4,28 @@ import { audit } from '@/lib/audit';
 
 export const runtime = 'nodejs';
 const APP_ID = 'gym-tracker';
+const CATEGORIES = ['push', 'cardio', 'pull', 'leg'] as const;
+
+function ensureSchema() {
+  dbExec(
+    APP_ID,
+    `CREATE TABLE IF NOT EXISTS entries (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      date TEXT,
+      exercise TEXT NOT NULL,
+      category TEXT,
+      sets INTEGER,
+      reps INTEGER,
+      weight REAL,
+      rpe REAL,
+      rest_seconds INTEGER,
+      notes TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT
+    )`
+  );
+  try { dbExec(APP_ID, `ALTER TABLE entries ADD COLUMN category TEXT`); } catch {}
+}
 
 function toNullableNumber(v: unknown) {
   const s = String(v ?? '').trim();
@@ -17,13 +39,21 @@ function toNullableText(v: unknown, max = 4000) {
   return s ? s.slice(0, max) : null;
 }
 
+function normalizeCategory(v: unknown): string | null {
+  const c = String(v ?? '').trim().toLowerCase();
+  if (!c) return null;
+  return (CATEGORIES as readonly string[]).includes(c) ? c : null;
+}
+
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  ensureSchema();
   const id = Number((await params).id);
   if (!Number.isFinite(id) || id <= 0) return NextResponse.json({ ok: false, error: 'invalid id' }, { status: 400 });
 
   const body = await req.json().catch(() => ({}));
   const date = toNullableText(body?.date, 32);
   const exercise = toNullableText(body?.exercise, 120);
+  const category = normalizeCategory(body?.category);
   const sets = toNullableNumber(body?.sets);
   const reps = toNullableNumber(body?.reps);
   const weight = toNullableNumber(body?.weight);
@@ -36,16 +66,17 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   dbExec(
     APP_ID,
     `UPDATE entries
-     SET date = ?, exercise = ?, sets = ?, reps = ?, weight = ?, rpe = ?, rest_seconds = ?, notes = ?, updated_at = ?
+     SET date = ?, category = ?, exercise = ?, sets = ?, reps = ?, weight = ?, rpe = ?, rest_seconds = ?, notes = ?, updated_at = ?
      WHERE id = ?`,
-    [date, exercise, sets, reps, weight, rpe, restSeconds, notes, new Date().toISOString(), id]
+    [date, category, exercise, sets, reps, weight, rpe, restSeconds, notes, new Date().toISOString(), id]
   );
 
-  audit(APP_ID, 'entries.update', { id, exercise });
+  audit(APP_ID, 'entries.update', { id, exercise, category });
   return NextResponse.json({ ok: true });
 }
 
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+  ensureSchema();
   const id = Number((await params).id);
   if (!Number.isFinite(id) || id <= 0) return NextResponse.json({ ok: false, error: 'invalid id' }, { status: 400 });
 
