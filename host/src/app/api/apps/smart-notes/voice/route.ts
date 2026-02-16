@@ -31,13 +31,27 @@ function ensureSchema() {
   } catch {}
 }
 
-async function transcribeOpenAI(audio: File) {
+function containsCJK(s: string) {
+  // Rough check for Japanese/Chinese/Korean characters.
+  return /[\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af]/.test(s);
+}
+
+async function transcribeOpenAI(audio: File, opts?: { language?: string; prompt?: string }) {
   const key = requireEnv('OPENAI_API_KEY');
 
   const fd = new FormData();
-  // Higher quality transcription model.
   fd.set('model', 'gpt-4o-transcribe');
   fd.set('file', audio);
+
+  // Force English unless explicitly overridden.
+  const language = opts?.language ?? 'en';
+  if (language) fd.set('language', language);
+
+  // Nudge: transcribe, don't translate.
+  const prompt =
+    opts?.prompt ??
+    'Transcribe the audio verbatim in English. Do not translate or switch languages. If unclear, write [inaudible].';
+  fd.set('prompt', prompt);
 
   const res = await fetch('https://api.openai.com/v1/audio/transcriptions', {
     method: 'POST',
@@ -53,62 +67,15 @@ async function transcribeOpenAI(audio: File) {
   return text;
 }
 
-async function structureWithOpenAI(transcript: string) {
-  const key = requireEnv('OPENAI_API_KEY');
+function formatMarkdownFromTranscript(raw: string) {
+  const cleaned = raw
+    .replace(/\s+/g, ' ')
+    .replace(/\s([,.!?;:])/g, '$1')
+    .trim();
 
-  const prompt = `You are a personal journaling / note assistant.
-
-Goal: produce Markdown that is *almost the raw transcript*, but cleaned up and lightly structured.
-
-STRICT RULES:
-- Do NOT rewrite content into "meeting notes".
-- Do NOT invent attendees, agenda items, decisions, or action items.
-- Preserve the user's wording and order as much as possible.
-- Only do light edits: punctuation, casing, remove obvious filler (um/like), fix obvious mishears.
-- If something sounds ambiguous, keep it as-is.
-
-OUTPUT FORMAT:
-Return JSON ONLY with keys: title, markdown
-- title: short (4-10 words), reflect what the user talked about (e.g. "Day recap" or "Sunday thoughts")
-- markdown: include these sections in this order:
-  1) "## Clean transcript" (this is the main body; keep it close to original)
-  2) "## Optional structure" (very light): bullets of themes or moments (max 5 bullets)
-  3) "## Raw transcript" in a blockquote (verbatim input)
-
-Transcript:\n${transcript}`;
-
-  const res = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${key}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      model: 'gpt-4o',
-      temperature: 0.1,
-      response_format: { type: 'json_object' },
-      messages: [
-        { role: 'system', content: 'You output strict JSON with minimal, faithful editing.' },
-        { role: 'user', content: prompt }
-      ]
-    })
-  });
-
-  const data = await res.json().catch(() => null);
-  if (!res.ok) throw new Error(`OpenAI structure failed (${res.status}): ${JSON.stringify(data)}`);
-
-  const content = data?.choices?.[0]?.message?.content;
-  if (typeof content !== 'string') throw new Error('OpenAI structure: missing content');
-
-  let obj: any;
-  try {
-    obj = JSON.parse(content);
-  } catch {
-    throw new Error(`OpenAI structure: invalid JSON: ${content}`);
-  }
-  const title = typeof obj.title === 'string' ? obj.title.slice(0, 200) : 'Voice note';
-  const markdown = typeof obj.markdown === 'string' ? obj.markdown : transcript;
-  return { title, markdown };
+  return {
+    markdown: `## Clean transcript\n\n${cleaned || '_No transcript._'}\n\n## Raw transcript\n\n> ${raw.trim().split(/\r?\n/).join('\n> ')}\n`
+  };
 }
 
 export async function POST(req: Request) {
@@ -130,8 +97,17 @@ export async function POST(req: Request) {
 
     audit(APP_ID, 'voice.upload', { path: relPath, bytes: buf.byteLength, type: audio.type });
 
-    const transcript = await transcribeOpenAI(audio);
-    const { title, markdown } = await structureWithOpenAI(transcript);
+    // Transcribe (force English). If we still get CJK characters, retry once with a stricter prompt.
+    let transcript = await transcribeOpenAI(audio, { language: 'en' });
+    if (containsCJK(transcript)) {
+      transcript = await transcribeOpenAI(audio, {
+        language: 'en',
+        prompt: 'Transcribe strictly in English characters. Do not output Japanese/Chinese/Korean. If uncertain, output [inaudible].'
+      });
+    }
+
+    const { markdown } = formatMarkdownFromTranscript(transcript);
+    const title = `Voice note — ${new Date().toISOString().slice(0, 16).replace('T', ' ')}`;
 
     dbExec(APP_ID, `INSERT INTO notes (title, body, created_at, updated_at) VALUES (?, ?, ?, ?)`, [
       title,
