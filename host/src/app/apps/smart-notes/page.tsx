@@ -24,7 +24,17 @@ function ensureSchema() {
 
 export default async function SmartNotesPage() {
   ensureSchema();
-  const notes = dbQuery<any>(APP_ID, `SELECT id, title, body, created_at, updated_at FROM notes ORDER BY id DESC LIMIT 50`);
+  const rows = dbQuery<any>(APP_ID, `SELECT id, title, body, created_at, updated_at FROM notes ORDER BY id DESC LIMIT 50`);
+
+  // Client Components require plain JSON-serializable objects.
+  // node:sqlite may return objects with non-standard prototypes.
+  const notes = rows.map((r: any) => ({
+    id: Number(r.id),
+    title: r.title ?? null,
+    body: r.body ?? null,
+    created_at: String(r.created_at),
+    updated_at: r.updated_at ?? null
+  }));
 
   return (
     <Shell title="Smart Notes" subtitle="Markdown notes with autosave">
