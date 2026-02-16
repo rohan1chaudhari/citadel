@@ -53,12 +53,29 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   ensureSchema();
-  const form = await req.formData();
-  const title = String(form.get('title') ?? '').slice(0, 200);
-  const body = String(form.get('body') ?? '');
+
+  const ct = req.headers.get('content-type') ?? '';
+  let title = '';
+  let body = '';
+
+  if (ct.includes('application/json')) {
+    const j = await req.json().catch(() => ({}));
+    title = typeof j.title === 'string' ? j.title.slice(0, 200) : '';
+    body = typeof j.body === 'string' ? j.body : '';
+  } else {
+    const form = await req.formData();
+    title = String(form.get('title') ?? '').slice(0, 200);
+    body = String(form.get('body') ?? '');
+  }
 
   dbExec(APP_ID, `INSERT INTO notes (title, body, created_at) VALUES (?, ?, ?)`, [title, body, new Date().toISOString()]);
-  audit(APP_ID, 'notes.create', { titleLen: title.length, bodyLen: body.length });
+  const idRow = dbQuery<{ id: number }>(APP_ID, `SELECT last_insert_rowid() as id`)[0];
+  const id = idRow?.id;
 
+  audit(APP_ID, 'notes.create', { titleLen: title.length, bodyLen: body.length, mode: ct.includes('application/json') ? 'json' : 'form' });
+
+  if (ct.includes('application/json')) {
+    return NextResponse.json({ ok: true, id });
+  }
   return NextResponse.redirect(new URL('/apps/smart-notes', req.url));
 }

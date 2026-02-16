@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { dbExec, dbQuery } from '@/lib/db';
+import { audit } from '@/lib/audit';
 
 export const runtime = 'nodejs';
 const APP_ID = 'smart-notes';
@@ -21,7 +22,7 @@ function ensureSchema() {
   }
 }
 
-export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }) {
+export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
   try {
     ensureSchema();
 
@@ -39,8 +40,42 @@ export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }
 
     return NextResponse.json({ ok: true, note });
   } catch (e: any) {
-    const msg = String(e?.message ?? e);
-    // In dev, help debugging by returning the message.
-    return NextResponse.json({ ok: false, error: msg }, { status: 500 });
+    return NextResponse.json({ ok: false, error: String(e?.message ?? e) }, { status: 500 });
+  }
+}
+
+export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {
+  try {
+    ensureSchema();
+    const { id } = await ctx.params;
+    const noteId = Number(id);
+    if (!Number.isFinite(noteId)) return NextResponse.json({ ok: false, error: 'bad id' }, { status: 400 });
+
+    const body = await req.json().catch(() => ({}));
+    const title = typeof body.title === 'string' ? body.title.slice(0, 200) : '';
+    const text = typeof body.body === 'string' ? body.body : '';
+
+    dbExec(APP_ID, `UPDATE notes SET title = ?, body = ?, updated_at = ? WHERE id = ?`, [title, text, new Date().toISOString(), noteId]);
+    audit(APP_ID, 'notes.update', { id: noteId, titleLen: title.length, bodyLen: text.length, mode: 'json' });
+
+    return NextResponse.json({ ok: true });
+  } catch (e: any) {
+    return NextResponse.json({ ok: false, error: String(e?.message ?? e) }, { status: 500 });
+  }
+}
+
+export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string }> }) {
+  try {
+    ensureSchema();
+    const { id } = await ctx.params;
+    const noteId = Number(id);
+    if (!Number.isFinite(noteId)) return NextResponse.json({ ok: false, error: 'bad id' }, { status: 400 });
+
+    dbExec(APP_ID, `DELETE FROM notes WHERE id = ?`, [noteId]);
+    audit(APP_ID, 'notes.delete', { id: noteId, mode: 'json' });
+
+    return NextResponse.json({ ok: true });
+  } catch (e: any) {
+    return NextResponse.json({ ok: false, error: String(e?.message ?? e) }, { status: 500 });
   }
 }
