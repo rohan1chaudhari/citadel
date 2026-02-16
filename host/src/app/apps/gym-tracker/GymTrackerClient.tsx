@@ -71,6 +71,28 @@ function formatDateTime(iso: string) {
   return d.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
+function sameExercise(a: string, b: string) {
+  return a.trim().toLowerCase() === b.trim().toLowerCase();
+}
+
+function suggestionForExerciseAndSet(entries: Entry[], exercise: string, targetSet: number, excludeSessionId?: string | null) {
+  const matches = entries
+    .filter((e) => sameExercise(e.exercise, exercise) && (excludeSessionId ? e.session_id !== excludeSessionId : true));
+
+  if (matches.length === 0) return null;
+
+  const exactSet = matches
+    .filter((e) => (e.sets ?? 0) === targetSet)
+    .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))[0];
+
+  if (exactSet) {
+    return { entry: exactSet, bySet: true as const };
+  }
+
+  const latestAny = matches.sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))[0];
+  return { entry: latestAny, bySet: false as const };
+}
+
 async function createEntry(payload: {
   date: string;
   category: DayCategory;
@@ -110,6 +132,8 @@ export function GymTrackerClient({ initialEntries, recentExercises }: { initialE
   const [entries, setEntries] = useState<Entry[]>(initialEntries);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [historyPage, setHistoryPage] = useState(1);
+  const SESSIONS_PER_PAGE = 10;
 
   const suggestedCategory = useMemo(() => nextCategory(initialEntries[0]?.category), [initialEntries]);
   const [startCategory, setStartCategory] = useState<DayCategory>(suggestedCategory);
@@ -171,9 +195,10 @@ export function GymTrackerClient({ initialEntries, recentExercises }: { initialE
     const groups = Array.from(map.entries()).map(([id, list]) => {
       const sorted = [...list].sort((a, b) => Date.parse(a.created_at) - Date.parse(b.created_at));
       const first = sorted[0];
+      const sessionDate = first.date || first.created_at.slice(0, 10);
       return {
         id,
-        label: first.session_id ? `Session ${first.date || first.created_at.slice(0, 10)}` : `Single log ${first.date || first.created_at.slice(0, 10)}`,
+        label: `${titleCase(first.category)} ${sessionDate}`,
         category: first.category,
         startedAt: first.created_at,
         entries: sorted
@@ -182,6 +207,10 @@ export function GymTrackerClient({ initialEntries, recentExercises }: { initialE
 
     return groups.sort((a, b) => Date.parse(b.startedAt) - Date.parse(a.startedAt));
   }, [entries]);
+
+  const totalHistoryPages = Math.max(1, Math.ceil(groupedSessions.length / SESSIONS_PER_PAGE));
+  const currentHistoryPage = Math.min(historyPage, totalHistoryPages);
+  const pagedSessions = groupedSessions.slice((currentHistoryPage - 1) * SESSIONS_PER_PAGE, currentHistoryPage * SESSIONS_PER_PAGE);
 
   const startSession = () => {
     setError(null);
@@ -328,6 +357,10 @@ export function GymTrackerClient({ initialEntries, recentExercises }: { initialE
     }
   };
 
+  useEffect(() => {
+    if (historyPage > totalHistoryPages) setHistoryPage(totalHistoryPages);
+  }, [historyPage, totalHistoryPages]);
+
   return (
     <div className="grid gap-6">
       {!session ? (
@@ -425,14 +458,21 @@ export function GymTrackerClient({ initialEntries, recentExercises }: { initialE
       <div>
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-semibold text-zinc-900">History</h2>
-          <div className="text-xs text-zinc-500">{entries.length} sets</div>
+          <div className="text-xs text-zinc-500">{entries.length} sets · page {currentHistoryPage}/{totalHistoryPages}</div>
         </div>
 
+        {totalHistoryPages > 1 ? (
+          <div className="mt-2 flex items-center gap-2">
+            <Button type="button" variant="secondary" onClick={() => setHistoryPage((p) => Math.max(1, p - 1))} disabled={currentHistoryPage <= 1}>Prev</Button>
+            <Button type="button" variant="secondary" onClick={() => setHistoryPage((p) => Math.min(totalHistoryPages, p + 1))} disabled={currentHistoryPage >= totalHistoryPages}>Next</Button>
+          </div>
+        ) : null}
+
         <div className="mt-3 grid gap-2">
-          {groupedSessions.map((group) => {
+          {pagedSessions.map((group) => {
             const exerciseNames = Array.from(new Set(group.entries.map((e) => e.exercise)));
             return (
-              <details key={group.id} className="rounded-xl border border-zinc-200 bg-white p-3" open={groupedSessions[0]?.id === group.id}>
+              <details key={group.id} className="rounded-xl border border-zinc-200 bg-white p-3" open>
                 <summary className="cursor-pointer list-none">
                   <div className="flex items-center justify-between gap-3">
                     <div className="text-sm font-semibold text-zinc-900">{group.label}</div>
