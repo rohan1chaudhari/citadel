@@ -4,14 +4,33 @@ type Note = { id: number; title: string | null; body: string | null; created_at:
 
 async function fetchNote(id: string) {
   const res = await fetch(`http://localhost:3000/api/apps/smart-notes/notes/${id}`, { cache: 'no-store' });
-  if (!res.ok) throw new Error(`Request failed: ${res.status}`);
-  return (await res.json()) as { ok: true; note: Note };
+  const data = await res.json().catch(() => null);
+  return { res, data };
 }
 
 export default async function NoteDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const data = await fetchNote(id);
-  const n = data.note;
+  const { res, data } = await fetchNote(id);
+  if (res.status === 404) {
+    return (
+      <Shell title="Not found" subtitle="This note doesn’t exist.">
+        <LinkA href="/apps/smart-notes">← back</LinkA>
+      </Shell>
+    );
+  }
+  if (!res.ok) {
+    return (
+      <Shell title="Error" subtitle="Failed to load note.">
+        <LinkA href="/apps/smart-notes">← back</LinkA>
+        <Card>
+          <p className="text-sm text-zinc-700">HTTP {res.status}</p>
+          <pre className="mt-3 whitespace-pre-wrap text-xs text-zinc-600">{JSON.stringify(data, null, 2)}</pre>
+        </Card>
+      </Shell>
+    );
+  }
+
+  const n = (data as any).note as Note;
 
   return (
     <Shell title={n.title?.trim() ? n.title : 'Untitled note'} subtitle="Edit your note">
