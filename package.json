@@ -1,0 +1,8 @@
+{
+  "name": "citadel",
+  "private": true,
+  "workspaces": [
+    "host",
+    "apps/*"
+  ]
+}

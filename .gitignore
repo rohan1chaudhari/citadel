@@ -1,0 +1,17 @@
+# dependencies
+node_modules/
+
+# builds
+.next/
+dist/
+out/
+
+# env
+.env
+.env.*
+
+# local data
+/data/
+
+# logs
+*.log
