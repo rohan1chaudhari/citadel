@@ -13,23 +13,44 @@ function ensureSchema() {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       title TEXT,
       body TEXT,
-      created_at TEXT NOT NULL
+      created_at TEXT NOT NULL,
+      updated_at TEXT
     )`
   );
+  dbExec(APP_ID, `CREATE INDEX IF NOT EXISTS idx_notes_created_at ON notes(created_at)`);
 }
 
-export async function GET() {
+export async function GET(req: Request) {
   ensureSchema();
-  const notes = dbQuery(APP_ID, `SELECT id, title, body, created_at FROM notes ORDER BY id DESC LIMIT 50`);
-  return NextResponse.json({ ok: true, notes });
+  const url = new URL(req.url);
+  const q = (url.searchParams.get('q') ?? '').trim();
+
+  let notes: any[];
+  if (q) {
+    const like = `%${q}%`;
+    notes = dbQuery(
+      APP_ID,
+      `SELECT id, title, body, created_at FROM notes
+       WHERE (title LIKE ? OR body LIKE ?)
+       ORDER BY id DESC
+       LIMIT 50`,
+      [like, like]
+    );
+  } else {
+    notes = dbQuery(APP_ID, `SELECT id, title, body, created_at FROM notes ORDER BY id DESC LIMIT 50`);
+  }
+
+  return NextResponse.json({ ok: true, q, notes });
 }
 
 export async function POST(req: Request) {
   ensureSchema();
   const form = await req.formData();
-  const title = String(form.get('title') ?? '');
+  const title = String(form.get('title') ?? '').slice(0, 200);
   const body = String(form.get('body') ?? '');
+
   dbExec(APP_ID, `INSERT INTO notes (title, body, created_at) VALUES (?, ?, ?)`, [title, body, new Date().toISOString()]);
   audit(APP_ID, 'notes.create', { titleLen: title.length, bodyLen: body.length });
+
   return NextResponse.redirect(new URL('/apps/smart-notes', req.url));
 }
