@@ -1,4 +1,14 @@
-type Entry = { id: number; date: string; exercise: string; sets: number | null; reps: number | null; weight: number | null; created_at: string };
+import { Button, Card, Input, Label, LinkA, Shell } from '@/components/Shell';
+
+type Entry = {
+  id: number;
+  date: string;
+  exercise: string;
+  sets: number | null;
+  reps: number | null;
+  weight: number | null;
+  created_at: string;
+};
 
 async function fetchEntries() {
   const res = await fetch('http://localhost:3000/api/apps/gym-tracker/entries', { cache: 'no-store' });
@@ -10,64 +20,88 @@ export default async function GymTrackerPage() {
   const data = await fetchEntries();
 
   return (
-    <main>
-      <p>
-        <a href="/">← home</a>
-      </p>
-      <h1>Gym Tracker</h1>
-      <p style={{ opacity: 0.7 }}>MVP: minimal logging (DB + storage interaction)</p>
+    <Shell title="Gym Tracker" subtitle="Minimal logging to prove DB + storage isolation.">
+      <div className="flex items-center justify-between">
+        <LinkA href="/">← home</LinkA>
+        <div className="text-xs text-zinc-500">{data.entries.length} entries</div>
+      </div>
 
-      <section style={{ border: '1px solid #ddd', padding: 12, borderRadius: 8 }}>
-        <h2>New entry</h2>
-        <form action="/api/apps/gym-tracker/entries" method="post">
-          <div>
-            <label>
-              Date
-              <input name="date" type="date" />
-            </label>
+      <div className="grid gap-6">
+        <Card>
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h2 className="text-sm font-semibold text-zinc-900">New entry</h2>
+              <p className="mt-1 text-sm text-zinc-600">This writes to the gym-tracker SQLite DB and touches app storage.</p>
+            </div>
+            <div className="text-xs text-zinc-500">MVP 2</div>
           </div>
-          <div style={{ marginTop: 8 }}>
-            <label>
-              Exercise
-              <input name="exercise" placeholder="Bench press" style={{ display: 'block', width: '100%' }} />
-            </label>
-          </div>
-          <div style={{ marginTop: 8, display: 'flex', gap: 8 }}>
-            <label>
-              Sets
-              <input name="sets" type="number" min="0" step="1" />
-            </label>
-            <label>
-              Reps
-              <input name="reps" type="number" min="0" step="1" />
-            </label>
-            <label>
-              Weight
-              <input name="weight" type="number" min="0" step="0.5" />
-            </label>
-          </div>
-          <button type="submit" style={{ marginTop: 8 }}>Add</button>
-        </form>
-      </section>
 
-      <section style={{ marginTop: 16 }}>
-        <h2>Recent</h2>
-        <ul style={{ paddingLeft: 18 }}>
-          {data.entries.map((e) => (
-            <li key={e.id} style={{ marginBottom: 10 }}>
-              <strong>{e.exercise}</strong> — {e.date || '(no date)'}
-              <div style={{ opacity: 0.8 }}>
-                sets: {e.sets ?? '-'} · reps: {e.reps ?? '-'} · weight: {e.weight ?? '-'}
+          <form action="/api/apps/gym-tracker/entries" method="post" className="mt-4 grid gap-3">
+            <div>
+              <Label>Date</Label>
+              <Input name="date" type="date" />
+            </div>
+
+            <div>
+              <Label>Exercise</Label>
+              <Input name="exercise" placeholder="Bench press" />
+            </div>
+
+            <div className="grid grid-cols-3 gap-2">
+              <div>
+                <Label>Sets</Label>
+                <Input name="sets" type="number" min="0" step="1" placeholder="3" />
               </div>
-              <small style={{ opacity: 0.7 }}>#{e.id} · {e.created_at}</small>
-            </li>
-          ))}
-        </ul>
-      </section>
+              <div>
+                <Label>Reps</Label>
+                <Input name="reps" type="number" min="0" step="1" placeholder="8" />
+              </div>
+              <div>
+                <Label>Weight</Label>
+                <Input name="weight" type="number" min="0" step="0.5" placeholder="80" />
+              </div>
+            </div>
 
-      <p>
-        <a href="/api/apps/gym-tracker/health" target="_blank" rel="noreferrer">health</a>
-      </p>
-    </main>
+            <div>
+              <Button type="submit">Add</Button>
+            </div>
+          </form>
+        </Card>
+
+        <div>
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-zinc-900">Recent</h2>
+            <div className="text-xs text-zinc-500">Newest first</div>
+          </div>
+          <div className="mt-3 grid gap-3">
+            {data.entries.map((e) => (
+              <Card key={e.id}>
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <div className="text-sm font-semibold text-zinc-900">{e.exercise}</div>
+                    <div className="mt-1 text-xs text-zinc-500">#{e.id} · {e.created_at}</div>
+                  </div>
+                  <div className="text-xs text-zinc-600">{e.date || '(no date)'}</div>
+                </div>
+                <div className="mt-3 text-sm text-zinc-700">
+                  sets: {e.sets ?? '-'} · reps: {e.reps ?? '-'} · weight: {e.weight ?? '-'}
+                </div>
+              </Card>
+            ))}
+            {data.entries.length === 0 ? (
+              <Card>
+                <p className="text-sm text-zinc-600">No entries yet. Add one above.</p>
+              </Card>
+            ) : null}
+          </div>
+        </div>
+
+        <div className="text-sm text-zinc-600">
+          <LinkA href="/api/apps/gym-tracker/health" target="_blank" rel="noreferrer">health</LinkA>
+          {' · '}
+          <LinkA href="/api/apps/gym-tracker/selftest" target="_blank" rel="noreferrer">selftest</LinkA>
+        </div>
+      </div>
+    </Shell>
   );
 }

@@ -1,4 +1,4 @@
-import { listApps } from '@/lib/registry';
+import { Button, Card, Input, Label, LinkA, Shell, Textarea } from '@/components/Shell';
 
 type Note = { id: number; title: string | null; body: string | null; created_at: string };
 
@@ -14,90 +14,110 @@ export default async function SmartNotesPage({ searchParams }: { searchParams: P
   const sp = await searchParams;
   const q = sp.q ?? '';
   const data = await fetchNotes(q);
-  const apps = await listApps();
 
   return (
-    <main>
-      <p>
-        <a href="/">← home</a>
-      </p>
-      <h1>Smart Notes</h1>
-      <p style={{ opacity: 0.7 }}>MVP: capture + list + search + edit + delete</p>
+    <Shell title="Smart Notes" subtitle="Capture fast. Find later.">
+      <div className="flex items-center justify-between">
+        <LinkA href="/">← home</LinkA>
+        <div className="text-xs text-zinc-500">{data.notes.length} shown</div>
+      </div>
 
-      <section style={{ border: '1px solid #ddd', padding: 12, borderRadius: 8 }}>
-        <h2>New note</h2>
-        <form action="/api/apps/smart-notes/notes" method="post">
-          <div>
-            <label>
-              Title
-              <input name="title" placeholder="Title" style={{ display: 'block', width: '100%' }} />
-            </label>
+      <div className="grid gap-6">
+        <Card>
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h2 className="text-sm font-semibold text-zinc-900">New note</h2>
+              <p className="mt-1 text-sm text-zinc-600">Local-first. Stored in your Smart Notes app DB.</p>
+            </div>
+            <div className="text-xs text-zinc-500">MVP A</div>
           </div>
-          <div style={{ marginTop: 8 }}>
-            <label>
-              Body
-              <textarea name="body" placeholder="Write…" rows={5} style={{ display: 'block', width: '100%' }} />
-            </label>
-          </div>
-          <button type="submit" style={{ marginTop: 8 }}>Add note</button>
-        </form>
-      </section>
 
-      <section style={{ marginTop: 16 }}>
-        <h2>Search</h2>
-        <form action="/apps/smart-notes" method="get">
-          <input name="q" value={data.q} placeholder="search title/body" style={{ width: '60%' }} />
-          <button type="submit">Search</button>
+          <form action="/api/apps/smart-notes/notes" method="post" className="mt-4 space-y-3">
+            <div>
+              <Label>Title</Label>
+              <Input name="title" placeholder="Title" />
+            </div>
+            <div>
+              <Label>Body</Label>
+              <Textarea name="body" placeholder="Write…" rows={5} />
+            </div>
+            <Button type="submit">Add note</Button>
+          </form>
+        </Card>
+
+        <Card>
+          <h2 className="text-sm font-semibold text-zinc-900">Search</h2>
+          <form action="/apps/smart-notes" method="get" className="mt-3 flex gap-2">
+            <Input name="q" defaultValue={data.q} placeholder="Search title or body" />
+            <Button type="submit" variant="secondary">Search</Button>
+          </form>
           {data.q ? (
-            <a href="/apps/smart-notes" style={{ marginLeft: 8 }}>clear</a>
-          ) : null}
-        </form>
-      </section>
+            <p className="mt-2 text-sm text-zinc-600">
+              Filtering by: <code className="rounded bg-zinc-100 px-1 py-0.5">{data.q}</code> ·{' '}
+              <a className="text-zinc-900 underline" href="/apps/smart-notes">
+                clear
+              </a>
+            </p>
+          ) : (
+            <p className="mt-2 text-sm text-zinc-600">Tip: try searching for a phrase you wrote.</p>
+          )}
+        </Card>
 
-      <section style={{ marginTop: 16 }}>
-        <h2>Recent {data.q ? '(filtered)' : ''}</h2>
-        <ul style={{ paddingLeft: 18 }}>
-          {data.notes.map((n) => (
-            <li key={n.id} style={{ marginBottom: 16 }}>
-              <div>
-                <strong>{n.title?.trim() ? n.title : '(untitled)'}</strong>
-                <small style={{ marginLeft: 8, opacity: 0.7 }}>#{n.id} · {n.created_at}</small>
-              </div>
-              <div style={{ whiteSpace: 'pre-wrap', marginTop: 6 }}>{n.body}</div>
+        <div>
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-zinc-900">Recent</h2>
+            <div className="text-xs text-zinc-500">Newest first</div>
+          </div>
 
-              <details style={{ marginTop: 8 }}>
-                <summary>Edit</summary>
-                <form action={`/api/apps/smart-notes/notes/${n.id}/update`} method="post">
+          <div className="mt-3 grid gap-3">
+            {data.notes.map((n) => (
+              <Card key={n.id}>
+                <div className="flex items-start justify-between gap-4">
                   <div>
-                    <label>
-                      Title
-                      <input name="title" defaultValue={n.title ?? ''} style={{ display: 'block', width: '100%' }} />
-                    </label>
+                    <div className="text-sm font-semibold text-zinc-900">{n.title?.trim() ? n.title : '(untitled)'}</div>
+                    <div className="mt-1 text-xs text-zinc-500">#{n.id} · {n.created_at}</div>
                   </div>
-                  <div style={{ marginTop: 8 }}>
-                    <label>
-                      Body
-                      <textarea name="body" defaultValue={n.body ?? ''} rows={5} style={{ display: 'block', width: '100%' }} />
-                    </label>
-                  </div>
-                  <button type="submit" style={{ marginTop: 8 }}>Save</button>
+                  <details className="text-sm">
+                    <summary className="cursor-pointer text-zinc-700 hover:text-zinc-900">Edit</summary>
+                    <form action={`/api/apps/smart-notes/notes/${n.id}/update`} method="post" className="mt-3 space-y-3">
+                      <div>
+                        <Label>Title</Label>
+                        <Input name="title" defaultValue={n.title ?? ''} />
+                      </div>
+                      <div>
+                        <Label>Body</Label>
+                        <Textarea name="body" defaultValue={n.body ?? ''} rows={5} />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button type="submit" variant="primary">Save</Button>
+                        <Button type="reset" variant="secondary">Reset</Button>
+                      </div>
+                    </form>
+                  </details>
+                </div>
+
+                {n.body ? <div className="mt-3 whitespace-pre-wrap text-sm text-zinc-700">{n.body}</div> : null}
+
+                <form action={`/api/apps/smart-notes/notes/${n.id}/delete`} method="post" className="mt-4">
+                  <Button type="submit" variant="danger">Delete</Button>
                 </form>
-              </details>
+              </Card>
+            ))}
 
-              <form action={`/api/apps/smart-notes/notes/${n.id}/delete`} method="post" style={{ marginTop: 8 }}>
-                <button type="submit" style={{ color: 'darkred' }}>
-                  Delete
-                </button>
-              </form>
-            </li>
-          ))}
-        </ul>
-      </section>
+            {data.notes.length === 0 ? (
+              <Card>
+                <p className="text-sm text-zinc-600">No notes yet. Create your first one above.</p>
+              </Card>
+            ) : null}
+          </div>
+        </div>
 
-      <hr />
-      <p style={{ opacity: 0.7 }}>
-        Discovered apps: {apps.map((a) => a.id).join(', ')}
-      </p>
-    </main>
+        <div className="text-sm text-zinc-600">
+          <LinkA href="/api/apps/smart-notes/health" target="_blank" rel="noreferrer">health</LinkA>
+          {' · '}
+          <LinkA href="/api/apps/smart-notes/selftest" target="_blank" rel="noreferrer">selftest</LinkA>
+        </div>
+      </div>
+    </Shell>
   );
 }
