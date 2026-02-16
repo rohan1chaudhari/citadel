@@ -13,8 +13,8 @@ export function Shell({ title, subtitle, children }: { title: string; subtitle?:
   );
 }
 
-export function Card({ children }: { children: ReactNode }) {
-  return <div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm">{children}</div>;
+export function Card({ children, className }: { children: ReactNode; className?: string }) {
+  return <div className={`rounded-xl border border-zinc-200 bg-white p-4 shadow-sm ${className ?? ''}`}>{children}</div>;
 }
 
 export function Button({

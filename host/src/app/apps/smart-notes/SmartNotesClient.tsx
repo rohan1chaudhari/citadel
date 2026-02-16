@@ -73,6 +73,7 @@ export function SmartNotesClient({ initialNotes }: { initialNotes: Note[] }) {
   const [body, setBody] = useState('');
   const [saveState, setSaveState] = useState<SaveState>('idle');
   const [view, setView] = useState<'list' | 'editor'>('list');
+  const [mobileTab, setMobileTab] = useState<'edit' | 'preview'>('edit');
 
   const debounceRef = useRef<any>(null);
   const lastSavedRef = useRef<{ title: string; body: string }>({ title: '', body: '' });
@@ -249,20 +250,22 @@ export function SmartNotesClient({ initialNotes }: { initialNotes: Note[] }) {
 
   const EditorPane = (
     <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          {window?.innerWidth < 768 ? (
-            <Button type="button" variant="secondary" onClick={() => setView('list') as any}>
-              Back
+      <div className="sticky top-0 z-10 -mx-4 border-b border-zinc-200 bg-zinc-50/80 px-4 py-2 backdrop-blur md:static md:mx-0 md:border-0 md:bg-transparent md:px-0 md:py-0">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            {window?.innerWidth < 768 ? (
+              <Button type="button" variant="secondary" onClick={() => setView('list') as any}>
+                Back
+              </Button>
+            ) : null}
+            <div className="text-xs text-zinc-500">{selected ? `#${selected.id}` : ''}</div>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="text-xs text-zinc-500">{statusText}</div>
+            <Button type="button" variant="danger" onClick={onDelete as any}>
+              Delete
             </Button>
-          ) : null}
-          <div className="text-xs text-zinc-500">{selected ? `#${selected.id}` : ''}</div>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="text-xs text-zinc-500">{statusText}</div>
-          <Button type="button" variant="danger" onClick={onDelete as any}>
-            Delete
-          </Button>
+          </div>
         </div>
       </div>
 
@@ -276,17 +279,23 @@ export function SmartNotesClient({ initialNotes }: { initialNotes: Note[] }) {
             <Label>Title</Label>
             <Input value={title} onChange={(e) => onChangeTitle(e.target.value)} placeholder="Title" />
             <div className="mt-3">
-              <Label>Markdown</Label>
+              <div className="flex items-center justify-between">
+                <Label>Markdown</Label>
+                <div className="flex items-center gap-2 md:hidden">
+                  <button type="button" onClick={() => setMobileTab('edit')} className="rounded-md px-2 py-1 text-xs font-medium border " + (mobileTab === 'edit' ? 'border-zinc-900 text-zinc-900' : 'border-zinc-200 text-zinc-600')>Edit</button>
+                  <button type="button" onClick={() => setMobileTab('preview')} className="rounded-md px-2 py-1 text-xs font-medium border " + (mobileTab === 'preview' ? 'border-zinc-900 text-zinc-900' : 'border-zinc-200 text-zinc-600')>Preview</button>
+                </div>
+              </div>
               <textarea
                 value={body}
                 onChange={(e) => onChangeBody(e.target.value)}
                 placeholder="Write in Markdown…"
-                className="mt-2 h-56 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-zinc-900/15"
+                className={"mt-2 h-56 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-zinc-900/15 " + (mobileTab === 'preview' ? 'hidden md:block' : '')}
               />
             </div>
           </Card>
 
-          <Card>
+          <Card className={mobileTab === 'edit' ? 'hidden md:block' : ''}>
             <div className="flex items-center justify-between">
               <div className="text-xs font-medium text-zinc-500">Preview</div>
               <Button type="button" variant="secondary" onClick={refreshList as any}>

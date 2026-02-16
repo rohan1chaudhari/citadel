@@ -52,7 +52,10 @@ export default async function SmartNotesPage() {
     <Shell title="Smart Notes" subtitle="Markdown notes with autosave">
       <div className="flex items-center justify-between">
         <LinkA href="/">← home</LinkA>
+        <div className="flex items-center gap-3">
+          <LinkA href="/apps/smart-notes/trash">Trash</LinkA>
         <div className="text-xs text-zinc-500">Local-first</div>
+        </div>
       </div>
       <SmartNotesClient initialNotes={notes} />
     </Shell>
