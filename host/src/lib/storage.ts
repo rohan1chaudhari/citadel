@@ -21,6 +21,13 @@ export async function storageWriteText(appId: string, rel: string, content: stri
   audit(appId, 'storage.write', { path: rel, bytes: Buffer.byteLength(content, 'utf8') });
 }
 
+export async function storageWriteBuffer(appId: string, rel: string, buf: Uint8Array) {
+  const abs = resolveScoped(appId, rel);
+  await fsp.mkdir(path.dirname(abs), { recursive: true });
+  await fsp.writeFile(abs, buf);
+  audit(appId, 'storage.write', { path: rel, bytes: buf.byteLength });
+}
+
 export async function storageReadText(appId: string, rel: string) {
   const abs = resolveScoped(appId, rel);
   const text = await fsp.readFile(abs, 'utf8');

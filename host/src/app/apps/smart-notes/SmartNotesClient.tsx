@@ -187,6 +187,61 @@ export function SmartNotesClient({ initialNotes }: { initialNotes: Note[] }) {
     setView('editor');
   };
 
+  const [voiceState, setVoiceState] = useState<'idle' | 'recording' | 'uploading' | 'processing' | 'error'>('idle');
+  const mediaRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<BlobPart[]>([]);
+
+  const startVoice = async () => {
+    try {
+      setVoiceState('recording');
+      chunksRef.current = [];
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const rec = new MediaRecorder(stream);
+      mediaRef.current = rec;
+      rec.ondataavailable = (e) => {
+        if (e.data && e.data.size > 0) chunksRef.current.push(e.data);
+      };
+      rec.onstop = () => {
+        stream.getTracks().forEach((t) => t.stop());
+      };
+      rec.start();
+    } catch {
+      setVoiceState('error');
+    }
+  };
+
+  const stopVoice = async () => {
+    const rec = mediaRef.current;
+    if (!rec) return;
+    setVoiceState('uploading');
+    await new Promise<void>((resolve) => {
+      rec.onstop = () => resolve();
+      rec.stop();
+    });
+
+    try {
+      const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
+      const file = new File([blob], `voice.webm`, { type: 'audio/webm' });
+      const fd = new FormData();
+      fd.set('audio', file);
+
+      const res = await fetch('/api/apps/smart-notes/voice', { method: 'POST', body: fd });
+      setVoiceState('processing');
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error((data as any)?.error ?? `HTTP ${res.status}`);
+
+      const id = Number((data as any).id);
+      await refreshList();
+      if (Number.isFinite(id)) {
+        setSelectedId(id);
+        setView('editor');
+      }
+      setVoiceState('idle');
+    } catch {
+      setVoiceState('error');
+    }
+  };
+
   const onSelect = (id: number) => {
     setSelectedId(id);
     if (isMobile) setView('editor');
@@ -222,9 +277,20 @@ export function SmartNotesClient({ initialNotes }: { initialNotes: Note[] }) {
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <div className="text-xs font-medium text-zinc-500">Notes</div>
-        <Button type="button" variant="secondary" onClick={onNew as any}>
-          New
-        </Button>
+        <div className="flex items-center gap-2">
+          {voiceState === 'recording' ? (
+            <Button type="button" variant="danger" onClick={stopVoice as any}>
+              Stop
+            </Button>
+          ) : (
+            <Button type="button" variant="secondary" onClick={startVoice as any}>
+              Voice
+            </Button>
+          )}
+          <Button type="button" variant="secondary" onClick={onNew as any}>
+            New
+          </Button>
+        </div>
       </div>
 
       <Card>
@@ -235,6 +301,11 @@ export function SmartNotesClient({ initialNotes }: { initialNotes: Note[] }) {
             Go
           </Button>
         </div>
+        {voiceState !== 'idle' ? (
+          <p className="mt-2 text-xs text-zinc-500">
+            Voice: {voiceState === 'recording' ? 'recording…' : voiceState === 'uploading' ? 'uploading…' : voiceState === 'processing' ? 'processing…' : 'error'}
+          </p>
+        ) : null}
       </Card>
 
       <div className="grid gap-2">
