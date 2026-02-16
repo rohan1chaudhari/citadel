@@ -35,7 +35,8 @@ async function transcribeOpenAI(audio: File) {
   const key = requireEnv('OPENAI_API_KEY');
 
   const fd = new FormData();
-  fd.set('model', 'gpt-4o-mini-transcribe');
+  // Higher quality transcription model.
+  fd.set('model', 'gpt-4o-transcribe');
   fd.set('file', audio);
 
   const res = await fetch('https://api.openai.com/v1/audio/transcriptions', {
@@ -55,17 +56,24 @@ async function transcribeOpenAI(audio: File) {
 async function structureWithOpenAI(transcript: string) {
   const key = requireEnv('OPENAI_API_KEY');
 
-  const prompt = `You are a note-taking assistant. Turn the transcript into a clean personal note in Markdown.
+  const prompt = `You are a personal journaling / note assistant.
 
-Requirements:
-- Output JSON ONLY with keys: title, markdown
-- title: short and specific
-- markdown: should include sections:
-  - Summary (3-6 bullets)
-  - Key points (bullets)
-  - Actions (checkbox list, can be empty)
-  - Raw transcript (verbatim transcript in a blockquote)
-- Keep it concise.
+Goal: produce Markdown that is *almost the raw transcript*, but cleaned up and lightly structured.
+
+STRICT RULES:
+- Do NOT rewrite content into "meeting notes".
+- Do NOT invent attendees, agenda items, decisions, or action items.
+- Preserve the user's wording and order as much as possible.
+- Only do light edits: punctuation, casing, remove obvious filler (um/like), fix obvious mishears.
+- If something sounds ambiguous, keep it as-is.
+
+OUTPUT FORMAT:
+Return JSON ONLY with keys: title, markdown
+- title: short (4-10 words), reflect what the user talked about (e.g. "Day recap" or "Sunday thoughts")
+- markdown: include these sections in this order:
+  1) "## Clean transcript" (this is the main body; keep it close to original)
+  2) "## Optional structure" (very light): bullets of themes or moments (max 5 bullets)
+  3) "## Raw transcript" in a blockquote (verbatim input)
 
 Transcript:\n${transcript}`;
 
@@ -76,11 +84,11 @@ Transcript:\n${transcript}`;
       'Content-Type': 'application/json'
     },
     body: JSON.stringify({
-      model: 'gpt-4o-mini',
-      temperature: 0.2,
+      model: 'gpt-4o',
+      temperature: 0.1,
       response_format: { type: 'json_object' },
       messages: [
-        { role: 'system', content: 'You produce clean structured notes as strict JSON.' },
+        { role: 'system', content: 'You output strict JSON with minimal, faithful editing.' },
         { role: 'user', content: prompt }
       ]
     })
