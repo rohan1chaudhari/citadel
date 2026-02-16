@@ -40,8 +40,17 @@ Lifecycle:
 5) healthcheck
 6) rollback
 
-## Host APIs (proposed)
-- `db.query(appId, sql, params)`
-- `db.exec(appId, sql, params)`
+## Host APIs (MVP decision)
+- Expose a **generic, host-enforced SQL API** to app code:
+  - `db.query(appId, sql, params)`
+  - `db.exec(appId, sql, params)`
+- Guardrails (must-have):
+  - host chooses DB file by appId (no override)
+  - parameterized queries only
+  - optional SQL allowlist for MVP (SELECT/INSERT/UPDATE/DELETE/CREATE TABLE/CREATE INDEX)
+  - audit every call (appId + query type + tables affected)
+
+- `storage.read/write/list(appId, path)`
+- `audit.log(appId, eventType, payload)`
 - `storage.read/write/list(appId, path)`
 - `audit.log(appId, eventType, payload)`
