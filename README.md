@@ -13,3 +13,6 @@ Personal App Hub / App Host monorepo.
 - Deny-by-default permissions via app manifests
 - Isolation: per-app DB schema + per-app storage root
 - No direct outbound connectors from apps (MVP)
+
+## Knowledge base
+See `kb/PROJECT.md` for project overview + current state.
