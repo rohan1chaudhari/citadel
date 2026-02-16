@@ -31,39 +31,34 @@ function ensureSchema() {
   } catch {}
 }
 
-function containsCJK(s: string) {
-  // Rough check for Japanese/Chinese/Korean characters.
-  return /[\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af]/.test(s);
-}
-
-async function transcribeOpenAI(audio: File, opts?: { language?: string; prompt?: string }) {
-  const key = requireEnv('OPENAI_API_KEY');
+async function transcribeElevenLabs(audio: File, opts?: { languageCode?: string }) {
+  const key = requireEnv('ELEVENLABS_API_KEY');
 
   const fd = new FormData();
-  fd.set('model', 'gpt-4o-transcribe');
+  fd.set('model_id', 'scribe_v1');
   fd.set('file', audio);
+  // Force English unless overridden.
+  fd.set('language_code', opts?.languageCode ?? 'en');
+  // Keep it simple for journaling.
+  fd.set('diarize', 'false');
+  fd.set('tag_audio_events', 'false');
 
-  // Force English unless explicitly overridden.
-  const language = opts?.language ?? 'en';
-  if (language) fd.set('language', language);
-
-  // Nudge: transcribe, don't translate.
-  const prompt =
-    opts?.prompt ??
-    'Transcribe the audio verbatim in English. Do not translate or switch languages. If unclear, write [inaudible].';
-  fd.set('prompt', prompt);
-
-  const res = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+  const res = await fetch('https://api.elevenlabs.io/v1/speech-to-text', {
     method: 'POST',
-    headers: { Authorization: `Bearer ${key}` },
+    headers: {
+      'xi-api-key': key
+    },
     body: fd
   });
+
   const data = await res.json().catch(() => null);
   if (!res.ok) {
-    throw new Error(`OpenAI transcribe failed (${res.status}): ${JSON.stringify(data)}`);
+    throw new Error(`ElevenLabs STT failed (${res.status}): ${JSON.stringify(data)}`);
   }
-  const text = data?.text;
-  if (typeof text !== 'string') throw new Error('OpenAI transcribe: missing text');
+
+  // ElevenLabs returns either `text` or `transcript` depending on API version.
+  const text = (data?.text ?? data?.transcript ?? data?.transcription) as unknown;
+  if (typeof text !== 'string') throw new Error(`ElevenLabs STT: missing transcript text (${JSON.stringify(data)})`);
   return text;
 }
 
@@ -97,14 +92,7 @@ export async function POST(req: Request) {
 
     audit(APP_ID, 'voice.upload', { path: relPath, bytes: buf.byteLength, type: audio.type });
 
-    // Transcribe (force English). If we still get CJK characters, retry once with a stricter prompt.
-    let transcript = await transcribeOpenAI(audio, { language: 'en' });
-    if (containsCJK(transcript)) {
-      transcript = await transcribeOpenAI(audio, {
-        language: 'en',
-        prompt: 'Transcribe strictly in English characters. Do not output Japanese/Chinese/Korean. If uncertain, output [inaudible].'
-      });
-    }
+    const transcript = await transcribeElevenLabs(audio, { languageCode: 'en' });
 
     const { markdown } = formatMarkdownFromTranscript(transcript);
     const title = `Voice note — ${new Date().toISOString().slice(0, 16).replace('T', ' ')}`;
