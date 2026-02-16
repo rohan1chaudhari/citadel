@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useDeferredValue, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Button, Card, Input, Label } from '@/components/Shell';
@@ -116,6 +116,7 @@ export function SmartNotesClient({ initialNotes }: { initialNotes: Note[] }) {
   const [mobileTab, setMobileTab] = useState<'edit' | 'preview'>('edit');
   const [isMobile, setIsMobile] = useState(false);
   const [snack, setSnack] = useState<{ msg: string; action?: { label: string; onClick: () => void } } | null>(null);
+  const [isPending, startTransition] = useTransition();
 
   const debounceRef = useRef<any>(null);
   const lastSavedRef = useRef<{ title: string; body: string }>({ title: '', body: '' });
@@ -184,7 +185,7 @@ export function SmartNotesClient({ initialNotes }: { initialNotes: Note[] }) {
         setSaveState('error');
         setSaveError(String(e?.message ?? e));
       }
-    }, 600);
+    }, 300);
   };
 
   const onChangeTitle = (v: string) => {
@@ -200,13 +201,17 @@ export function SmartNotesClient({ initialNotes }: { initialNotes: Note[] }) {
   const refreshList = async () => {
     const list = await apiList(q);
     const sorted = sortNotes(list);
-    setNotes(sorted);
-    if (!selectedId && sorted[0]?.id) setSelectedId(sorted[0].id);
+    startTransition(() => {
+      setNotes(sorted);
+      if (!selectedId && sorted[0]?.id) setSelectedId(sorted[0].id);
+    });
   };
 
   const onSearch = async () => {
     const list = await apiList(q);
-    setNotes(sortNotes(list));
+    startTransition(() => {
+      setNotes(sortNotes(list));
+    });
   };
 
   const onNew = async () => {
@@ -219,20 +224,26 @@ export function SmartNotesClient({ initialNotes }: { initialNotes: Note[] }) {
 
   const [voiceState, setVoiceState] = useState<'idle' | 'recording' | 'uploading' | 'processing' | 'error'>('idle');
   const mediaRef = useRef<MediaRecorder | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const uploadAbortRef = useRef<AbortController | null>(null);
   const chunksRef = useRef<BlobPart[]>([]);
+  const deferredBody = useDeferredValue(body);
 
   const startVoice = async () => {
     try {
+      // If a previous upload is in flight, cancel it before starting a new recording.
+      uploadAbortRef.current?.abort();
+      uploadAbortRef.current = null;
+
       setVoiceState('recording');
       chunksRef.current = [];
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
+
       const rec = new MediaRecorder(stream);
       mediaRef.current = rec;
       rec.ondataavailable = (e) => {
         if (e.data && e.data.size > 0) chunksRef.current.push(e.data);
-      };
-      rec.onstop = () => {
-        stream.getTracks().forEach((t) => t.stop());
       };
       rec.start();
     } catch {
@@ -243,11 +254,27 @@ export function SmartNotesClient({ initialNotes }: { initialNotes: Note[] }) {
   const stopVoice = async () => {
     const rec = mediaRef.current;
     if (!rec) return;
+
     setVoiceState('uploading');
+
     await new Promise<void>((resolve) => {
-      rec.onstop = () => resolve();
-      rec.stop();
+      rec.addEventListener('stop', () => resolve(), { once: true });
+      // Flush final chunk quickly before stopping.
+      if (rec.state === 'recording') {
+        try {
+          rec.requestData();
+        } catch {}
+        rec.stop();
+      } else {
+        resolve();
+      }
     });
+
+    // Ensure mic capture is actually cut off immediately.
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
+    }
 
     try {
       const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
@@ -255,7 +282,14 @@ export function SmartNotesClient({ initialNotes }: { initialNotes: Note[] }) {
       const fd = new FormData();
       fd.set('audio', file);
 
-      const res = await fetch('/api/apps/smart-notes/voice', { method: 'POST', body: fd });
+      const controller = new AbortController();
+      uploadAbortRef.current = controller;
+
+      const res = await fetch('/api/apps/smart-notes/voice', {
+        method: 'POST',
+        body: fd,
+        signal: controller.signal
+      });
       setVoiceState('processing');
       const data = await res.json().catch(() => null);
       if (!res.ok) throw new Error((data as any)?.error ?? `HTTP ${res.status}`);
@@ -267,9 +301,33 @@ export function SmartNotesClient({ initialNotes }: { initialNotes: Note[] }) {
         setView('editor');
       }
       setVoiceState('idle');
+      mediaRef.current = null;
+      uploadAbortRef.current = null;
     } catch {
       setVoiceState('error');
+      mediaRef.current = null;
+      uploadAbortRef.current = null;
     }
+  };
+
+  const cancelVoice = () => {
+    uploadAbortRef.current?.abort();
+    uploadAbortRef.current = null;
+
+    try {
+      if (mediaRef.current?.state === 'recording') {
+        mediaRef.current.stop();
+      }
+    } catch {}
+    mediaRef.current = null;
+
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
+    }
+
+    chunksRef.current = [];
+    setVoiceState('idle');
   };
 
   const onSelect = (id: number) => {
@@ -313,6 +371,20 @@ export function SmartNotesClient({ initialNotes }: { initialNotes: Note[] }) {
     }
   };
 
+  useEffect(() => {
+    return () => {
+      uploadAbortRef.current?.abort();
+      if (mediaRef.current?.state === 'recording') {
+        try {
+          mediaRef.current.stop();
+        } catch {}
+      }
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((t) => t.stop());
+      }
+    };
+  }, []);
+
   const statusText =
     saveState === 'saving'
       ? 'Saving…'
@@ -347,6 +419,10 @@ export function SmartNotesClient({ initialNotes }: { initialNotes: Note[] }) {
             <Button type="button" variant="danger" onClick={stopVoice as any}>
               Stop
             </Button>
+          ) : voiceState === 'uploading' || voiceState === 'processing' ? (
+            <Button type="button" variant="danger" onClick={cancelVoice as any}>
+              Cancel voice
+            </Button>
           ) : (
             <Button type="button" variant="secondary" onClick={startVoice as any}>
               Voice
@@ -362,8 +438,8 @@ export function SmartNotesClient({ initialNotes }: { initialNotes: Note[] }) {
         <Label>Search</Label>
         <div className="mt-2 flex gap-2">
           <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search title/body" />
-          <Button type="button" variant="secondary" onClick={onSearch as any}>
-            Go
+          <Button type="button" variant="secondary" onClick={onSearch as any} disabled={isPending}>
+            {isPending ? '…' : 'Go'}
           </Button>
         </div>
         {voiceState !== 'idle' ? (
@@ -523,7 +599,7 @@ export function SmartNotesClient({ initialNotes }: { initialNotes: Note[] }) {
               </Button>
             </div>
             <div className="prose prose-zinc mt-3 max-w-none">
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>{body || '_Nothing to preview yet._'}</ReactMarkdown>
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>{deferredBody || '_Nothing to preview yet._'}</ReactMarkdown>
             </div>
           </Card>
         </>
