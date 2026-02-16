@@ -82,6 +82,10 @@ function dayKey(iso: string) {
   return iso.slice(0, 10);
 }
 
+function entryDay(e: Entry) {
+  return e.date || dayKey(e.created_at);
+}
+
 function sameExercise(a: string, b: string) {
   return a.trim().toLowerCase() === b.trim().toLowerCase();
 }
@@ -231,7 +235,7 @@ export function GymTrackerClient({ initialEntries, recentExercises }: { initialE
 
   const rangeStartMs = Date.now() - rangeDays(range) * 24 * 60 * 60 * 1000;
   const analyticsEntries = entries.filter((e) => {
-    const t = Date.parse(e.created_at);
+    const t = Date.parse(`${entryDay(e)}T00:00:00`);
     if (!Number.isFinite(t) || t < rangeStartMs) return false;
     if (analyticsCategory !== 'all' && e.category !== analyticsCategory) return false;
     if (analyticsExercise !== 'all' && e.exercise !== analyticsExercise) return false;
@@ -255,7 +259,7 @@ export function GymTrackerClient({ initialEntries, recentExercises }: { initialE
   const byDay = (() => {
     const m = new Map<string, { date: string; sets: number; volume: number; avgWeight: number; reps: number; weightSum: number }>();
     for (const e of analyticsEntries) {
-      const k = dayKey(e.created_at);
+      const k = entryDay(e);
       if (!m.has(k)) m.set(k, { date: k, sets: 0, volume: 0, avgWeight: 0, reps: 0, weightSum: 0 });
       const row = m.get(k)!;
       row.sets += 1;
@@ -274,7 +278,7 @@ export function GymTrackerClient({ initialEntries, recentExercises }: { initialE
     count: analyticsEntries.filter((e) => e.category === c).length
   }));
 
-  const activeDays = Array.from(new Set(analyticsEntries.map((e) => dayKey(e.created_at)))).sort();
+  const activeDays = Array.from(new Set(analyticsEntries.map((e) => entryDay(e)))).sort();
 
   const daysInRange = rangeDays(range);
   const sessionsPerWeek = analyticsSessions.length / Math.max(1, daysInRange / 7);
@@ -284,7 +288,7 @@ export function GymTrackerClient({ initialEntries, recentExercises }: { initialE
     const byExercise = new Map<string, Map<string, number>>();
     for (const e of analyticsEntries) {
       const ex = e.exercise;
-      const d = dayKey(e.created_at);
+      const d = entryDay(e);
       if (!byExercise.has(ex)) byExercise.set(ex, new Map<string, number>());
       const exMap = byExercise.get(ex)!;
       exMap.set(d, (exMap.get(d) ?? 0) + (e.weight ?? 0) * (e.reps ?? 0));
