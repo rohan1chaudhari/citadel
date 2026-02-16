@@ -64,6 +64,23 @@ function clampPreview(s: string, n = 80) {
   return t.length > n ? t.slice(0, n) + '…' : t;
 }
 
+function highlight(text: string, q: string) {
+  const needle = q.trim();
+  if (!needle) return text;
+  const idx = text.toLowerCase().indexOf(needle.toLowerCase());
+  if (idx === -1) return text;
+  const before = text.slice(0, idx);
+  const match = text.slice(idx, idx + needle.length);
+  const after = text.slice(idx + needle.length);
+  return (
+    <>
+      {before}
+      <mark className="rounded bg-yellow-100 px-1 text-zinc-900">{match}</mark>
+      {after}
+    </>
+  );
+}
+
 export function SmartNotesClient({ initialNotes }: { initialNotes: Note[] }) {
   const [q, setQ] = useState('');
   const [notes, setNotes] = useState<Note[]>(initialNotes);
@@ -230,8 +247,12 @@ export function SmartNotesClient({ initialNotes }: { initialNotes: Note[] }) {
             >
               <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0">
-                  <div className="truncate text-sm font-semibold text-zinc-900">{n.title?.trim() ? n.title : 'Untitled'}</div>
-                  <div className="mt-1 truncate text-xs text-zinc-500">{clampPreview(n.body ?? '')}</div>
+                  <div className="truncate text-sm font-semibold text-zinc-900">
+                    {n.title?.trim() ? highlight(n.title, q) : 'Untitled'}
+                  </div>
+                  <div className="mt-1 truncate text-xs text-zinc-500">
+                    {highlight(clampPreview(n.body ?? ''), q)}
+                  </div>
                 </div>
                 <div className="text-xs text-zinc-400">#{n.id}</div>
               </div>
