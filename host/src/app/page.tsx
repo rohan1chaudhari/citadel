@@ -1,19 +1,15 @@
-const APPS = [
-  { id: 'smart-notes', name: 'Smart Notes' },
-  { id: 'gym-tracker', name: 'Gym Tracker' }
-];
-
 export default function HomePage() {
   return (
     <main>
       <h1>Citadel</h1>
       <p>Host is running. Pick an app:</p>
       <ul>
-        {APPS.map((a) => (
-          <li key={a.id}>
-            <a href={`/apps/${a.id}`}>{a.name}</a>
-          </li>
-        ))}
+        <li>
+          <a href="/apps/smart-notes">Smart Notes</a>
+        </li>
+        <li>
+          <a href="/apps/gym-tracker">Gym Tracker</a>
+        </li>
       </ul>
     </main>
   );
