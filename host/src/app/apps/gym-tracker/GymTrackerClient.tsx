@@ -160,6 +160,7 @@ export function GymTrackerClient({ initialEntries, recentExercises }: { initialE
   const [editingReps, setEditingReps] = useState('');
 
   const [range, setRange] = useState<'3d' | '7d' | '30d' | '90d'>('30d');
+  const [analyticsMode, setAnalyticsMode] = useState<'overview' | 'consistency' | 'exercise-load'>('overview');
   const [analyticsCategory, setAnalyticsCategory] = useState<'all' | DayCategory>('all');
   const [analyticsExercise, setAnalyticsExercise] = useState<string>('all');
 
@@ -274,15 +275,34 @@ export function GymTrackerClient({ initialEntries, recentExercises }: { initialE
   }));
 
   const activeDays = Array.from(new Set(analyticsEntries.map((e) => dayKey(e.created_at)))).sort();
-  let streak = 0;
-  {
-    let cursor = new Date();
-    cursor.setHours(0, 0, 0, 0);
-    while (activeDays.includes(cursor.toISOString().slice(0, 10))) {
-      streak += 1;
-      cursor = new Date(cursor.getTime() - 24 * 60 * 60 * 1000);
+
+  const daysInRange = rangeDays(range);
+  const sessionsPerWeek = analyticsSessions.length / Math.max(1, daysInRange / 7);
+  const activeDaysPerWeek = activeDays.length / Math.max(1, daysInRange / 7);
+
+  const exerciseLoadProgression = (() => {
+    const byExercise = new Map<string, Map<string, number>>();
+    for (const e of analyticsEntries) {
+      const ex = e.exercise;
+      const d = dayKey(e.created_at);
+      if (!byExercise.has(ex)) byExercise.set(ex, new Map<string, number>());
+      const exMap = byExercise.get(ex)!;
+      exMap.set(d, (exMap.get(d) ?? 0) + (e.weight ?? 0) * (e.reps ?? 0));
     }
-  }
+
+    const rows = Array.from(byExercise.entries()).map(([exercise, dayMap]) => {
+      const points = Array.from(dayMap.entries())
+        .map(([date, load]) => ({ date, load }))
+        .sort((a, b) => a.date.localeCompare(b.date));
+      const first = points[0]?.load ?? 0;
+      const last = points[points.length - 1]?.load ?? 0;
+      const delta = last - first;
+      return { exercise, points, first, last, delta };
+    });
+
+    rows.sort((a, b) => b.last - a.last);
+    return rows;
+  })();
 
   const startSession = () => {
     setError(null);
@@ -601,10 +621,18 @@ export function GymTrackerClient({ initialEntries, recentExercises }: { initialE
       {tab === 'analytics' ? (
         <div className="grid gap-4">
           <Card>
-            <div className="grid gap-3 md:grid-cols-4">
+            <div className="flex flex-wrap items-end gap-3">
+              <div>
+                <Label>Mode</Label>
+                <select value={analyticsMode} onChange={(e) => setAnalyticsMode(e.target.value as any)} className="mt-1 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm">
+                  <option value="overview">Overview</option>
+                  <option value="consistency">Consistency</option>
+                  <option value="exercise-load">Per exercise load</option>
+                </select>
+              </div>
               <div>
                 <Label>Range</Label>
-                <select value={range} onChange={(e) => setRange(e.target.value as any)} className="mt-1 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm">
+                <select value={range} onChange={(e) => setRange(e.target.value as any)} className="mt-1 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm">
                   <option value="3d">3d</option>
                   <option value="7d">7d</option>
                   <option value="30d">30d</option>
@@ -613,12 +641,12 @@ export function GymTrackerClient({ initialEntries, recentExercises }: { initialE
               </div>
               <div>
                 <Label>Category</Label>
-                <select value={analyticsCategory} onChange={(e) => setAnalyticsCategory(e.target.value as any)} className="mt-1 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm">
+                <select value={analyticsCategory} onChange={(e) => setAnalyticsCategory(e.target.value as any)} className="mt-1 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm">
                   <option value="all">All</option>
                   {DAY_CATEGORIES.map((c) => <option key={c} value={c}>{titleCase(c)}</option>)}
                 </select>
               </div>
-              <div className="md:col-span-2">
+              <div className="min-w-[180px] grow">
                 <Label>Exercise</Label>
                 <select value={analyticsExercise} onChange={(e) => setAnalyticsExercise(e.target.value)} className="mt-1 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm">
                   <option value="all">All exercises</option>
@@ -628,48 +656,85 @@ export function GymTrackerClient({ initialEntries, recentExercises }: { initialE
             </div>
           </Card>
 
-          <div className="grid gap-3 md:grid-cols-5">
-            <Card><div className="text-xs text-zinc-500">Sessions</div><div className="mt-1 text-xl font-semibold">{analyticsSessions.length}</div></Card>
-            <Card><div className="text-xs text-zinc-500">Sets</div><div className="mt-1 text-xl font-semibold">{analyticsEntries.length}</div></Card>
-            <Card><div className="text-xs text-zinc-500">Volume</div><div className="mt-1 text-xl font-semibold">{Math.round(totalVolume)}</div></Card>
-            <Card><div className="text-xs text-zinc-500">Avg reps</div><div className="mt-1 text-xl font-semibold">{avgReps.toFixed(1)}</div></Card>
-            <Card><div className="text-xs text-zinc-500">Heaviest</div><div className="mt-1 text-xl font-semibold">{heaviest || 0} kg</div></Card>
-          </div>
-
-          <Card>
-            <div className="text-sm font-semibold text-zinc-900">Volume trend</div>
-            <div className="mt-3 grid gap-2">
-              {byDay.length === 0 ? <div className="text-sm text-zinc-500">No data in selected range.</div> : byDay.map((d) => (
-                <div key={d.date} className="grid grid-cols-[80px_1fr_100px] items-center gap-2">
-                  <div className="text-xs text-zinc-500">{d.date.slice(5)}</div>
-                  <div className="h-2 rounded bg-zinc-100"><div className="h-2 rounded bg-zinc-900" style={{ width: `${maxVolumeDay ? (d.volume / maxVolumeDay) * 100 : 0}%` }} /></div>
-                  <div className="text-right text-xs text-zinc-600">{Math.round(d.volume)}</div>
-                </div>
-              ))}
-            </div>
-          </Card>
-
-          <Card>
-            <div className="text-sm font-semibold text-zinc-900">Consistency insights</div>
-            <div className="mt-3 grid gap-2 text-sm text-zinc-700">
-              <div>Current active-day streak: <span className="font-semibold">{streak} day(s)</span></div>
-              <div>Days with training in range: <span className="font-semibold">{activeDays.length}</span></div>
-              <div className="flex flex-wrap gap-2">
-                {categoryCounts.map((c) => (
-                  <span key={c.category} className="rounded border border-zinc-200 bg-zinc-50 px-2 py-1 text-xs">{titleCase(c.category)}: {c.count}</span>
-                ))}
+          {analyticsMode === 'overview' ? (
+            <>
+              <div className="grid gap-3 md:grid-cols-5">
+                <Card><div className="text-xs text-zinc-500">Sessions</div><div className="mt-1 text-xl font-semibold">{analyticsSessions.length}</div></Card>
+                <Card><div className="text-xs text-zinc-500">Sets</div><div className="mt-1 text-xl font-semibold">{analyticsEntries.length}</div></Card>
+                <Card><div className="text-xs text-zinc-500">Volume</div><div className="mt-1 text-xl font-semibold">{Math.round(totalVolume)}</div></Card>
+                <Card><div className="text-xs text-zinc-500">Avg reps</div><div className="mt-1 text-xl font-semibold">{avgReps.toFixed(1)}</div></Card>
+                <Card><div className="text-xs text-zinc-500">Heaviest</div><div className="mt-1 text-xl font-semibold">{heaviest || 0} kg</div></Card>
               </div>
-            </div>
-          </Card>
 
-          <Card>
-            <div className="text-sm font-semibold text-zinc-900">Filtered sets</div>
-            <div className="mt-3 grid gap-2">
-              {analyticsEntries.slice(0, 100).map((e) => (
-                <div key={e.id} className="text-sm text-zinc-700">{e.date || dayKey(e.created_at)} · {titleCase(e.category)} · {e.exercise} · set {e.sets ?? '-'} · {e.weight ?? '-'} kg × {e.reps ?? '-'}</div>
-              ))}
-            </div>
-          </Card>
+              <Card>
+                <div className="text-sm font-semibold text-zinc-900">Volume trend</div>
+                <div className="mt-3 grid gap-2">
+                  {byDay.length === 0 ? <div className="text-sm text-zinc-500">No data in selected range.</div> : byDay.map((d) => (
+                    <div key={d.date} className="grid grid-cols-[80px_1fr_100px] items-center gap-2">
+                      <div className="text-xs text-zinc-500">{d.date.slice(5)}</div>
+                      <div className="h-2 rounded bg-zinc-100"><div className="h-2 rounded bg-zinc-900" style={{ width: `${maxVolumeDay ? (d.volume / maxVolumeDay) * 100 : 0}%` }} /></div>
+                      <div className="text-right text-xs text-zinc-600">{Math.round(d.volume)}</div>
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            </>
+          ) : null}
+
+          {analyticsMode === 'consistency' ? (
+            <Card>
+              <div className="text-sm font-semibold text-zinc-900">Consistency (how often you train)</div>
+              <div className="mt-3 grid gap-3 md:grid-cols-3">
+                <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-3">
+                  <div className="text-xs text-zinc-500">Sessions/week</div>
+                  <div className="mt-1 text-xl font-semibold text-zinc-900">{sessionsPerWeek.toFixed(1)}</div>
+                </div>
+                <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-3">
+                  <div className="text-xs text-zinc-500">Active days/week</div>
+                  <div className="mt-1 text-xl font-semibold text-zinc-900">{activeDaysPerWeek.toFixed(1)}</div>
+                </div>
+                <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-3">
+                  <div className="text-xs text-zinc-500">Total active days ({range})</div>
+                  <div className="mt-1 text-xl font-semibold text-zinc-900">{activeDays.length}</div>
+                </div>
+              </div>
+            </Card>
+          ) : null}
+
+          {analyticsMode === 'exercise-load' ? (
+            <Card>
+              <div className="text-sm font-semibold text-zinc-900">Per-exercise load progression</div>
+              <p className="mt-1 text-xs text-zinc-500">Load = sum(weight × reps) across sets per day.</p>
+              <div className="mt-3 grid gap-3">
+                {exerciseLoadProgression.length === 0 ? (
+                  <div className="text-sm text-zinc-500">No exercise load data in selected range.</div>
+                ) : (
+                  exerciseLoadProgression.map((row) => {
+                    const max = row.points.reduce((m, p) => Math.max(m, p.load), 0);
+                    return (
+                      <div key={row.exercise} className="rounded-lg border border-zinc-200 p-3">
+                        <div className="flex items-center justify-between">
+                          <div className="text-sm font-medium text-zinc-900">{row.exercise}</div>
+                          <div className={`text-xs ${row.delta >= 0 ? 'text-emerald-700' : 'text-amber-700'}`}>
+                            {row.delta >= 0 ? '+' : ''}{Math.round(row.delta)}
+                          </div>
+                        </div>
+                        <div className="mt-2 grid gap-1">
+                          {row.points.map((p) => (
+                            <div key={p.date} className="grid grid-cols-[70px_1fr_80px] items-center gap-2">
+                              <div className="text-[11px] text-zinc-500">{p.date.slice(5)}</div>
+                              <div className="h-2 rounded bg-zinc-100"><div className="h-2 rounded bg-zinc-900" style={{ width: `${max ? (p.load / max) * 100 : 0}%` }} /></div>
+                              <div className="text-right text-[11px] text-zinc-600">{Math.round(p.load)}</div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </Card>
+          ) : null}
         </div>
       ) : null}
 
