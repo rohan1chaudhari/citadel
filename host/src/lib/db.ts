@@ -36,7 +36,8 @@ export function dbExec(appId: string, sql: string, params: unknown[] = []) {
   const t0 = Date.now();
   try {
     const stmt = db.prepare(sql);
-    const info = stmt.run(params as any);
+    // node:sqlite binds positional parameters via varargs, not an array.
+    const info = stmt.run(...(params as any[]));
     audit(appId, 'db.exec', { verb: verb(sql), ms: Date.now() - t0, changes: info.changes });
     return info;
   } catch (e: any) {
@@ -53,7 +54,8 @@ export function dbQuery<T = unknown>(appId: string, sql: string, params: unknown
   const t0 = Date.now();
   try {
     const stmt = db.prepare(sql);
-    const rows = stmt.all(params as any) as T[];
+    // node:sqlite binds positional parameters via varargs, not an array.
+    const rows = stmt.all(...(params as any[])) as T[];
     audit(appId, 'db.query', { verb: verb(sql), ms: Date.now() - t0, rows: rows.length });
     return rows;
   } catch (e: any) {
