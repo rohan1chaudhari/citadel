@@ -53,18 +53,19 @@ function ensureSchema() {
 
 async function fetchEntries() {
   ensureSchema();
-  const entries = dbQuery<Entry>(
+  const entriesRaw = dbQuery<Entry>(
     APP_ID,
     `SELECT id, date, category, exercise, sets, reps, weight, rpe, rest_seconds, notes, session_id, created_at, updated_at
      FROM entries
      ORDER BY id DESC
      LIMIT 200`
   );
+  const entries = entriesRaw.map((e) => ({ ...e }));
 
   const recentExercises = dbQuery<{ exercise: string }>(
     APP_ID,
     `SELECT exercise FROM entries GROUP BY exercise ORDER BY MAX(id) DESC LIMIT 20`
-  ).map((r) => r.exercise);
+  ).map((r) => String(r.exercise));
 
   return { entries, recentExercises };
 }
