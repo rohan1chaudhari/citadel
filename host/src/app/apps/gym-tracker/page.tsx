@@ -16,6 +16,7 @@ type Entry = {
   rpe: number | null;
   rest_seconds: number | null;
   notes: string | null;
+  session_id: string | null;
   created_at: string;
   updated_at: string | null;
 };
@@ -34,6 +35,7 @@ function ensureSchema() {
       rpe REAL,
       rest_seconds INTEGER,
       notes TEXT,
+      session_id TEXT,
       created_at TEXT NOT NULL,
       updated_at TEXT
     )`
@@ -43,6 +45,7 @@ function ensureSchema() {
   try { dbExec(APP_ID, `ALTER TABLE entries ADD COLUMN notes TEXT`); } catch {}
   try { dbExec(APP_ID, `ALTER TABLE entries ADD COLUMN updated_at TEXT`); } catch {}
   try { dbExec(APP_ID, `ALTER TABLE entries ADD COLUMN category TEXT`); } catch {}
+  try { dbExec(APP_ID, `ALTER TABLE entries ADD COLUMN session_id TEXT`); } catch {}
 
   dbExec(APP_ID, `CREATE INDEX IF NOT EXISTS idx_entries_created_at ON entries(created_at)`);
   dbExec(APP_ID, `CREATE INDEX IF NOT EXISTS idx_entries_exercise ON entries(exercise)`);
@@ -52,7 +55,7 @@ async function fetchEntries() {
   ensureSchema();
   const entries = dbQuery<Entry>(
     APP_ID,
-    `SELECT id, date, category, exercise, sets, reps, weight, rpe, rest_seconds, notes, created_at, updated_at
+    `SELECT id, date, category, exercise, sets, reps, weight, rpe, rest_seconds, notes, session_id, created_at, updated_at
      FROM entries
      ORDER BY id DESC
      LIMIT 200`

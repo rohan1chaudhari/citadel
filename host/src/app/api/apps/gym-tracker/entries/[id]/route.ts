@@ -15,6 +15,7 @@ function ensureSchema() {
       exercise TEXT NOT NULL,
       category TEXT,
       sets INTEGER,
+      session_id TEXT,
       reps INTEGER,
       weight REAL,
       rpe REAL,
@@ -25,6 +26,7 @@ function ensureSchema() {
     )`
   );
   try { dbExec(APP_ID, `ALTER TABLE entries ADD COLUMN category TEXT`); } catch {}
+  try { dbExec(APP_ID, `ALTER TABLE entries ADD COLUMN session_id TEXT`); } catch {}
 }
 
 function toNullableNumber(v: unknown) {
@@ -60,15 +62,16 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   const rpe = toNullableNumber(body?.rpe);
   const restSeconds = toNullableNumber(body?.rest_seconds ?? body?.restSeconds);
   const notes = toNullableText(body?.notes, 4000);
+  const sessionId = toNullableText(body?.session_id ?? body?.sessionId, 80);
 
   if (!exercise) return NextResponse.json({ ok: false, error: 'exercise required' }, { status: 400 });
 
   dbExec(
     APP_ID,
     `UPDATE entries
-     SET date = ?, category = ?, exercise = ?, sets = ?, reps = ?, weight = ?, rpe = ?, rest_seconds = ?, notes = ?, updated_at = ?
+     SET date = ?, category = ?, exercise = ?, sets = ?, reps = ?, weight = ?, rpe = ?, rest_seconds = ?, notes = ?, session_id = ?, updated_at = ?
      WHERE id = ?`,
-    [date, category, exercise, sets, reps, weight, rpe, restSeconds, notes, new Date().toISOString(), id]
+    [date, category, exercise, sets, reps, weight, rpe, restSeconds, notes, sessionId, new Date().toISOString(), id]
   );
 
   audit(APP_ID, 'entries.update', { id, exercise, category });
