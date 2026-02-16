@@ -86,6 +86,13 @@ function entryDay(e: Entry) {
   return e.date || dayKey(e.created_at);
 }
 
+function weekStartKey(day: string) {
+  const d = new Date(`${day}T00:00:00`);
+  const dow = (d.getDay() + 6) % 7; // Mon=0
+  d.setDate(d.getDate() - dow);
+  return d.toISOString().slice(0, 10);
+}
+
 function sameExercise(a: string, b: string) {
   return a.trim().toLowerCase() === b.trim().toLowerCase();
 }
@@ -307,6 +314,36 @@ export function GymTrackerClient({ initialEntries, recentExercises }: { initialE
     rows.sort((a, b) => b.last - a.last);
     return rows;
   })();
+
+  const weeklyCategory = (() => {
+    const m = new Map<string, Record<DayCategory, number>>();
+    for (const e of analyticsEntries) {
+      const wk = weekStartKey(entryDay(e));
+      if (!m.has(wk)) m.set(wk, { push: 0, cardio: 0, pull: 0, leg: 0 });
+      const cat = normalizeCategory(e.category) ?? 'push';
+      m.get(wk)![cat] += 1;
+    }
+    return Array.from(m.entries())
+      .map(([week, counts]) => ({ week, counts, total: DAY_CATEGORIES.reduce((s, c) => s + counts[c], 0) }))
+      .sort((a, b) => a.week.localeCompare(b.week));
+  })();
+
+  const heatmapDays = (() => {
+    const countByDay = new Map<string, number>();
+    for (const e of analyticsEntries) {
+      const d = entryDay(e);
+      countByDay.set(d, (countByDay.get(d) ?? 0) + 1);
+    }
+    const out: { day: string; count: number }[] = [];
+    for (let i = rangeDays(range) - 1; i >= 0; i--) {
+      const d = new Date(Date.now() - i * 24 * 60 * 60 * 1000);
+      const key = d.toISOString().slice(0, 10);
+      out.push({ day: key, count: countByDay.get(key) ?? 0 });
+    }
+    return out;
+  })();
+
+  const lineRows = analyticsExercise === 'all' ? exerciseLoadProgression.slice(0, 4) : exerciseLoadProgression;
 
   const startSession = () => {
     setError(null);
@@ -671,13 +708,21 @@ export function GymTrackerClient({ initialEntries, recentExercises }: { initialE
               </div>
 
               <Card>
-                <div className="text-sm font-semibold text-zinc-900">Volume trend</div>
+                <div className="text-sm font-semibold text-zinc-900">Category balance by week</div>
                 <div className="mt-3 grid gap-2">
-                  {byDay.length === 0 ? <div className="text-sm text-zinc-500">No data in selected range.</div> : byDay.map((d) => (
-                    <div key={d.date} className="grid grid-cols-[80px_1fr_100px] items-center gap-2">
-                      <div className="text-xs text-zinc-500">{d.date.slice(5)}</div>
-                      <div className="h-2 rounded bg-zinc-100"><div className="h-2 rounded bg-zinc-900" style={{ width: `${maxVolumeDay ? (d.volume / maxVolumeDay) * 100 : 0}%` }} /></div>
-                      <div className="text-right text-xs text-zinc-600">{Math.round(d.volume)}</div>
+                  {weeklyCategory.length === 0 ? <div className="text-sm text-zinc-500">No data in selected range.</div> : weeklyCategory.map((w) => (
+                    <div key={w.week} className="grid grid-cols-[80px_1fr_50px] items-center gap-2">
+                      <div className="text-xs text-zinc-500">{w.week.slice(5)}</div>
+                      <div className="flex h-3 overflow-hidden rounded bg-zinc-100">
+                        {DAY_CATEGORIES.map((c) => (
+                          <div
+                            key={c}
+                            style={{ width: `${w.total ? (w.counts[c] / w.total) * 100 : 0}%` }}
+                            className={c === 'push' ? 'bg-blue-500' : c === 'cardio' ? 'bg-emerald-500' : c === 'pull' ? 'bg-violet-500' : 'bg-amber-500'}
+                          />
+                        ))}
+                      </div>
+                      <div className="text-right text-xs text-zinc-600">{w.total}</div>
                     </div>
                   ))}
                 </div>
@@ -702,6 +747,26 @@ export function GymTrackerClient({ initialEntries, recentExercises }: { initialE
                   <div className="mt-1 text-xl font-semibold text-zinc-900">{activeDays.length}</div>
                 </div>
               </div>
+              <div className="mt-4">
+                <div className="text-xs font-medium text-zinc-500">Calendar heatmap</div>
+                <div className="mt-2 grid grid-cols-10 gap-1 md:grid-cols-15">
+                  {heatmapDays.map((d) => (
+                    <div
+                      key={d.day}
+                      title={`${d.day}: ${d.count} sets`}
+                      className={
+                        d.count === 0
+                          ? 'h-4 rounded bg-zinc-100'
+                          : d.count < 3
+                            ? 'h-4 rounded bg-emerald-200'
+                            : d.count < 6
+                              ? 'h-4 rounded bg-emerald-400'
+                              : 'h-4 rounded bg-emerald-600'
+                      }
+                    />
+                  ))}
+                </div>
+              </div>
             </Card>
           ) : null}
 
@@ -710,27 +775,41 @@ export function GymTrackerClient({ initialEntries, recentExercises }: { initialE
               <div className="text-sm font-semibold text-zinc-900">Per-exercise load progression</div>
               <p className="mt-1 text-xs text-zinc-500">Load = sum(weight × reps) across sets per day.</p>
               <div className="mt-3 grid gap-3">
-                {exerciseLoadProgression.length === 0 ? (
+                {lineRows.length === 0 ? (
                   <div className="text-sm text-zinc-500">No exercise load data in selected range.</div>
                 ) : (
-                  exerciseLoadProgression.map((row) => {
-                    const max = row.points.reduce((m, p) => Math.max(m, p.load), 0);
+                  lineRows.map((row) => {
+                    const w = 520;
+                    const h = 120;
+                    const pad = 16;
+                    const maxY = Math.max(1, ...row.points.map((p) => p.load));
+                    const minY = Math.min(...row.points.map((p) => p.load));
+                    const span = Math.max(1, maxY - minY);
+                    const path = row.points
+                      .map((p, i) => {
+                        const x = pad + (i * (w - pad * 2)) / Math.max(1, row.points.length - 1);
+                        const y = h - pad - ((p.load - minY) / span) * (h - pad * 2);
+                        return `${i === 0 ? 'M' : 'L'} ${x} ${y}`;
+                      })
+                      .join(' ');
+
                     return (
                       <div key={row.exercise} className="rounded-lg border border-zinc-200 p-3">
                         <div className="flex items-center justify-between">
                           <div className="text-sm font-medium text-zinc-900">{row.exercise}</div>
-                          <div className={`text-xs ${row.delta >= 0 ? 'text-emerald-700' : 'text-amber-700'}`}>
-                            {row.delta >= 0 ? '+' : ''}{Math.round(row.delta)}
-                          </div>
+                          <div className={`text-xs ${row.delta >= 0 ? 'text-emerald-700' : 'text-amber-700'}`}>{row.delta >= 0 ? '+' : ''}{Math.round(row.delta)}</div>
                         </div>
-                        <div className="mt-2 grid gap-1">
-                          {row.points.map((p) => (
-                            <div key={p.date} className="grid grid-cols-[70px_1fr_80px] items-center gap-2">
-                              <div className="text-[11px] text-zinc-500">{p.date.slice(5)}</div>
-                              <div className="h-2 rounded bg-zinc-100"><div className="h-2 rounded bg-zinc-900" style={{ width: `${max ? (p.load / max) * 100 : 0}%` }} /></div>
-                              <div className="text-right text-[11px] text-zinc-600">{Math.round(p.load)}</div>
-                            </div>
-                          ))}
+                        <svg viewBox={`0 0 ${w} ${h}`} className="mt-2 h-28 w-full rounded bg-zinc-50">
+                          <path d={path} fill="none" stroke="currentColor" strokeWidth="2" className="text-zinc-900" />
+                          {row.points.map((p, i) => {
+                            const x = pad + (i * (w - pad * 2)) / Math.max(1, row.points.length - 1);
+                            const y = h - pad - ((p.load - minY) / span) * (h - pad * 2);
+                            return <circle key={p.date} cx={x} cy={y} r="2.8" className="fill-zinc-900" />;
+                          })}
+                        </svg>
+                        <div className="mt-2 flex items-center justify-between text-[11px] text-zinc-500">
+                          <span>{row.points[0]?.date?.slice(5)}</span>
+                          <span>{row.points[row.points.length - 1]?.date?.slice(5)}</span>
                         </div>
                       </div>
                     );
