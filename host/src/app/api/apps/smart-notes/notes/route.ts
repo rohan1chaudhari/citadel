@@ -7,7 +7,7 @@ export const runtime = 'nodejs';
 const APP_ID = 'smart-notes';
 
 function ensureSchema() {
-  // Base table (older installs may already have notes without updated_at)
+  // Base table (older installs may already have notes without updated_at/deleted_at)
   dbExec(
     APP_ID,
     `CREATE TABLE IF NOT EXISTS notes (
@@ -18,14 +18,20 @@ function ensureSchema() {
     )`
   );
 
-  // Lightweight migration: add updated_at if missing.
+  // Lightweight migrations
   try {
     dbExec(APP_ID, `ALTER TABLE notes ADD COLUMN updated_at TEXT`);
   } catch {
-    // ignore (likely "duplicate column name")
+    // ignore
+  }
+  try {
+    dbExec(APP_ID, `ALTER TABLE notes ADD COLUMN deleted_at TEXT`);
+  } catch {
+    // ignore
   }
 
   dbExec(APP_ID, `CREATE INDEX IF NOT EXISTS idx_notes_created_at ON notes(created_at)`);
+  dbExec(APP_ID, `CREATE INDEX IF NOT EXISTS idx_notes_deleted_at ON notes(deleted_at)`);
 }
 
 export async function GET(req: Request) {
@@ -38,14 +44,20 @@ export async function GET(req: Request) {
     const like = `%${q}%`;
     notes = dbQuery(
       APP_ID,
-      `SELECT id, title, body, created_at FROM notes
-       WHERE (title LIKE ? OR body LIKE ?)
-       ORDER BY id DESC
+      `SELECT id, title, body, created_at, updated_at FROM notes
+       WHERE deleted_at IS NULL AND (title LIKE ? OR body LIKE ?)
+       ORDER BY COALESCE(updated_at, created_at) DESC, id DESC
        LIMIT 50`,
       [like, like]
     );
   } else {
-    notes = dbQuery(APP_ID, `SELECT id, title, body, created_at FROM notes ORDER BY id DESC LIMIT 50`);
+    notes = dbQuery(
+      APP_ID,
+      `SELECT id, title, body, created_at, updated_at FROM notes
+       WHERE deleted_at IS NULL
+       ORDER BY COALESCE(updated_at, created_at) DESC, id DESC
+       LIMIT 50`
+    );
   }
 
   return NextResponse.json({ ok: true, q, notes });

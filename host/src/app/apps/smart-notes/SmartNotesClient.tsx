@@ -54,8 +54,8 @@ async function apiUpdate(id: number, patch: { title: string; body: string }) {
 
 async function apiDelete(id: number) {
   const res = await fetch(`/api/apps/smart-notes/notes/${id}`, { method: 'DELETE' });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data?.error ?? `HTTP ${res.status}`);
+  const data = await res.json().catch(() => null);
+  if (!res.ok) throw new Error((data as any)?.error ?? `HTTP ${res.status}`);
 }
 
 function clampPreview(s: string, n = 80) {
@@ -173,13 +173,17 @@ export function SmartNotesClient({ initialNotes }: { initialNotes: Note[] }) {
 
   const onDelete = async () => {
     if (!selectedId) return;
-    const ok = window.confirm('Delete this note?');
+    const ok = window.confirm('Move this note to trash?');
     if (!ok) return;
-    await apiDelete(selectedId);
-    const remaining = notes.filter((n) => n.id !== selectedId);
-    setNotes(remaining);
-    setSelectedId(remaining[0]?.id ?? null);
-    if (window.innerWidth < 768) setView('list');
+    try {
+      await apiDelete(selectedId);
+      const remaining = notes.filter((n) => n.id !== selectedId);
+      setNotes(remaining);
+      setSelectedId(remaining[0]?.id ?? null);
+      if (window.innerWidth < 768) setView('list');
+    } catch {
+      setSaveState('error');
+    }
   };
 
   const statusText =

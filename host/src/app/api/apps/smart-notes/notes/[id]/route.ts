@@ -20,6 +20,11 @@ function ensureSchema() {
   } catch {
     // ignore
   }
+  try {
+    dbExec(APP_ID, `ALTER TABLE notes ADD COLUMN deleted_at TEXT`);
+  } catch {
+    // ignore
+  }
 }
 
 export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
@@ -32,11 +37,12 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
 
     const rows = dbQuery<any>(
       APP_ID,
-      `SELECT id, title, body, created_at, updated_at FROM notes WHERE id = ? LIMIT 1`,
+      `SELECT id, title, body, created_at, updated_at, deleted_at FROM notes WHERE id = ? LIMIT 1`,
       [noteId]
     );
     const note = rows[0];
     if (!note) return NextResponse.json({ ok: false, error: 'not found' }, { status: 404 });
+    if (note.deleted_at) return NextResponse.json({ ok: false, error: 'not found' }, { status: 404 });
 
     return NextResponse.json({ ok: true, note });
   } catch (e: any) {
@@ -71,8 +77,8 @@ export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string 
     const noteId = Number(id);
     if (!Number.isFinite(noteId)) return NextResponse.json({ ok: false, error: 'bad id' }, { status: 400 });
 
-    dbExec(APP_ID, `DELETE FROM notes WHERE id = ?`, [noteId]);
-    audit(APP_ID, 'notes.delete', { id: noteId, mode: 'json' });
+    dbExec(APP_ID, `UPDATE notes SET deleted_at = ? WHERE id = ?`, [new Date().toISOString(), noteId]);
+    audit(APP_ID, 'notes.soft_delete', { id: noteId, mode: 'json' });
 
     return NextResponse.json({ ok: true });
   } catch (e: any) {

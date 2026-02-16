@@ -20,11 +20,23 @@ function ensureSchema() {
   } catch {
     // ignore
   }
+  try {
+    dbExec(APP_ID, `ALTER TABLE notes ADD COLUMN deleted_at TEXT`);
+  } catch {
+    // ignore
+  }
 }
 
 export default async function SmartNotesPage() {
   ensureSchema();
-  const rows = dbQuery<any>(APP_ID, `SELECT id, title, body, created_at, updated_at FROM notes ORDER BY id DESC LIMIT 50`);
+  const rows = dbQuery<any>(
+    APP_ID,
+    `SELECT id, title, body, created_at, updated_at
+     FROM notes
+     WHERE deleted_at IS NULL
+     ORDER BY COALESCE(updated_at, created_at) DESC, id DESC
+     LIMIT 50`
+  );
 
   // Client Components require plain JSON-serializable objects.
   // node:sqlite may return objects with non-standard prototypes.
