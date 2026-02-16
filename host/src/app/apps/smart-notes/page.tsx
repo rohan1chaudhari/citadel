@@ -10,6 +10,12 @@ async function fetchNotes(q: string) {
   return (await res.json()) as { ok: true; notes: Note[]; q: string };
 }
 
+function preview(body: string | null) {
+  const t = (body ?? '').trim();
+  if (!t) return '';
+  return t.length > 140 ? t.slice(0, 140) + '…' : t;
+}
+
 export default async function SmartNotesPage({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
   const sp = await searchParams;
   const q = sp.q ?? '';
@@ -24,14 +30,7 @@ export default async function SmartNotesPage({ searchParams }: { searchParams: P
 
       <div className="grid gap-6">
         <Card>
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <h2 className="text-sm font-semibold text-zinc-900">New note</h2>
-              <p className="mt-1 text-sm text-zinc-600">Local-first. Stored in your Smart Notes app DB.</p>
-            </div>
-            <div className="text-xs text-zinc-500">MVP A</div>
-          </div>
-
+          <h2 className="text-sm font-semibold text-zinc-900">New note</h2>
           <form action="/api/apps/smart-notes/notes" method="post" className="mt-4 space-y-3">
             <div>
               <Label>Title</Label>
@@ -47,16 +46,14 @@ export default async function SmartNotesPage({ searchParams }: { searchParams: P
 
         <Card>
           <h2 className="text-sm font-semibold text-zinc-900">Search</h2>
-          <form action="/apps/smart-notes" method="get" className="mt-3 flex gap-2">
+          <form action="/apps/smart-notes" method="get" className="mt-3 flex flex-col gap-2 sm:flex-row">
             <Input name="q" defaultValue={data.q} placeholder="Search title or body" />
             <Button type="submit" variant="secondary">Search</Button>
           </form>
           {data.q ? (
             <p className="mt-2 text-sm text-zinc-600">
               Filtering by: <code className="rounded bg-zinc-100 px-1 py-0.5">{data.q}</code> ·{' '}
-              <a className="text-zinc-900 underline" href="/apps/smart-notes">
-                clear
-              </a>
+              <a className="text-zinc-900 underline" href="/apps/smart-notes">clear</a>
             </p>
           ) : (
             <p className="mt-2 text-sm text-zinc-600">Tip: try searching for a phrase you wrote.</p>
@@ -73,34 +70,17 @@ export default async function SmartNotesPage({ searchParams }: { searchParams: P
             {data.notes.map((n) => (
               <Card key={n.id}>
                 <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <div className="text-sm font-semibold text-zinc-900">{n.title?.trim() ? n.title : '(untitled)'}</div>
+                  <div className="min-w-0">
+                    <a className="block truncate text-sm font-semibold text-zinc-900 hover:underline" href={`/apps/smart-notes/${n.id}`}>
+                      {n.title?.trim() ? n.title : 'Untitled note'}
+                    </a>
                     <div className="mt-1 text-xs text-zinc-500">#{n.id} · {n.created_at}</div>
                   </div>
-                  <details className="text-sm">
-                    <summary className="cursor-pointer text-zinc-700 hover:text-zinc-900">Edit</summary>
-                    <form action={`/api/apps/smart-notes/notes/${n.id}/update`} method="post" className="mt-3 space-y-3">
-                      <div>
-                        <Label>Title</Label>
-                        <Input name="title" defaultValue={n.title ?? ''} />
-                      </div>
-                      <div>
-                        <Label>Body</Label>
-                        <Textarea name="body" defaultValue={n.body ?? ''} rows={5} />
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Button type="submit" variant="primary">Save</Button>
-                        <Button type="reset" variant="secondary">Reset</Button>
-                      </div>
-                    </form>
-                  </details>
+                  <div className="shrink-0">
+                    <LinkA href={`/apps/smart-notes/${n.id}`}>Open →</LinkA>
+                  </div>
                 </div>
-
-                {n.body ? <div className="mt-3 whitespace-pre-wrap text-sm text-zinc-700">{n.body}</div> : null}
-
-                <form action={`/api/apps/smart-notes/notes/${n.id}/delete`} method="post" className="mt-4">
-                  <Button type="submit" variant="danger">Delete</Button>
-                </form>
+                {preview(n.body) ? <div className="mt-3 text-sm text-zinc-700">{preview(n.body)}</div> : null}
               </Card>
             ))}
 
