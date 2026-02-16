@@ -7,16 +7,24 @@ export const runtime = 'nodejs';
 const APP_ID = 'smart-notes';
 
 function ensureSchema() {
+  // Base table (older installs may already have notes without updated_at)
   dbExec(
     APP_ID,
     `CREATE TABLE IF NOT EXISTS notes (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       title TEXT,
       body TEXT,
-      created_at TEXT NOT NULL,
-      updated_at TEXT
+      created_at TEXT NOT NULL
     )`
   );
+
+  // Lightweight migration: add updated_at if missing.
+  try {
+    dbExec(APP_ID, `ALTER TABLE notes ADD COLUMN updated_at TEXT`);
+  } catch {
+    // ignore (likely "duplicate column name")
+  }
+
   dbExec(APP_ID, `CREATE INDEX IF NOT EXISTS idx_notes_created_at ON notes(created_at)`);
 }
 

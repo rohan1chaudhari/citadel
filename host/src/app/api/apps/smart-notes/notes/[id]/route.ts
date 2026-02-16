@@ -11,10 +11,14 @@ function ensureSchema() {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       title TEXT,
       body TEXT,
-      created_at TEXT NOT NULL,
-      updated_at TEXT
+      created_at TEXT NOT NULL
     )`
   );
+  try {
+    dbExec(APP_ID, `ALTER TABLE notes ADD COLUMN updated_at TEXT`);
+  } catch {
+    // ignore
+  }
 }
 
 export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }) {
