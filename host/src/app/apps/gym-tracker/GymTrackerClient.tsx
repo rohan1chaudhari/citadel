@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Button, Card, Input, Label } from '@/components/Shell';
 
 const DAY_CATEGORIES = ['push', 'cardio', 'pull', 'leg'] as const;
@@ -169,6 +169,12 @@ export function GymTrackerClient({ initialEntries, recentExercises }: { initialE
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editingWeight, setEditingWeight] = useState('');
   const [editingReps, setEditingReps] = useState('');
+
+  const [voiceState, setVoiceState] = useState<'idle' | 'recording' | 'processing' | 'error'>('idle');
+  const [voiceTranscript, setVoiceTranscript] = useState<string>('');
+  const mediaRef = useRef<MediaRecorder | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const chunksRef = useRef<BlobPart[]>([]);
 
   const [range, setRange] = useState<'3d' | '7d' | '30d' | '90d'>('30d');
   const [analyticsMode, setAnalyticsMode] = useState<'overview' | 'consistency' | 'exercise-load'>('overview');
@@ -490,9 +496,93 @@ export function GymTrackerClient({ initialEntries, recentExercises }: { initialE
     }
   };
 
+  const startVoiceFill = async () => {
+    try {
+      setVoiceTranscript('');
+      setVoiceState('recording');
+      chunksRef.current = [];
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
+      const rec = new MediaRecorder(stream);
+      mediaRef.current = rec;
+      rec.ondataavailable = (e) => {
+        if (e.data && e.data.size > 0) chunksRef.current.push(e.data);
+      };
+      rec.start();
+    } catch {
+      setVoiceState('error');
+    }
+  };
+
+  const stopVoiceFill = async () => {
+    const rec = mediaRef.current;
+    if (!rec) return;
+    setVoiceState('processing');
+
+    await new Promise<void>((resolve) => {
+      rec.addEventListener('stop', () => resolve(), { once: true });
+      if (rec.state === 'recording') rec.stop();
+      else resolve();
+    });
+
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    streamRef.current = null;
+
+    try {
+      const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
+      const file = new File([blob], 'set.webm', { type: 'audio/webm' });
+      const fd = new FormData();
+      fd.set('audio', file);
+      fd.set('context', JSON.stringify({
+        category: session?.category ?? null,
+        exercise: session?.exercise || exerciseName || null,
+        nextSet: session?.nextSet ?? 1,
+        lastWeight: weight || null,
+        lastReps: reps || null
+      }));
+
+      const res = await fetch('/api/apps/gym-tracker/voice-parse', { method: 'POST', body: fd });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.error ?? `HTTP ${res.status}`);
+
+      const transcript = String(data?.transcript ?? '');
+      const extracted = data?.extracted ?? {};
+
+      setVoiceTranscript(transcript);
+      if (typeof extracted?.exercise === 'string' && extracted.exercise.trim()) {
+        if (session?.exercise) {
+          // only overwrite active exercise if user explicitly said a different one
+          if (extracted.exercise.trim().toLowerCase() !== session.exercise.trim().toLowerCase()) {
+            setExerciseName(extracted.exercise.trim());
+          }
+        } else {
+          setExerciseName(extracted.exercise.trim());
+        }
+      }
+      if (Number.isFinite(Number(extracted?.weight))) setWeight(String(extracted.weight));
+      if (Number.isFinite(Number(extracted?.reps))) setReps(String(extracted.reps));
+
+      setVoiceState('idle');
+      mediaRef.current = null;
+    } catch (e: any) {
+      setError(String(e?.message ?? e));
+      setVoiceState('error');
+      mediaRef.current = null;
+    }
+  };
+
   useEffect(() => {
     if (historyPage > totalHistoryPages) setHistoryPage(totalHistoryPages);
   }, [historyPage, totalHistoryPages]);
+
+  useEffect(() => {
+    return () => {
+      try {
+        if (mediaRef.current?.state === 'recording') mediaRef.current.stop();
+      } catch {}
+      streamRef.current?.getTracks().forEach((t) => t.stop());
+    };
+  }, []);
 
   return (
     <div className="grid gap-6">
@@ -571,10 +661,18 @@ export function GymTrackerClient({ initialEntries, recentExercises }: { initialE
                 </div>
               </div>
 
-              <div className="flex gap-2">
-                <Button type="button" onClick={logSet} disabled={busy}>{busy ? 'Saving…' : `Log set ${session.nextSet}`}</Button>
+              <div className="flex flex-wrap gap-2">
+                <Button type="button" onClick={logSet} disabled={busy}>{busy ? 'Saving…' : `Create set ${session.nextSet}`}</Button>
                 <Button type="button" variant="secondary" onClick={startNextExercise} disabled={busy}>Start next exercise</Button>
+                {voiceState === 'recording' ? (
+                  <Button type="button" variant="danger" onClick={stopVoiceFill}>Stop voice</Button>
+                ) : (
+                  <Button type="button" variant="secondary" onClick={startVoiceFill} disabled={voiceState === 'processing'}>
+                    {voiceState === 'processing' ? 'Processing…' : 'Voice fill'}
+                  </Button>
+                )}
               </div>
+              {voiceTranscript ? <div className="text-xs text-zinc-500">Heard: “{voiceTranscript}”</div> : null}
 
               {sessionEntries.length > 0 ? (
                 <div className="mt-2 grid gap-2">
@@ -663,13 +761,13 @@ export function GymTrackerClient({ initialEntries, recentExercises }: { initialE
         <div className="grid gap-4">
           <Card>
             <div className="flex flex-wrap items-end gap-3">
-              <div>
+              <div className="min-w-[260px]">
                 <Label>Mode</Label>
-                <select value={analyticsMode} onChange={(e) => setAnalyticsMode(e.target.value as any)} className="mt-1 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm">
-                  <option value="overview">Overview</option>
-                  <option value="consistency">Consistency</option>
-                  <option value="exercise-load">Per exercise load</option>
-                </select>
+                <div className="mt-1 flex items-center gap-2">
+                  <Button type="button" variant={analyticsMode === 'overview' ? 'primary' : 'secondary'} onClick={() => setAnalyticsMode('overview')}>Overview</Button>
+                  <Button type="button" variant={analyticsMode === 'consistency' ? 'primary' : 'secondary'} onClick={() => setAnalyticsMode('consistency')}>Consistency</Button>
+                  <Button type="button" variant={analyticsMode === 'exercise-load' ? 'primary' : 'secondary'} onClick={() => setAnalyticsMode('exercise-load')}>Exercise load</Button>
+                </div>
               </div>
               <div>
                 <Label>Range</Label>
