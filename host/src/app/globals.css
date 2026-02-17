@@ -86,9 +86,11 @@ body {
 }
 
 .smart-notes-analog textarea.analog-note-body {
-  background-image: url('/textures/paper-fibers.png');
-  background-size: 220px 220px;
-  line-height: 1.65;
+  background-image:
+    repeating-linear-gradient(0deg, var(--line) 0px, var(--line) 1px, transparent 1px, transparent 28px),
+    url('/textures/paper-fibers.png');
+  background-size: auto, 220px 220px;
+  line-height: 28px;
   caret-color: #2f2318;
 }
 
