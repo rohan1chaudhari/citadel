@@ -30,6 +30,11 @@ function ensureSchema() {
   } catch {
     // ignore
   }
+  try {
+    dbExec(APP_ID, `ALTER TABLE notes ADD COLUMN tags TEXT`);
+  } catch {
+    // ignore
+  }
 }
 
 export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
@@ -42,7 +47,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
 
     const rows = dbQuery<any>(
       APP_ID,
-      `SELECT id, title, body, created_at, updated_at, deleted_at, pinned FROM notes WHERE id = ? LIMIT 1`,
+      `SELECT id, title, body, tags, created_at, updated_at, deleted_at, pinned FROM notes WHERE id = ? LIMIT 1`,
       [noteId]
     );
     const note = rows[0];
@@ -73,21 +78,23 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
 
     const title = typeof body.title === 'string' ? body.title.slice(0, 200) : '';
     const text = typeof body.body === 'string' ? body.body : '';
+    const tags = typeof body.tags === 'string' ? body.tags.slice(0, 400) : '';
     const pinned = typeof body.pinned === 'boolean' ? (body.pinned ? 1 : 0) : null;
 
     if (pinned === null) {
-      dbExec(APP_ID, `UPDATE notes SET title = ?, body = ?, updated_at = ? WHERE id = ?`, [title, text, new Date().toISOString(), noteId]);
+      dbExec(APP_ID, `UPDATE notes SET title = ?, body = ?, tags = ?, updated_at = ? WHERE id = ?`, [title, text, tags, new Date().toISOString(), noteId]);
     } else {
-      dbExec(APP_ID, `UPDATE notes SET title = ?, body = ?, pinned = ?, updated_at = ? WHERE id = ?`, [
+      dbExec(APP_ID, `UPDATE notes SET title = ?, body = ?, tags = ?, pinned = ?, updated_at = ? WHERE id = ?`, [
         title,
         text,
+        tags,
         pinned,
         new Date().toISOString(),
         noteId
       ]);
     }
 
-    audit(APP_ID, 'notes.update', { id: noteId, titleLen: title.length, bodyLen: text.length, pinned, mode: 'json' });
+    audit(APP_ID, 'notes.update', { id: noteId, titleLen: title.length, bodyLen: text.length, tagsLen: tags.length, pinned, mode: 'json' });
 
     return NextResponse.json({ ok: true });
   } catch (e: any) {

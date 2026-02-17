@@ -9,6 +9,7 @@ type Note = {
   id: number;
   title: string | null;
   body: string | null;
+  tags?: string | null;
   created_at: string;
   updated_at?: string | null;
   pinned?: number;
@@ -48,7 +49,7 @@ async function apiGet(id: number): Promise<Note> {
   return data.note as Note;
 }
 
-async function apiUpdate(id: number, patch: { title: string; body: string; pinned?: boolean; restore?: boolean }) {
+async function apiUpdate(id: number, patch: { title: string; body: string; tags?: string; pinned?: boolean; restore?: boolean }) {
   const res = await fetch(`/api/apps/smart-notes/notes/${id}`, {
     method: 'PATCH',
     headers: { 'content-type': 'application/json' },
@@ -68,6 +69,18 @@ function clampPreview(s: string, n = 80) {
   const t = s.trim().replace(/\s+/g, ' ');
   if (!t) return '';
   return t.length > n ? t.slice(0, n) + '…' : t;
+}
+
+function parseTags(raw: string) {
+  return raw
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .slice(0, 12);
+}
+
+function normalizeTags(raw: string) {
+  return parseTags(raw).join(', ');
 }
 
 function highlight(text: string, q: string) {
@@ -110,6 +123,7 @@ export function SmartNotesClient({ initialNotes }: { initialNotes: Note[] }) {
   const [current, setCurrent] = useState<Note | null>(null);
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
+  const [tags, setTags] = useState('');
   const [saveState, setSaveState] = useState<SaveState>('idle');
   const [saveError, setSaveError] = useState<string | null>(null);
   const [view, setView] = useState<'list' | 'editor'>('list');
@@ -119,7 +133,7 @@ export function SmartNotesClient({ initialNotes }: { initialNotes: Note[] }) {
   const [isPending, startTransition] = useTransition();
 
   const debounceRef = useRef<any>(null);
-  const lastSavedRef = useRef<{ title: string; body: string }>({ title: '', body: '' });
+  const lastSavedRef = useRef<{ title: string; body: string; tags: string }>({ title: '', body: '', tags: '' });
 
   const selected = useMemo(() => notes.find((n) => n.id === selectedId) ?? null, [notes, selectedId]);
 
@@ -136,7 +150,8 @@ export function SmartNotesClient({ initialNotes }: { initialNotes: Note[] }) {
         setCurrent(note);
         setTitle(note.title ?? '');
         setBody(note.body ?? '');
-        lastSavedRef.current = { title: note.title ?? '', body: note.body ?? '' };
+        setTags(note.tags ?? '');
+        lastSavedRef.current = { title: note.title ?? '', body: note.body ?? '', tags: note.tags ?? '' };
         setSaveError(null);
         setSaveState('idle');
       } catch (e: any) {
@@ -164,7 +179,7 @@ export function SmartNotesClient({ initialNotes }: { initialNotes: Note[] }) {
     return () => window.removeEventListener('resize', onResize);
   }, []);
 
-  const scheduleSave = (nextTitle: string, nextBody: string) => {
+  const scheduleSave = (nextTitle: string, nextBody: string, nextTags: string) => {
     if (!selectedId) return;
     if (debounceRef.current) clearTimeout(debounceRef.current);
 
@@ -174,11 +189,15 @@ export function SmartNotesClient({ initialNotes }: { initialNotes: Note[] }) {
       try {
         if (!isOnline()) throw new Error('Offline');
         setSaveState('saving');
-        await apiUpdate(selectedId, { title: nextTitle, body: nextBody });
-        lastSavedRef.current = { title: nextTitle, body: nextBody };
+        await apiUpdate(selectedId, { title: nextTitle, body: nextBody, tags: normalizeTags(nextTags) });
+        lastSavedRef.current = { title: nextTitle, body: nextBody, tags: normalizeTags(nextTags) };
         setSaveState('saved');
         setNotes((prev) =>
-          sortNotes(prev.map((n) => (n.id === selectedId ? { ...n, title: nextTitle, body: nextBody, updated_at: new Date().toISOString() } : n)))
+          sortNotes(
+            prev.map((n) =>
+              n.id === selectedId ? { ...n, title: nextTitle, body: nextBody, tags: normalizeTags(nextTags), updated_at: new Date().toISOString() } : n
+            )
+          )
         );
         setTimeout(() => setSaveState('idle'), 800);
       } catch (e: any) {
@@ -190,12 +209,17 @@ export function SmartNotesClient({ initialNotes }: { initialNotes: Note[] }) {
 
   const onChangeTitle = (v: string) => {
     setTitle(v);
-    scheduleSave(v, body);
+    scheduleSave(v, body, tags);
   };
 
   const onChangeBody = (v: string) => {
     setBody(v);
-    scheduleSave(title, v);
+    scheduleSave(title, v, tags);
+  };
+
+  const onChangeTags = (v: string) => {
+    setTags(v);
+    scheduleSave(title, body, v);
   };
 
   const refreshList = async () => {
@@ -401,7 +425,7 @@ export function SmartNotesClient({ initialNotes }: { initialNotes: Note[] }) {
     try {
       setSaveState('saving');
       setSaveError(null);
-      await apiUpdate(selectedId, { title, body });
+      await apiUpdate(selectedId, { title, body, tags: normalizeTags(tags) });
       setSaveState('saved');
       setTimeout(() => setSaveState('idle'), 800);
     } catch (e: any) {
@@ -472,9 +496,8 @@ export function SmartNotesClient({ initialNotes }: { initialNotes: Note[] }) {
                       </span>
                     ) : null}
                   </div>
-                  <div className="mt-1 truncate text-xs text-zinc-500">
-                    {highlight(clampPreview(n.body ?? ''), q)}
-                  </div>
+                  <div className="mt-1 truncate text-xs text-zinc-500">{highlight(clampPreview(n.body ?? ''), q)}</div>
+                  {n.tags?.trim() ? <div className="mt-1 truncate text-[11px] text-zinc-500">🏷 {n.tags}</div> : null}
                 </div>
                 <div className="text-xs text-zinc-400">#{n.id}</div>
               </div>
@@ -528,7 +551,7 @@ export function SmartNotesClient({ initialNotes }: { initialNotes: Note[] }) {
                 if (!selectedId) return;
                 const next = !(current?.pinned ? true : false);
                 try {
-                  await apiUpdate(selectedId, { title, body, pinned: next });
+                  await apiUpdate(selectedId, { title, body, tags: normalizeTags(tags), pinned: next });
                   const now = new Date().toISOString();
                   setNotes((prev) =>
                     sortNotes(prev.map((n) => (n.id === selectedId ? { ...n, pinned: next ? 1 : 0, updated_at: now } : n)))
@@ -558,6 +581,46 @@ export function SmartNotesClient({ initialNotes }: { initialNotes: Note[] }) {
           <Card>
             <Label>Title</Label>
             <Input value={title} onChange={(e) => onChangeTitle(e.target.value)} placeholder="Title" />
+
+            <div className="mt-3">
+              <Label>Tags</Label>
+              <Input value={tags} onChange={(e) => onChangeTags(e.target.value)} placeholder="ideas, location:home, time:morning" />
+              <div className="mt-2 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const tag = `time:${new Date().toLocaleString()}`;
+                    const next = normalizeTags([tags, tag].filter(Boolean).join(', '));
+                    onChangeTags(next);
+                  }}
+                  className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-700 hover:bg-zinc-50"
+                >
+                  + time
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!navigator?.geolocation) return;
+                    navigator.geolocation.getCurrentPosition(
+                      (pos) => {
+                        const tag = `gps:${pos.coords.latitude.toFixed(5)},${pos.coords.longitude.toFixed(5)}`;
+                        const next = normalizeTags([tags, tag].filter(Boolean).join(', '));
+                        onChangeTags(next);
+                      },
+                      () => {
+                        setSnack({ msg: 'Location permission denied' });
+                        setTimeout(() => setSnack(null), 2000);
+                      },
+                      { enableHighAccuracy: false, timeout: 8000 }
+                    );
+                  }}
+                  className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-700 hover:bg-zinc-50"
+                >
+                  + gps
+                </button>
+              </div>
+            </div>
+
             <div className="mt-3">
               <div className="flex items-center justify-between">
                 <Label>Markdown</Label>

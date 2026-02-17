@@ -30,13 +30,18 @@ function ensureSchema() {
   } catch {
     // ignore
   }
+  try {
+    dbExec(APP_ID, `ALTER TABLE notes ADD COLUMN tags TEXT`);
+  } catch {
+    // ignore
+  }
 }
 
 export default async function SmartNotesPage() {
   ensureSchema();
   const rows = dbQuery<any>(
     APP_ID,
-    `SELECT id, title, body, created_at, updated_at, pinned
+    `SELECT id, title, body, tags, created_at, updated_at, pinned
      FROM notes
      WHERE deleted_at IS NULL
      ORDER BY pinned DESC, COALESCE(updated_at, created_at) DESC, id DESC
@@ -49,6 +54,7 @@ export default async function SmartNotesPage() {
     id: Number(r.id),
     title: r.title ?? null,
     body: r.body ?? null,
+    tags: r.tags ?? null,
     created_at: String(r.created_at),
     updated_at: r.updated_at ?? null,
     pinned: Number(r.pinned ?? 0)
