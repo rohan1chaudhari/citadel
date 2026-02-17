@@ -20,3 +20,55 @@ body {
   box-sizing: border-box;
   @apply selection:bg-zinc-900 selection:text-white;
 }
+
+/* Smart Notes analog theme */
+.smart-notes-analog {
+  --paper-base: #f8f1df;
+  --paper-ink: #2f2418;
+}
+
+.smart-notes-analog .analog-paper-card {
+  color: var(--paper-ink);
+  background-color: var(--paper-base);
+  background-image:
+    radial-gradient(circle at 20% 20%, rgba(255, 255, 255, 0.35) 0, transparent 40%),
+    radial-gradient(circle at 80% 0%, rgba(120, 90, 55, 0.06) 0, transparent 35%),
+    repeating-linear-gradient(0deg, rgba(95, 70, 45, 0.055) 0px, rgba(95, 70, 45, 0.055) 1px, transparent 1px, transparent 26px);
+  border-color: rgba(72, 48, 26, 0.2);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.5) inset, 0 10px 20px -14px rgba(48, 30, 12, 0.45);
+}
+
+.smart-notes-analog .analog-note-item {
+  position: relative;
+  color: var(--paper-ink);
+  background-image:
+    linear-gradient(0deg, rgba(130, 92, 53, 0.04), rgba(130, 92, 53, 0.04)),
+    radial-gradient(circle at 92% 10%, rgba(100, 67, 35, 0.06), transparent 32%);
+}
+
+.smart-notes-analog input,
+.smart-notes-analog textarea {
+  color: #362719;
+  background-color: #fbf6ea !important;
+  border-color: rgba(76, 53, 33, 0.26) !important;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.7) inset;
+}
+
+.smart-notes-analog textarea.analog-note-body {
+  background-image: repeating-linear-gradient(
+    0deg,
+    rgba(105, 75, 44, 0.07) 0px,
+    rgba(105, 75, 44, 0.07) 1px,
+    transparent 1px,
+    transparent 26px
+  );
+  line-height: 26px;
+}
+
+.smart-notes-analog button {
+  border-color: rgba(71, 50, 31, 0.24);
+}
+
+.smart-notes-analog .prose {
+  color: #3a2b1d;
+}
