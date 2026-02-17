@@ -434,7 +434,7 @@ export function SmartNotesClient({ initialNotes }: { initialNotes: Note[] }) {
         </div>
       </div>
 
-      <Card className="analog-paper-card">
+      <Card>
         <Label>Search</Label>
         <div className="mt-2 flex gap-2">
           <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search title/body" />
@@ -456,8 +456,8 @@ export function SmartNotesClient({ initialNotes }: { initialNotes: Note[] }) {
             <button
               key={n.id}
               onClick={() => onSelect(n.id)}
-              className={`analog-note-item text-left rounded-xl border p-3 transition ${
-                active ? 'border-amber-900/40 bg-amber-50/90' : 'border-amber-900/20 bg-amber-50/70 hover:bg-amber-50'
+              className={`text-left rounded-xl border p-3 transition ${
+                active ? 'border-zinc-900 bg-white' : 'border-zinc-200 bg-white hover:bg-zinc-50'
               }`}
             >
               <div className="flex items-center justify-between gap-3">
@@ -483,7 +483,7 @@ export function SmartNotesClient({ initialNotes }: { initialNotes: Note[] }) {
         })}
 
         {notes.length === 0 ? (
-          <Card className="analog-paper-card">
+          <Card>
             <p className="text-sm text-zinc-600">No notes yet. Tap “New” to create one.</p>
           </Card>
         ) : null}
@@ -494,7 +494,7 @@ export function SmartNotesClient({ initialNotes }: { initialNotes: Note[] }) {
   const EditorPane = (
     <div className="space-y-3">
       {saveError ? (
-        <Card className="analog-paper-card">
+        <Card>
           <p className="text-sm font-medium text-zinc-900">Couldn’t save</p>
           <p className="mt-1 text-xs text-zinc-600">{saveError}</p>
           <div className="mt-3">
@@ -550,12 +550,12 @@ export function SmartNotesClient({ initialNotes }: { initialNotes: Note[] }) {
       </div>
 
       {!selectedId ? (
-        <Card className="analog-paper-card">
+        <Card>
           <p className="text-sm text-zinc-600">Select a note.</p>
         </Card>
       ) : (
         <>
-          <Card className="analog-paper-card">
+          <Card>
             <Label>Title</Label>
             <Input value={title} onChange={(e) => onChangeTitle(e.target.value)} placeholder="Title" />
             <div className="mt-3">
@@ -586,12 +586,12 @@ export function SmartNotesClient({ initialNotes }: { initialNotes: Note[] }) {
                 value={body}
                 onChange={(e) => onChangeBody(e.target.value)}
                 placeholder="Write in Markdown…"
-                className={"analog-note-body mt-2 h-56 w-full rounded-lg border border-amber-900/20 bg-amber-50/80 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-900/20 " + (mobileTab === 'preview' ? 'hidden md:block' : '')}
+                className={"mt-2 h-56 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-zinc-900/15 " + (mobileTab === 'preview' ? 'hidden md:block' : '')}
               />
             </div>
           </Card>
 
-          <Card className={`analog-paper-card ${mobileTab === 'edit' ? 'hidden md:block' : ''}`}>
+          <Card className={mobileTab === 'edit' ? 'hidden md:block' : ''}>
             <div className="flex items-center justify-between">
               <div className="text-xs font-medium text-zinc-500">Preview</div>
               <Button type="button" variant="secondary" onClick={refreshList as any}>
@@ -609,13 +609,13 @@ export function SmartNotesClient({ initialNotes }: { initialNotes: Note[] }) {
 
   return (
     <>
-      <div className="smart-notes-analog-inner grid gap-6 md:grid-cols-[320px_1fr]">
+      <div className="grid gap-6 md:grid-cols-[320px_1fr]">
         <div className={view === 'editor' && isMobile ? 'hidden' : ''}>{ListPane}</div>
         <div className={view === 'list' && isMobile ? 'hidden' : ''}>{EditorPane}</div>
       </div>
 
       {snack ? (
-        <div className="fixed inset-x-0 bottom-4 z-50 mx-auto flex max-w-md items-center justify-between gap-3 rounded-xl border border-amber-900/20 bg-amber-50 px-4 py-3 shadow-lg">
+        <div className="fixed inset-x-0 bottom-4 z-50 mx-auto flex max-w-md items-center justify-between gap-3 rounded-xl border border-zinc-200 bg-white px-4 py-3 shadow-lg">
           <div className="text-sm text-zinc-900">{snack.msg}</div>
           {snack.action ? (
             <button
