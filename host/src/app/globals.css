@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&family=Patrick+Hand&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -28,6 +30,7 @@ body {
   --ink: #2f2318;
   --line: rgba(111, 84, 51, 0.14);
   color: var(--ink);
+  font-family: 'Newsreader', 'Palatino Linotype', 'Book Antiqua', Palatino, serif;
   border-radius: 18px;
   padding: 12px;
   background:
@@ -103,4 +106,19 @@ body {
 
 .smart-notes-analog mark {
   background: rgba(247, 218, 125, 0.45) !important;
+}
+
+.smart-notes-analog label,
+.smart-notes-analog button,
+.smart-notes-analog input,
+.smart-notes-analog textarea,
+.smart-notes-analog .analog-note-item .text-sm.font-semibold,
+.smart-notes-analog .text-xs {
+  font-family: 'Patrick Hand', 'Comic Sans MS', cursive;
+  letter-spacing: 0.2px;
+}
+
+.smart-notes-analog textarea,
+.smart-notes-analog input {
+  font-size: 1.08rem;
 }
