@@ -39,3 +39,5 @@ npm run dev
 
 ## Notion
 Project is tracked in Notion (project home + tasks + specs). Keep the canonical roadmap there; keep implementation details and “how it works” here.
+
+- PRD / Brain dump: https://www.notion.so/Personal-App-Hub-OpenClaw-for-Apps-PRD-Brain-Dump-3097c2df0e2e80098e09fcdbe0438561
