@@ -436,8 +436,8 @@ export function SmartNotesClient({ initialNotes }: { initialNotes: Note[] }) {
 
       <Card className="analog-paper-card">
         <Label>Search</Label>
-        <div className="mt-2 flex min-w-0 gap-2">
-          <Input className="min-w-0 flex-1" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search title/body" />
+        <div className="mt-2 flex gap-2">
+          <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search title/body" />
           <Button type="button" variant="secondary" onClick={onSearch as any} disabled={isPending}>
             {isPending ? '…' : 'Go'}
           </Button>
@@ -504,7 +504,7 @@ export function SmartNotesClient({ initialNotes }: { initialNotes: Note[] }) {
           </div>
         </Card>
       ) : null}
-      <div className="sticky top-0 z-20 mx-0 border-b border-zinc-200 bg-zinc-50/80 px-2 py-2 backdrop-blur md:static md:border-0 md:bg-transparent md:px-0 md:py-0">
+      <div className="sticky top-0 z-10 -mx-4 border-b border-zinc-200 bg-zinc-50/80 px-4 py-2 backdrop-blur md:static md:mx-0 md:border-0 md:bg-transparent md:px-0 md:py-0">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             {isMobile ? (
@@ -610,8 +610,8 @@ export function SmartNotesClient({ initialNotes }: { initialNotes: Note[] }) {
   return (
     <>
       <div className="smart-notes-analog-inner analog-notebook-frame grid gap-6 md:grid-cols-[320px_1fr]">
-        <div className={`min-w-0 ${view === 'editor' && isMobile ? 'hidden' : ''}`}>{ListPane}</div>
-        <div className={`min-w-0 ${view === 'list' && isMobile ? 'hidden' : ''}`}>{EditorPane}</div>
+        <div className={view === 'editor' && isMobile ? 'hidden' : ''}>{ListPane}</div>
+        <div className={view === 'list' && isMobile ? 'hidden' : ''}>{EditorPane}</div>
       </div>
 
       {snack ? (

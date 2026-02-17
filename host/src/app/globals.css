@@ -30,7 +30,6 @@ body {
   color: var(--ink);
   border-radius: 18px;
   padding: 12px;
-  overflow: hidden;
   background:
     radial-gradient(circle at 10% 10%, rgba(255,255,255,0.65), transparent 45%),
     linear-gradient(180deg, #f9f2e3, #f1e6ce);
