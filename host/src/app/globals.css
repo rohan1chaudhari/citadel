@@ -21,87 +21,67 @@ body {
   @apply selection:bg-zinc-900 selection:text-white;
 }
 
-/* Smart Notes analog theme */
+/* Smart Notes analog theme (paper-first, no wood) */
 .smart-notes-analog {
-  --desk: #5d4632;
-  --paper: #f8f1e0;
-  --paper-2: #f5ecd8;
+  --paper: #f7efdd;
+  --paper-soft: #fbf6ea;
   --ink: #2f2318;
-  --line: rgba(111, 84, 51, 0.18);
+  --line: rgba(111, 84, 51, 0.14);
   color: var(--ink);
-  border-radius: 20px;
-  padding: 16px;
-  background-color: var(--desk);
-  background-image:
-    linear-gradient(130deg, rgba(255, 255, 255, 0.05), rgba(0, 0, 0, 0.16)),
-    url('/textures/wood-pattern.png');
-  border: 1px solid rgba(58, 40, 25, 0.45);
-  box-shadow: 0 26px 50px -32px rgba(21, 13, 8, 0.85), 0 2px 0 rgba(255, 255, 255, 0.05) inset;
+  border-radius: 18px;
+  padding: 12px;
+  background:
+    radial-gradient(circle at 10% 10%, rgba(255,255,255,0.65), transparent 45%),
+    linear-gradient(180deg, #f9f2e3, #f1e6ce);
+  border: 1px solid rgba(99, 69, 40, 0.16);
+  box-shadow: 0 16px 30px -24px rgba(40, 24, 12, 0.55);
 }
 
 .smart-notes-analog-inner.analog-notebook-frame {
   position: relative;
-  padding: 18px;
-  border-radius: 16px;
-  background: linear-gradient(180deg, rgba(255, 251, 242, 0.88), rgba(243, 232, 207, 0.9));
-  border: 1px solid rgba(99, 69, 40, 0.24);
-  box-shadow: 0 18px 30px -24px rgba(40, 24, 12, 0.6);
+  overflow: hidden;
+  padding: 14px;
+  border-radius: 14px;
+  background-color: var(--paper);
+  border: 1px solid rgba(99, 69, 40, 0.18);
 }
 
 .smart-notes-analog-inner.analog-notebook-frame::before {
   content: '';
   position: absolute;
   inset: 0;
-  border-radius: 16px;
+  border-radius: 14px;
   pointer-events: none;
   background-image: url('/textures/cream-paper.png'), url('/textures/paper-fibers.png');
-  background-size: 180px 180px, 260px 260px;
-  mix-blend-mode: multiply;
-  opacity: 0.22;
+  background-size: 220px 220px, 260px 260px;
+  opacity: 0.2;
 }
 
 .smart-notes-analog .analog-list-pane,
 .smart-notes-analog .analog-editor-pane {
   position: relative;
   z-index: 1;
+  min-width: 0;
 }
 
-.smart-notes-analog .analog-paper-card {
-  color: var(--ink);
-  background-color: var(--paper);
-  background-image:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.55), rgba(245, 232, 205, 0.7)),
-    url('/textures/paper-fibers.png');
-  background-size: auto, 240px 240px;
-  border: 1px solid rgba(90, 62, 35, 0.2);
-  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.58) inset, 0 10px 24px -20px rgba(44, 27, 12, 0.62);
-}
-
+.smart-notes-analog .analog-paper-card,
 .smart-notes-analog .analog-note-item {
-  position: relative;
+  width: 100%;
   color: var(--ink);
-  background-image:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.42), rgba(247, 237, 215, 0.78)),
-    url('/textures/cream-paper.png');
-  background-size: auto, 160px 160px;
-}
-
-.smart-notes-analog .analog-note-item::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: 0.75rem;
-  pointer-events: none;
-  background: radial-gradient(circle at 90% 10%, rgba(96, 63, 33, 0.09), transparent 40%);
+  background-color: var(--paper-soft);
+  background-image: url('/textures/paper-fibers.png');
+  background-size: 240px 240px;
+  border: 1px solid rgba(90, 62, 35, 0.18);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.6) inset;
 }
 
 .smart-notes-analog input,
 .smart-notes-analog textarea {
   color: #362719;
-  background-color: #fbf6ea !important;
+  background-color: #fcf8ee !important;
   background-image: url('/textures/paper-fibers.png');
   background-size: 220px 220px;
-  border-color: rgba(76, 53, 33, 0.26) !important;
+  border-color: rgba(76, 53, 33, 0.22) !important;
   box-shadow: 0 1px 0 rgba(255, 255, 255, 0.7) inset;
 }
 
@@ -114,19 +94,15 @@ body {
   caret-color: #2f2318;
 }
 
-.smart-notes-analog button {
-  border-color: rgba(71, 50, 31, 0.24);
+.smart-notes-analog .sticky {
+  border-color: rgba(82, 57, 34, 0.16) !important;
+  background: rgba(247, 239, 223, 0.95) !important;
 }
 
 .smart-notes-analog .prose {
   color: #3a2b1d;
 }
 
-.smart-notes-analog .sticky {
-  border-color: rgba(82, 57, 34, 0.2) !important;
-  background: rgba(247, 239, 223, 0.9) !important;
-}
-
 .smart-notes-analog mark {
-  background: rgba(247, 218, 125, 0.55) !important;
+  background: rgba(247, 218, 125, 0.45) !important;
 }
