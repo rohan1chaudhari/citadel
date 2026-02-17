@@ -594,8 +594,8 @@ export function GymTrackerClient({ initialEntries, recentExercises }: { initialE
   }, []);
 
   return (
-    <div className="grid gap-6">
-      <div className="flex items-center gap-2">
+    <div className="grid gap-6 pb-20 md:pb-0">
+      <div className="hidden md:flex items-center gap-2">
         <Button type="button" variant={tab === 'log' ? 'primary' : 'secondary'} onClick={() => setTab('log')}>Log</Button>
         <Button type="button" variant={tab === 'history' ? 'primary' : 'secondary'} onClick={() => setTab('history')}>History</Button>
         <Button type="button" variant={tab === 'analytics' ? 'primary' : 'secondary'} onClick={() => setTab('analytics')}>Analytics</Button>
@@ -777,10 +777,10 @@ export function GymTrackerClient({ initialEntries, recentExercises }: { initialE
       ) : null}
 
       {tab === 'analytics' ? (
-        <div className="grid gap-4">
+        <div className="grid gap-4 pb-20 md:pb-0">
           <Card>
             <div className="flex flex-wrap items-end gap-3">
-              <div className="min-w-[260px]">
+              <div className="w-full md:min-w-[260px] md:w-auto">
                 <Label>Mode</Label>
                 <div className="mt-1 flex items-center gap-2">
                   <Button type="button" variant={analyticsMode === 'overview' ? 'primary' : 'secondary'} onClick={() => setAnalyticsMode('overview')}>Overview</Button>
@@ -804,7 +804,7 @@ export function GymTrackerClient({ initialEntries, recentExercises }: { initialE
                   {DAY_CATEGORIES.map((c) => <option key={c} value={c}>{titleCase(c)}</option>)}
                 </select>
               </div>
-              <div className="min-w-[180px] grow">
+              <div className="w-full md:min-w-[180px] md:grow">
                 <Label>Exercise</Label>
                 <select value={analyticsExercise} onChange={(e) => setAnalyticsExercise(e.target.value)} className="mt-1 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm">
                   <option value="all">All exercises</option>
@@ -937,6 +937,14 @@ export function GymTrackerClient({ initialEntries, recentExercises }: { initialE
           ) : null}
         </div>
       ) : null}
+
+      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-zinc-200 bg-white/95 px-3 pb-[calc(env(safe-area-inset-bottom)+0.5rem)] pt-2 backdrop-blur md:hidden">
+        <div className="mx-auto grid max-w-3xl grid-cols-3 gap-2">
+          <Button type="button" variant={tab === 'log' ? 'primary' : 'secondary'} onClick={() => setTab('log')} className="w-full">Log</Button>
+          <Button type="button" variant={tab === 'history' ? 'primary' : 'secondary'} onClick={() => setTab('history')} className="w-full">History</Button>
+          <Button type="button" variant={tab === 'analytics' ? 'primary' : 'secondary'} onClick={() => setTab('analytics')} className="w-full">Analytics</Button>
+        </div>
+      </div>
 
       {error ? <p className="text-xs text-red-600">{error}</p> : null}
     </div>
