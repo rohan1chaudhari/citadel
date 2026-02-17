@@ -411,7 +411,7 @@ export function SmartNotesClient({ initialNotes }: { initialNotes: Note[] }) {
   };
 
   const ListPane = (
-    <div className="analog-list-pane space-y-3">
+    <div className="space-y-3">
       <div className="flex items-center justify-between">
         <div className="text-xs font-medium text-zinc-500">Notes</div>
         <div className="flex items-center gap-2">
@@ -492,7 +492,7 @@ export function SmartNotesClient({ initialNotes }: { initialNotes: Note[] }) {
   );
 
   const EditorPane = (
-    <div className="analog-editor-pane space-y-3">
+    <div className="space-y-3">
       {saveError ? (
         <Card className="analog-paper-card">
           <p className="text-sm font-medium text-zinc-900">Couldn’t save</p>
@@ -609,7 +609,7 @@ export function SmartNotesClient({ initialNotes }: { initialNotes: Note[] }) {
 
   return (
     <>
-      <div className="smart-notes-analog-inner analog-notebook-frame grid gap-6 md:grid-cols-[320px_1fr]">
+      <div className="smart-notes-analog-inner grid gap-6 md:grid-cols-[320px_1fr]">
         <div className={view === 'editor' && isMobile ? 'hidden' : ''}>{ListPane}</div>
         <div className={view === 'list' && isMobile ? 'hidden' : ''}>{EditorPane}</div>
       </div>
