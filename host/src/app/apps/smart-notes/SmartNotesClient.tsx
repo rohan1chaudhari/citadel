@@ -677,6 +677,16 @@ export function SmartNotesClient({ initialNotes }: { initialNotes: Note[] }) {
         <div className={view === 'list' && isMobile ? 'hidden' : ''}>{EditorPane}</div>
       </div>
 
+      {isMobile ? (
+        <button
+          type="button"
+          onClick={onNew as any}
+          className="fixed bottom-[calc(env(safe-area-inset-bottom)+1rem)] right-4 z-40 inline-flex h-12 items-center justify-center rounded-full bg-zinc-900 px-4 text-sm font-semibold text-white shadow-lg"
+        >
+          + New note
+        </button>
+      ) : null}
+
       {snack ? (
         <div className="fixed inset-x-0 bottom-4 z-50 mx-auto flex max-w-md items-center justify-between gap-3 rounded-xl border border-zinc-200 bg-white px-4 py-3 shadow-lg">
           <div className="text-sm text-zinc-900">{snack.msg}</div>
