@@ -549,18 +549,27 @@ export function GymTrackerClient({ initialEntries, recentExercises }: { initialE
       const extracted = data?.extracted ?? {};
 
       setVoiceTranscript(transcript);
-      if (typeof extracted?.exercise === 'string' && extracted.exercise.trim()) {
-        if (session?.exercise) {
-          // only overwrite active exercise if user explicitly said a different one
-          if (extracted.exercise.trim().toLowerCase() !== session.exercise.trim().toLowerCase()) {
-            setExerciseName(extracted.exercise.trim());
-          }
-        } else {
-          setExerciseName(extracted.exercise.trim());
+
+      const parsedExercise = typeof extracted?.exercise === 'string' && extracted.exercise.trim() ? extracted.exercise.trim() : null;
+      const parsedSet = Number.isFinite(Number(extracted?.set)) ? Number(extracted.set) : null;
+      const parsedWeight = Number.isFinite(Number(extracted?.weight)) ? Number(extracted.weight) : null;
+      const parsedReps = Number.isFinite(Number(extracted?.reps)) ? Number(extracted.reps) : null;
+
+      if (parsedWeight != null) setWeight(String(parsedWeight));
+      if (parsedReps != null) setReps(String(parsedReps));
+
+      if (session) {
+        const ex = parsedExercise ?? session.exercise ?? (exerciseName.trim() || '');
+        if (ex) {
+          const maxSetForExercise = sessionEntries
+            .filter((e) => e.exercise.toLowerCase() === ex.toLowerCase())
+            .reduce((m, e) => Math.max(m, e.sets ?? 0), 0);
+
+          const nextSet = parsedSet && parsedSet > 0 ? parsedSet : maxSetForExercise + 1;
+          setSession((prev) => (prev ? { ...prev, exercise: ex, nextSet } : prev));
+          setExerciseName(ex);
         }
       }
-      if (Number.isFinite(Number(extracted?.weight))) setWeight(String(extracted.weight));
-      if (Number.isFinite(Number(extracted?.reps))) setReps(String(extracted.reps));
 
       setVoiceState('idle');
       mediaRef.current = null;
@@ -646,7 +655,17 @@ export function GymTrackerClient({ initialEntries, recentExercises }: { initialE
                   Last time: {suggestedFromHistory.weight ?? '-'} kg × {suggestedFromHistory.reps ?? '-'} reps ({formatDateTime(suggestedFromHistory.when)})
                 </p>
               ) : null}
-              <Button type="button" onClick={startExercise}>Start exercise</Button>
+              <div className="flex flex-wrap gap-2">
+                <Button type="button" onClick={startExercise}>Start exercise</Button>
+                {voiceState === 'recording' ? (
+                  <Button type="button" variant="danger" onClick={stopVoiceFill}>Stop voice</Button>
+                ) : (
+                  <Button type="button" variant="secondary" onClick={startVoiceFill} disabled={voiceState === 'processing'}>
+                    {voiceState === 'processing' ? 'Processing…' : 'Voice fill'}
+                  </Button>
+                )}
+              </div>
+              {voiceTranscript ? <div className="text-xs text-zinc-500">Heard: “{voiceTranscript}”</div> : null}
             </div>
           ) : (
             <div className="mt-4 grid gap-3">
