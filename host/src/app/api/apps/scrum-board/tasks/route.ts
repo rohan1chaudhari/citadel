@@ -122,6 +122,9 @@ export async function PATCH(req: Request) {
   const row = dbQuery<TaskRow>(APP_ID, `SELECT * FROM tasks WHERE id = ? LIMIT 1`, [id])[0];
   if (!row) return NextResponse.json({ ok: false, error: 'task not found' }, { status: 404 });
 
+  const targetAppId = typeof body?.targetAppId === 'string' ? body.targetAppId.trim() : '';
+  const targetBoardId = targetAppId ? getOrCreateBoardId(targetAppId) : row.board_id;
+
   const title = typeof body?.title === 'string' ? String(body.title).trim().slice(0, 200) : row.title;
   const description = typeof body?.description === 'string' ? String(body.description).trim().slice(0, 5000) : row.description;
   const status = body?.status != null ? normalizeStatus(body.status) : (row.status as any);
@@ -158,14 +161,15 @@ export async function PATCH(req: Request) {
   }
 
   const completedAt = status === 'done' ? row.completed_at ?? now : null;
-  const position = status !== row.status ? nextPosition(row.board_id, status) : row.position;
+  const movedBoard = targetBoardId !== row.board_id;
+  const position = movedBoard || status !== row.status ? nextPosition(targetBoardId, status) : row.position;
 
   dbExec(
     APP_ID,
     `UPDATE tasks
-     SET title = ?, description = ?, status = ?, position = ?, priority = ?, assignee = ?, due_at = ?, session_id = ?, updated_at = ?, completed_at = ?
+     SET board_id = ?, title = ?, description = ?, status = ?, position = ?, priority = ?, assignee = ?, due_at = ?, session_id = ?, updated_at = ?, completed_at = ?
      WHERE id = ?`,
-    [title, description, status, position, priority, assignee, dueAt, sessionId, now, completedAt, id]
+    [targetBoardId, title, description, status, position, priority, assignee, dueAt, sessionId, now, completedAt, id]
   );
 
   if (body?.comment) {
