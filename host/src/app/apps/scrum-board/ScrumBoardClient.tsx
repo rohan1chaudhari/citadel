@@ -10,6 +10,7 @@ type Task = {
   status: 'backlog' | 'todo' | 'in_progress' | 'done';
   priority: 'low' | 'medium' | 'high';
   assignee: string | null;
+  due_at: string | null;
   session_id: string | null;
   comment_count: number;
 };
@@ -30,6 +31,7 @@ export function ScrumBoardClient({ appIds }: { appIds: string[] }) {
   const [description, setDescription] = useState('');
   const [priority, setPriority] = useState<Task['priority']>('medium');
   const [assignee, setAssignee] = useState('');
+  const [dueAt, setDueAt] = useState('');
   const [sessionId, setSessionId] = useState('');
   const [selectedTask, setSelectedTask] = useState<number | null>(null);
   const [comments, setComments] = useState<Comment[]>([]);
@@ -71,13 +73,14 @@ export function ScrumBoardClient({ appIds }: { appIds: string[] }) {
     const res = await fetch('/api/apps/scrum-board/tasks', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ appId, title, description, priority, assignee: assignee || null, session_id: sessionId || null, status: 'backlog' })
+      body: JSON.stringify({ appId, title, description, priority, assignee: assignee || null, due_at: dueAt || null, session_id: sessionId || null, status: 'backlog' })
     });
     const data = await res.json();
     if (!res.ok || !data?.ok) return;
     setTitle('');
     setDescription('');
     setAssignee('');
+    setDueAt('');
     setSessionId('');
     setPriority('medium');
     await loadTasks();
@@ -106,6 +109,15 @@ export function ScrumBoardClient({ appIds }: { appIds: string[] }) {
       method: 'PATCH',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ id: t.id, assignee: who || null })
+    });
+    await loadTasks();
+  }
+
+  async function changeDueAt(t: Task, dueAtValue: string) {
+    await fetch('/api/apps/scrum-board/tasks', {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ id: t.id, due_at: dueAtValue || null })
     });
     await loadTasks();
   }
@@ -165,6 +177,10 @@ export function ScrumBoardClient({ appIds }: { appIds: string[] }) {
             <Input value={assignee} onChange={(e) => setAssignee(e.target.value)} placeholder="e.g. rohan" />
           </div>
           <div>
+            <Label>Due date (Step 3)</Label>
+            <Input type="datetime-local" value={dueAt} onChange={(e) => setDueAt(e.target.value)} />
+          </div>
+          <div>
             <Label>Session ID (optional)</Label>
             <Input value={sessionId} onChange={(e) => setSessionId(e.target.value)} placeholder="session id for execution context/output" />
           </div>
@@ -188,6 +204,7 @@ export function ScrumBoardClient({ appIds }: { appIds: string[] }) {
                   <div className="font-medium text-zinc-900">{t.title}</div>
                   <div className="mt-1 text-xs text-zinc-500">priority: {t.priority} · comments: {t.comment_count}</div>
                   <div className="mt-1 text-xs text-zinc-500">assignee: {t.assignee || 'unassigned'}</div>
+                  {t.due_at ? <div className="mt-1 text-xs text-zinc-500">due: {new Date(t.due_at).toLocaleString()}</div> : null}
                   {t.session_id ? <div className="mt-1 text-xs text-zinc-500">session: {t.session_id}</div> : null}
                   <div className="mt-2 flex flex-wrap gap-1">
                     {STATUSES.filter((x) => x !== t.status).map((x) => (
@@ -225,6 +242,17 @@ export function ScrumBoardClient({ appIds }: { appIds: string[] }) {
                       }}
                     >
                       assign
+                    </button>
+                    <button
+                      className="rounded border border-zinc-200 px-1.5 py-0.5 text-xs"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const current = t.due_at ? new Date(t.due_at).toISOString().slice(0, 16) : '';
+                        const next = window.prompt('Due date (YYYY-MM-DDTHH:mm, blank to clear)', current);
+                        if (next !== null) changeDueAt(t, next.trim());
+                      }}
+                    >
+                      due
                     </button>
                   </div>
                 </button>

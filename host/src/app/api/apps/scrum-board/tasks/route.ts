@@ -14,6 +14,7 @@ type TaskRow = {
   status: string;
   priority: string;
   assignee: string | null;
+  due_at: string | null;
   session_id: string | null;
   created_at: string;
   updated_at: string | null;
@@ -24,6 +25,14 @@ function priorityRank(p: string) {
   return p === 'high' ? 0 : p === 'medium' ? 1 : 2;
 }
 
+function toIsoOrNull(v: unknown): string | null {
+  const s = String(v ?? '').trim();
+  if (!s) return null;
+  const d = new Date(s);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toISOString();
+}
+
 export async function GET(req: Request) {
   ensureScrumBoardSchema();
   const appId = (new URL(req.url).searchParams.get('app') ?? '').trim();
@@ -32,7 +41,7 @@ export async function GET(req: Request) {
   const boardId = getOrCreateBoardId(appId);
   const tasks = dbQuery<TaskRow>(
     APP_ID,
-    `SELECT id, board_id, title, description, status, priority, assignee, session_id, created_at, updated_at, completed_at
+    `SELECT id, board_id, title, description, status, priority, assignee, due_at, session_id, created_at, updated_at, completed_at
      FROM tasks
      WHERE board_id = ?
      ORDER BY created_at DESC, id DESC`,
@@ -71,6 +80,7 @@ export async function POST(req: Request) {
   const status = normalizeStatus(body?.status);
   const priority = normalizePriority(body?.priority);
   const assignee = String(body?.assignee ?? '').trim().slice(0, 120) || null;
+  const dueAt = toIsoOrNull(body?.due_at ?? body?.dueAt);
   const sessionId = String(body?.session_id ?? body?.sessionId ?? '').trim().slice(0, 120) || null;
 
   if (!appId) return NextResponse.json({ ok: false, error: 'appId required' }, { status: 400 });
@@ -80,13 +90,13 @@ export async function POST(req: Request) {
   const now = new Date().toISOString();
   dbExec(
     APP_ID,
-    `INSERT INTO tasks (board_id, title, description, status, priority, assignee, session_id, created_at, updated_at, completed_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [boardId, title, description || null, status, priority, assignee, sessionId, now, now, status === 'done' ? now : null]
+    `INSERT INTO tasks (board_id, title, description, status, priority, assignee, due_at, session_id, created_at, updated_at, completed_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [boardId, title, description || null, status, priority, assignee, dueAt, sessionId, now, now, status === 'done' ? now : null]
   );
 
   const id = dbQuery<{ id: number }>(APP_ID, `SELECT last_insert_rowid() as id`)[0]?.id;
-  audit(APP_ID, 'scrum.tasks.create', { appId, boardId, id, status, priority, assignee });
+  audit(APP_ID, 'scrum.tasks.create', { appId, boardId, id, status, priority, assignee, dueAt });
   return NextResponse.json({ ok: true, id });
 }
 
@@ -107,6 +117,10 @@ export async function PATCH(req: Request) {
     ? String(body?.assignee ?? '').trim().slice(0, 120) || null
     : row.assignee;
 
+  const dueAt = body?.due_at !== undefined || body?.dueAt !== undefined
+    ? toIsoOrNull(body?.due_at ?? body?.dueAt)
+    : row.due_at;
+
   const sessionId = body?.session_id !== undefined || body?.sessionId !== undefined
     ? String(body?.session_id ?? body?.sessionId ?? '').trim().slice(0, 120) || null
     : row.session_id;
@@ -117,9 +131,9 @@ export async function PATCH(req: Request) {
   dbExec(
     APP_ID,
     `UPDATE tasks
-     SET title = ?, description = ?, status = ?, priority = ?, assignee = ?, session_id = ?, updated_at = ?, completed_at = ?
+     SET title = ?, description = ?, status = ?, priority = ?, assignee = ?, due_at = ?, session_id = ?, updated_at = ?, completed_at = ?
      WHERE id = ?`,
-    [title, description, status, priority, assignee, sessionId, now, completedAt, id]
+    [title, description, status, priority, assignee, dueAt, sessionId, now, completedAt, id]
   );
 
   if (body?.comment) {
@@ -129,6 +143,6 @@ export async function PATCH(req: Request) {
     }
   }
 
-  audit(APP_ID, 'scrum.tasks.update', { id, status, priority, assignee });
+  audit(APP_ID, 'scrum.tasks.update', { id, status, priority, assignee, dueAt });
   return NextResponse.json({ ok: true });
 }
