@@ -681,9 +681,10 @@ export function SmartNotesClient({ initialNotes }: { initialNotes: Note[] }) {
         <button
           type="button"
           onClick={onNew as any}
-          className="fixed bottom-[calc(env(safe-area-inset-bottom)+5.5rem)] right-4 z-[70] inline-flex h-12 items-center justify-center rounded-full bg-zinc-900 px-4 text-sm font-semibold text-white shadow-lg md:hidden"
+          aria-label="New note"
+          className="fixed bottom-[calc(env(safe-area-inset-bottom)+2.25rem)] right-4 z-[70] inline-flex h-12 w-12 items-center justify-center rounded-full bg-zinc-900 text-2xl leading-none text-white shadow-lg md:hidden"
         >
-          + New note
+          +
         </button>
       ) : null}
 
