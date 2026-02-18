@@ -3,7 +3,7 @@
 import { useDeferredValue, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { Button, Card, Input, Label } from '@/components/Shell';
+import { Button, Card, Input, Label, LinkA } from '@/components/Shell';
 
 type Note = {
   id: number;
@@ -436,7 +436,25 @@ export function SmartNotesClient({ initialNotes }: { initialNotes: Note[] }) {
 
   const ListPane = (
     <div className="space-y-3">
-      <div className="flex items-center justify-end">
+      <Card>
+        <Label>Search</Label>
+        <div className="mt-2 flex gap-2">
+          <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search title/body/tags" />
+          <Button type="button" variant="secondary" onClick={onSearch as any} disabled={isPending}>
+            {isPending ? '…' : 'Go'}
+          </Button>
+        </div>
+        {voiceState !== 'idle' ? (
+          <p className="mt-2 text-xs text-zinc-500">
+            Voice: {voiceState === 'recording' ? 'recording…' : voiceState === 'uploading' ? 'uploading…' : voiceState === 'processing' ? 'processing…' : 'error'}
+          </p>
+        ) : null}
+      </Card>
+
+      <div className="flex items-center justify-between gap-2">
+        <LinkA href="/apps/smart-notes/trash" className="rounded-md border border-zinc-200 px-2 py-1 text-xs">
+          Trash
+        </LinkA>
         <div className="flex items-center gap-2">
           {voiceState === 'recording' ? (
             <Button type="button" variant="danger" onClick={stopVoice as any}>
@@ -456,21 +474,6 @@ export function SmartNotesClient({ initialNotes }: { initialNotes: Note[] }) {
           </Button>
         </div>
       </div>
-
-      <Card>
-        <Label>Search</Label>
-        <div className="mt-2 flex gap-2">
-          <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search title/body" />
-          <Button type="button" variant="secondary" onClick={onSearch as any} disabled={isPending}>
-            {isPending ? '…' : 'Go'}
-          </Button>
-        </div>
-        {voiceState !== 'idle' ? (
-          <p className="mt-2 text-xs text-zinc-500">
-            Voice: {voiceState === 'recording' ? 'recording…' : voiceState === 'uploading' ? 'uploading…' : voiceState === 'processing' ? 'processing…' : 'error'}
-          </p>
-        ) : null}
-      </Card>
 
       <div className="grid gap-2">
         {notes.map((n) => {

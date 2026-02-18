@@ -1,4 +1,4 @@
-import { LinkA, Shell } from '@/components/Shell';
+import { Shell } from '@/components/Shell';
 import { dbExec, dbQuery } from '@/lib/db';
 import { SmartNotesClient } from './SmartNotesClient';
 
@@ -62,12 +62,6 @@ export default async function SmartNotesPage() {
 
   return (
     <Shell title="Smart Notes" hideBrand>
-      <div className="-mt-3 flex items-center justify-end gap-3 text-xs">
-        <LinkA href="/apps/smart-notes/trash" className="rounded-md border border-zinc-200 px-2 py-1">
-          Trash
-        </LinkA>
-        <div className="rounded-md border border-zinc-200 px-2 py-1 text-zinc-500">Local-first</div>
-      </div>
       <SmartNotesClient initialNotes={notes} />
     </Shell>
   );
