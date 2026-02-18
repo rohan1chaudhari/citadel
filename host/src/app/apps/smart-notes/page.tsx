@@ -61,12 +61,12 @@ export default async function SmartNotesPage() {
   }));
 
   return (
-    <Shell title="Smart Notes" subtitle="Markdown notes with autosave">
-      <div className="flex items-center justify-end">
-        <div className="flex items-center gap-3">
-          <LinkA href="/apps/smart-notes/trash">Trash</LinkA>
-          <div className="text-xs text-zinc-500">Local-first</div>
-        </div>
+    <Shell title="Smart Notes" hideBrand>
+      <div className="-mt-3 flex items-center justify-end gap-3 text-xs">
+        <LinkA href="/apps/smart-notes/trash" className="rounded-md border border-zinc-200 px-2 py-1">
+          Trash
+        </LinkA>
+        <div className="rounded-md border border-zinc-200 px-2 py-1 text-zinc-500">Local-first</div>
       </div>
       <SmartNotesClient initialNotes={notes} />
     </Shell>

@@ -1,10 +1,20 @@
 import type { ReactNode } from 'react';
 
-export function Shell({ title, subtitle, children }: { title: string; subtitle?: string; children: ReactNode }) {
+export function Shell({
+  title,
+  subtitle,
+  children,
+  hideBrand = false
+}: {
+  title: string;
+  subtitle?: string;
+  children: ReactNode;
+  hideBrand?: boolean;
+}) {
   return (
     <div className="space-y-6">
       <header className="space-y-1">
-        <p className="text-xs font-medium text-zinc-500">Citadel</p>
+        {!hideBrand ? <p className="text-xs font-medium text-zinc-500">Citadel</p> : null}
         <h1 className="text-2xl font-semibold tracking-tight text-zinc-900">{title}</h1>
         {subtitle ? <p className="text-sm text-zinc-600">{subtitle}</p> : null}
       </header>
