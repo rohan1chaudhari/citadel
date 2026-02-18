@@ -12,6 +12,7 @@ type TaskRow = {
   title: string;
   description: string | null;
   status: string;
+  position: number;
   priority: string;
   assignee: string | null;
   due_at: string | null;
@@ -33,6 +34,15 @@ function toIsoOrNull(v: unknown): string | null {
   return d.toISOString();
 }
 
+function nextPosition(boardId: number, status: string): number {
+  const row = dbQuery<{ p: number }>(
+    APP_ID,
+    `SELECT COALESCE(MAX(position), -1) as p FROM tasks WHERE board_id = ? AND status = ?`,
+    [boardId, status]
+  )[0];
+  return Number(row?.p ?? -1) + 1;
+}
+
 export async function GET(req: Request) {
   ensureScrumBoardSchema();
   const appId = (new URL(req.url).searchParams.get('app') ?? '').trim();
@@ -41,10 +51,10 @@ export async function GET(req: Request) {
   const boardId = getOrCreateBoardId(appId);
   const tasks = dbQuery<TaskRow>(
     APP_ID,
-    `SELECT id, board_id, title, description, status, priority, assignee, due_at, session_id, created_at, updated_at, completed_at
+    `SELECT id, board_id, title, description, status, position, priority, assignee, due_at, session_id, created_at, updated_at, completed_at
      FROM tasks
      WHERE board_id = ?
-     ORDER BY created_at DESC, id DESC`,
+     ORDER BY status ASC, position ASC, id ASC`,
     [boardId]
   );
 
@@ -65,7 +75,9 @@ export async function GET(req: Request) {
       const pa = priorityRank(a.priority);
       const pb = priorityRank(b.priority);
       if (pa !== pb) return pa - pb;
-      return Number(b.id) - Number(a.id);
+      const pos = Number(a.position ?? 0) - Number(b.position ?? 0);
+      if (pos !== 0) return pos;
+      return Number(a.id) - Number(b.id);
     });
 
   return NextResponse.json({ ok: true, appId, boardId, tasks: out });
@@ -88,11 +100,12 @@ export async function POST(req: Request) {
 
   const boardId = getOrCreateBoardId(appId);
   const now = new Date().toISOString();
+  const position = nextPosition(boardId, status);
   dbExec(
     APP_ID,
-    `INSERT INTO tasks (board_id, title, description, status, priority, assignee, due_at, session_id, created_at, updated_at, completed_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [boardId, title, description || null, status, priority, assignee, dueAt, sessionId, now, now, status === 'done' ? now : null]
+    `INSERT INTO tasks (board_id, title, description, status, position, priority, assignee, due_at, session_id, created_at, updated_at, completed_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [boardId, title, description || null, status, position, priority, assignee, dueAt, sessionId, now, now, status === 'done' ? now : null]
   );
 
   const id = dbQuery<{ id: number }>(APP_ID, `SELECT last_insert_rowid() as id`)[0]?.id;
@@ -126,14 +139,33 @@ export async function PATCH(req: Request) {
     : row.session_id;
 
   const now = new Date().toISOString();
+
+  if (body?.move === 'up' || body?.move === 'down') {
+    const neighbor = dbQuery<TaskRow>(
+      APP_ID,
+      body.move === 'up'
+        ? `SELECT * FROM tasks WHERE board_id = ? AND status = ? AND position < ? ORDER BY position DESC LIMIT 1`
+        : `SELECT * FROM tasks WHERE board_id = ? AND status = ? AND position > ? ORDER BY position ASC LIMIT 1`,
+      [row.board_id, row.status, row.position]
+    )[0];
+
+    if (neighbor) {
+      dbExec(APP_ID, `UPDATE tasks SET position = ?, updated_at = ? WHERE id = ?`, [neighbor.position, now, row.id]);
+      dbExec(APP_ID, `UPDATE tasks SET position = ?, updated_at = ? WHERE id = ?`, [row.position, now, neighbor.id]);
+    }
+
+    return NextResponse.json({ ok: true });
+  }
+
   const completedAt = status === 'done' ? row.completed_at ?? now : null;
+  const position = status !== row.status ? nextPosition(row.board_id, status) : row.position;
 
   dbExec(
     APP_ID,
     `UPDATE tasks
-     SET title = ?, description = ?, status = ?, priority = ?, assignee = ?, due_at = ?, session_id = ?, updated_at = ?, completed_at = ?
+     SET title = ?, description = ?, status = ?, position = ?, priority = ?, assignee = ?, due_at = ?, session_id = ?, updated_at = ?, completed_at = ?
      WHERE id = ?`,
-    [title, description, status, priority, assignee, dueAt, sessionId, now, completedAt, id]
+    [title, description, status, position, priority, assignee, dueAt, sessionId, now, completedAt, id]
   );
 
   if (body?.comment) {

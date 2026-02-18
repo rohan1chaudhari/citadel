@@ -11,7 +11,7 @@ export default async function ScrumBoardPage() {
   const appIds = apps.map((a) => a.id).filter((id) => id !== 'scrum-board');
 
   return (
-    <Shell title="Scrum Board" subtitle="One board per app · Step 1+2+3: priority + assignee + due date enabled">
+    <Shell title="Scrum Board" subtitle="One board per app · Steps 1-4 enabled (priority, assignee, due date, manual order)">
       <ScrumBoardClient appIds={appIds} />
     </Shell>
   );

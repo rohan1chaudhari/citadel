@@ -23,6 +23,7 @@ export function ensureScrumBoardSchema() {
       title TEXT NOT NULL,
       description TEXT,
       status TEXT NOT NULL DEFAULT 'backlog',
+      position INTEGER NOT NULL DEFAULT 0,
       priority TEXT NOT NULL DEFAULT 'medium',
       assignee TEXT,
       due_at TEXT,
@@ -48,11 +49,13 @@ export function ensureScrumBoardSchema() {
   const cols = new Set(
     dbQuery<{ name: string }>(APP_ID, `SELECT name FROM pragma_table_info('tasks')`).map((c) => c.name)
   );
+  if (!cols.has('position')) dbExec(APP_ID, `ALTER TABLE tasks ADD COLUMN position INTEGER NOT NULL DEFAULT 0`);
   if (!cols.has('assignee')) dbExec(APP_ID, `ALTER TABLE tasks ADD COLUMN assignee TEXT`);
   if (!cols.has('due_at')) dbExec(APP_ID, `ALTER TABLE tasks ADD COLUMN due_at TEXT`);
 
   dbExec(APP_ID, `CREATE INDEX IF NOT EXISTS idx_boards_app_id ON boards(app_id)`);
   dbExec(APP_ID, `CREATE INDEX IF NOT EXISTS idx_tasks_board_status ON tasks(board_id, status)`);
+  dbExec(APP_ID, `CREATE INDEX IF NOT EXISTS idx_tasks_board_status_position ON tasks(board_id, status, position)`);
   dbExec(APP_ID, `CREATE INDEX IF NOT EXISTS idx_tasks_priority ON tasks(priority)`);
   dbExec(APP_ID, `CREATE INDEX IF NOT EXISTS idx_tasks_assignee ON tasks(assignee)`);
   dbExec(APP_ID, `CREATE INDEX IF NOT EXISTS idx_tasks_due_at ON tasks(due_at)`);

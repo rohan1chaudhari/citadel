@@ -8,6 +8,7 @@ type Task = {
   title: string;
   description: string | null;
   status: 'backlog' | 'todo' | 'in_progress' | 'done';
+  position: number;
   priority: 'low' | 'medium' | 'high';
   assignee: string | null;
   due_at: string | null;
@@ -122,6 +123,15 @@ export function ScrumBoardClient({ appIds }: { appIds: string[] }) {
     await loadTasks();
   }
 
+  async function moveTask(t: Task, dir: 'up' | 'down') {
+    await fetch('/api/apps/scrum-board/tasks', {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ id: t.id, move: dir })
+    });
+    await loadTasks();
+  }
+
   async function addComment() {
     if (!selectedTask) return;
     const res = await fetch('/api/apps/scrum-board/comments', {
@@ -202,7 +212,7 @@ export function ScrumBoardClient({ appIds }: { appIds: string[] }) {
                   className={`w-full rounded-lg border p-2 text-left text-sm ${selectedTask === t.id ? 'border-zinc-900' : 'border-zinc-200'}`}
                 >
                   <div className="font-medium text-zinc-900">{t.title}</div>
-                  <div className="mt-1 text-xs text-zinc-500">priority: {t.priority} · comments: {t.comment_count}</div>
+                  <div className="mt-1 text-xs text-zinc-500">pos: {t.position} · priority: {t.priority} · comments: {t.comment_count}</div>
                   <div className="mt-1 text-xs text-zinc-500">assignee: {t.assignee || 'unassigned'}</div>
                   {t.due_at ? <div className="mt-1 text-xs text-zinc-500">due: {new Date(t.due_at).toLocaleString()}</div> : null}
                   {t.session_id ? <div className="mt-1 text-xs text-zinc-500">session: {t.session_id}</div> : null}
@@ -219,6 +229,24 @@ export function ScrumBoardClient({ appIds }: { appIds: string[] }) {
                         {prettyStatus(x)}
                       </button>
                     ))}
+                    <button
+                      className="rounded border border-zinc-200 px-1.5 py-0.5 text-xs"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        moveTask(t, 'up');
+                      }}
+                    >
+                      ↑
+                    </button>
+                    <button
+                      className="rounded border border-zinc-200 px-1.5 py-0.5 text-xs"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        moveTask(t, 'down');
+                      }}
+                    >
+                      ↓
+                    </button>
                   </div>
                   <div className="mt-2 flex gap-1">
                     {PRIORITIES.map((p) => (
