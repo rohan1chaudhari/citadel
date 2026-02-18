@@ -1,25 +1,12 @@
 import { Button, Card, LinkA, Shell } from '@/components/Shell';
 import { dbExec, dbQuery } from '@/lib/db';
+import { ensureSmartNotesSchema } from '@/lib/smartNotesSchema';
 
 export const runtime = 'nodejs';
 const APP_ID = 'smart-notes';
 
 function ensureSchema() {
-  dbExec(
-    APP_ID,
-    `CREATE TABLE IF NOT EXISTS notes (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      title TEXT,
-      body TEXT,
-      created_at TEXT NOT NULL
-    )`
-  );
-  try {
-    dbExec(APP_ID, `ALTER TABLE notes ADD COLUMN updated_at TEXT`);
-  } catch {}
-  try {
-    dbExec(APP_ID, `ALTER TABLE notes ADD COLUMN deleted_at TEXT`);
-  } catch {}
+  ensureSmartNotesSchema();
 }
 
 export default async function TrashPage() {

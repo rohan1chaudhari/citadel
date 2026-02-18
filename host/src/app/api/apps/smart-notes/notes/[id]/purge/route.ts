@@ -1,22 +1,13 @@
 import { NextResponse } from 'next/server';
 import { dbExec } from '@/lib/db';
 import { audit } from '@/lib/audit';
+import { ensureSmartNotesSchema } from '@/lib/smartNotesSchema';
 
 export const runtime = 'nodejs';
 const APP_ID = 'smart-notes';
 
 function ensureSchema() {
-  dbExec(
-    APP_ID,
-    `CREATE TABLE IF NOT EXISTS notes (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      title TEXT,
-      body TEXT,
-      created_at TEXT NOT NULL
-    )`
-  );
-  try { dbExec(APP_ID, `ALTER TABLE notes ADD COLUMN updated_at TEXT`); } catch {}
-  try { dbExec(APP_ID, `ALTER TABLE notes ADD COLUMN deleted_at TEXT`); } catch {}
+  ensureSmartNotesSchema();
 }
 
 export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {
