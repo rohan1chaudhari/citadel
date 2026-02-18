@@ -37,9 +37,11 @@ export default async function HomePage() {
           ))}
         </div>
 
-        <div className="mt-4 flex gap-3">
+        <div className="mt-4 flex flex-wrap gap-3">
+          <LinkA href="/apps/scrum-board">Open Scrum Board</LinkA>
           <LinkA href="/api/apps/smart-notes/health" target="_blank" rel="noreferrer">API health (smart-notes)</LinkA>
           <LinkA href="/api/apps/gym-tracker/health" target="_blank" rel="noreferrer">API health (gym-tracker)</LinkA>
+          <LinkA href="/api/apps/scrum-board/health" target="_blank" rel="noreferrer">API health (scrum-board)</LinkA>
         </div>
       </Card>
     </Shell>
