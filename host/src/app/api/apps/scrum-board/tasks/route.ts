@@ -13,6 +13,7 @@ type TaskRow = {
   description: string | null;
   status: string;
   priority: string;
+  assignee: string | null;
   session_id: string | null;
   created_at: string;
   updated_at: string | null;
@@ -31,7 +32,7 @@ export async function GET(req: Request) {
   const boardId = getOrCreateBoardId(appId);
   const tasks = dbQuery<TaskRow>(
     APP_ID,
-    `SELECT id, board_id, title, description, status, priority, session_id, created_at, updated_at, completed_at
+    `SELECT id, board_id, title, description, status, priority, assignee, session_id, created_at, updated_at, completed_at
      FROM tasks
      WHERE board_id = ?
      ORDER BY created_at DESC, id DESC`,
@@ -69,6 +70,7 @@ export async function POST(req: Request) {
   const description = String(body?.description ?? '').trim().slice(0, 5000);
   const status = normalizeStatus(body?.status);
   const priority = normalizePriority(body?.priority);
+  const assignee = String(body?.assignee ?? '').trim().slice(0, 120) || null;
   const sessionId = String(body?.session_id ?? body?.sessionId ?? '').trim().slice(0, 120) || null;
 
   if (!appId) return NextResponse.json({ ok: false, error: 'appId required' }, { status: 400 });
@@ -78,13 +80,13 @@ export async function POST(req: Request) {
   const now = new Date().toISOString();
   dbExec(
     APP_ID,
-    `INSERT INTO tasks (board_id, title, description, status, priority, session_id, created_at, updated_at, completed_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [boardId, title, description || null, status, priority, sessionId, now, now, status === 'done' ? now : null]
+    `INSERT INTO tasks (board_id, title, description, status, priority, assignee, session_id, created_at, updated_at, completed_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [boardId, title, description || null, status, priority, assignee, sessionId, now, now, status === 'done' ? now : null]
   );
 
   const id = dbQuery<{ id: number }>(APP_ID, `SELECT last_insert_rowid() as id`)[0]?.id;
-  audit(APP_ID, 'scrum.tasks.create', { appId, boardId, id, status, priority });
+  audit(APP_ID, 'scrum.tasks.create', { appId, boardId, id, status, priority, assignee });
   return NextResponse.json({ ok: true, id });
 }
 
@@ -101,6 +103,10 @@ export async function PATCH(req: Request) {
   const description = typeof body?.description === 'string' ? String(body.description).trim().slice(0, 5000) : row.description;
   const status = body?.status != null ? normalizeStatus(body.status) : (row.status as any);
   const priority = body?.priority != null ? normalizePriority(body.priority) : (row.priority as any);
+  const assignee = body?.assignee !== undefined
+    ? String(body?.assignee ?? '').trim().slice(0, 120) || null
+    : row.assignee;
+
   const sessionId = body?.session_id !== undefined || body?.sessionId !== undefined
     ? String(body?.session_id ?? body?.sessionId ?? '').trim().slice(0, 120) || null
     : row.session_id;
@@ -111,9 +117,9 @@ export async function PATCH(req: Request) {
   dbExec(
     APP_ID,
     `UPDATE tasks
-     SET title = ?, description = ?, status = ?, priority = ?, session_id = ?, updated_at = ?, completed_at = ?
+     SET title = ?, description = ?, status = ?, priority = ?, assignee = ?, session_id = ?, updated_at = ?, completed_at = ?
      WHERE id = ?`,
-    [title, description, status, priority, sessionId, now, completedAt, id]
+    [title, description, status, priority, assignee, sessionId, now, completedAt, id]
   );
 
   if (body?.comment) {
@@ -123,6 +129,6 @@ export async function PATCH(req: Request) {
     }
   }
 
-  audit(APP_ID, 'scrum.tasks.update', { id, status, priority });
+  audit(APP_ID, 'scrum.tasks.update', { id, status, priority, assignee });
   return NextResponse.json({ ok: true });
 }
