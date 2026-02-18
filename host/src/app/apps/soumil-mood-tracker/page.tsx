@@ -33,13 +33,17 @@ function ensureSchema() {
 
 async function fetchEntries() {
   ensureSchema();
-  return dbQuery<MoodEntry>(
+  const rows = dbQuery<MoodEntry>(
     APP_ID,
     `SELECT id, date, mood, note, created_at, updated_at
      FROM mood_entries
      ORDER BY date DESC, id DESC
      LIMIT 180`
   );
+
+  // node:sqlite can return row objects with non-plain prototypes.
+  // Convert each row to a plain object before passing to a Client Component.
+  return rows.map((r) => ({ ...r }));
 }
 
 export default async function SoumilMoodTrackerPage() {
