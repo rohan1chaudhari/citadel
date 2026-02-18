@@ -29,7 +29,8 @@ export function ScrumBoardClient({ appIds }: { appIds: string[] }) {
   const [appId, setAppId] = useState(appIds[0] ?? 'smart-notes');
   const [tasks, setTasks] = useState<Task[]>([]);
 
-  // Create form (board selection is intentionally separate)
+  // Create form (invoked via modal; board selection stays separate)
+  const [createOpen, setCreateOpen] = useState(false);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [priority, setPriority] = useState<Task['priority']>('medium');
@@ -191,48 +192,16 @@ export function ScrumBoardClient({ appIds }: { appIds: string[] }) {
               ))}
             </select>
           </div>
-          <div className="text-xs text-zinc-500">
-            {tasks.length} tasks · backlog {grouped.backlog.length} · todo {grouped.todo.length} · in-progress {grouped.in_progress.length} · done {grouped.done.length}
+          <div className="flex items-center gap-2">
+            <div className="text-xs text-zinc-500">
+              {tasks.length} tasks · backlog {grouped.backlog.length} · todo {grouped.todo.length} · in-progress {grouped.in_progress.length} · done {grouped.done.length}
+            </div>
+            <Button onClick={() => setCreateOpen(true)}>+ New task</Button>
           </div>
         </div>
       </Card>
 
-      {/* Create form separate */}
-      <Card>
-        <div className="grid gap-3 md:grid-cols-2">
-          <div className="md:col-span-2">
-            <Label>Title</Label>
-            <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Task title" />
-          </div>
-          <div className="md:col-span-2">
-            <Label>Description</Label>
-            <Textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} placeholder="Task description" />
-          </div>
-          <div>
-            <Label>Priority</Label>
-            <select value={priority} onChange={(e) => setPriority(e.target.value as Task['priority'])} className="mt-1 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm">
-              <option value="high">high</option>
-              <option value="medium">medium</option>
-              <option value="low">low</option>
-            </select>
-          </div>
-          <div>
-            <Label>Assignee</Label>
-            <Input value={assignee} onChange={(e) => setAssignee(e.target.value)} placeholder="e.g. rohan" />
-          </div>
-          <div>
-            <Label>Due date</Label>
-            <Input type="datetime-local" value={dueAt} onChange={(e) => setDueAt(e.target.value)} />
-          </div>
-          <div>
-            <Label>Session ID</Label>
-            <Input value={sessionId} onChange={(e) => setSessionId(e.target.value)} placeholder="execution session id" />
-          </div>
-        </div>
-        <div className="mt-3">
-          <Button onClick={createTask} disabled={!title.trim()}>Create task</Button>
-        </div>
-      </Card>
+      {/* Create task is modal-first to keep board view focused */}
 
       {/* Minimal board cards */}
       <div className="grid gap-3 lg:grid-cols-4">
@@ -256,6 +225,61 @@ export function ScrumBoardClient({ appIds }: { appIds: string[] }) {
           </Card>
         ))}
       </div>
+
+      {/* Create task modal */}
+      {createOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-3" onClick={() => setCreateOpen(false)}>
+          <div className="max-h-[92vh] w-full max-w-xl overflow-auto rounded-xl bg-white p-4 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="text-base font-semibold">Create task</h3>
+              <button className="rounded border border-zinc-200 px-2 py-1 text-xs" onClick={() => setCreateOpen(false)}>Close</button>
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="md:col-span-2">
+                <Label>Title</Label>
+                <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Task title" />
+              </div>
+              <div className="md:col-span-2">
+                <Label>Description</Label>
+                <Textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} placeholder="Task description" />
+              </div>
+              <div>
+                <Label>Priority</Label>
+                <select value={priority} onChange={(e) => setPriority(e.target.value as Task['priority'])} className="mt-1 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm">
+                  <option value="high">high</option>
+                  <option value="medium">medium</option>
+                  <option value="low">low</option>
+                </select>
+              </div>
+              <div>
+                <Label>Assignee</Label>
+                <Input value={assignee} onChange={(e) => setAssignee(e.target.value)} placeholder="e.g. rohan" />
+              </div>
+              <div>
+                <Label>Due date</Label>
+                <Input type="datetime-local" value={dueAt} onChange={(e) => setDueAt(e.target.value)} />
+              </div>
+              <div>
+                <Label>Session ID</Label>
+                <Input value={sessionId} onChange={(e) => setSessionId(e.target.value)} placeholder="execution session id" />
+              </div>
+            </div>
+
+            <div className="mt-3">
+              <Button
+                onClick={async () => {
+                  await createTask();
+                  setCreateOpen(false);
+                }}
+                disabled={!title.trim()}
+              >
+                Create task
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {/* Task modal */}
       {openTask ? (
