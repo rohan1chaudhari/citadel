@@ -436,8 +436,7 @@ export function SmartNotesClient({ initialNotes }: { initialNotes: Note[] }) {
 
   const ListPane = (
     <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <div className="text-xs font-medium text-zinc-500">Notes</div>
+      <div className="flex items-center justify-end">
         <div className="flex items-center gap-2">
           {voiceState === 'recording' ? (
             <Button type="button" variant="danger" onClick={stopVoice as any}>
