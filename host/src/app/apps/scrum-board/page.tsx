@@ -8,7 +8,7 @@ export const runtime = 'nodejs';
 export default async function ScrumBoardPage() {
   ensureScrumBoardSchema();
   const apps = await listApps();
-  const appIds = apps.map((a) => a.id).filter((id) => id !== 'scrum-board');
+  const appIds = apps.map((a) => a.id);
 
   return (
     <Shell title="Scrum Board" subtitle="One board per app · Steps 1-4 enabled (priority, assignee, due date, manual order)">
