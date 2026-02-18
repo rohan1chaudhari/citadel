@@ -36,6 +36,11 @@ function prettyStatus(s: Task['status']) {
   return s[0].toUpperCase() + s.slice(1);
 }
 
+function sessionLogUrl(sessionId: string) {
+  const sid = String(sessionId || '').trim();
+  return `/apps/scrum-master/sessions/${encodeURIComponent(sid)}`;
+}
+
 export function ScrumBoardClient({ appIds }: { appIds: string[] }) {
   const [appId, setAppId] = useState(appIds[0] ?? 'smart-notes');
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -226,16 +231,38 @@ export function ScrumBoardClient({ appIds }: { appIds: string[] }) {
             <div className="text-sm font-semibold">{prettyStatus(s)} <span className="text-zinc-500">({grouped[s].length})</span></div>
             <div className="space-y-2">
               {grouped[s].map((t) => (
-                <button
+                <div
                   key={t.id}
                   onClick={() => openModal(t)}
-                  className="w-full rounded-lg border border-zinc-200 p-2 text-left hover:border-zinc-400"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      openModal(t);
+                    }
+                  }}
+                  role="button"
+                  tabIndex={0}
+                  className="w-full cursor-pointer rounded-lg border border-zinc-200 p-2 text-left hover:border-zinc-400"
                 >
                   <div className="truncate text-sm font-medium text-zinc-900">{t.title}</div>
                   <div className="mt-1 text-[11px] text-zinc-500">
                     p:{t.priority[0].toUpperCase()} · #{t.position} · c:{t.comment_count}
                   </div>
-                </button>
+                  {t.status === 'done' && t.session_id ? (
+                    <div className="mt-2">
+                      <button
+                        type="button"
+                        className="rounded border border-zinc-300 px-2 py-1 text-[11px] text-zinc-700 hover:bg-zinc-50"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          window.open(sessionLogUrl(t.session_id as string), '_blank', 'noopener,noreferrer');
+                        }}
+                      >
+                        View session log
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
               ))}
             </div>
           </Card>
