@@ -14,6 +14,14 @@ This runbook applies to these apps:
 
 Autopilot executes **one task per run**.
 
+### Scrum task status lifecycle
+- `todo` → queued
+- `in_progress` → currently being executed
+- `needs_input` → waiting for human decision/input
+- `blocked` → external dependency blocks progress
+- `done` → validated complete
+- `failed` → exhausted retries or hard failure
+
 ---
 
 ## 1) Inputs expected by each cron run
@@ -55,6 +63,7 @@ A task is eligible only if:
 - status is `todo`
 - app matches `app_id`
 - not already claimed by another active autopilot run
+- `attempt_count < max_attempts`
 
 ### Ranking
 Pick top by:
@@ -69,11 +78,12 @@ If `force_task_id` is provided, skip ranking and use it.
 ## 4) Claim protocol (anti-collision)
 
 Before coding:
-1. Move task to `in-progress`
-2. Add/append claim metadata:
+1. Move task to `in_progress`
+2. Add/append claim metadata fields:
    - `claimed_by: autopilot`
-   - `claim_run: <cron_job_id>/<cron_run_ts>`
-   - `claim_app: <app_id>`
+   - `claimed_at: <now-iso>`
+   - `last_run_at: <now-iso>`
+   - `session_id: <agent_session_key_or_empty>`
 
 If claim fails, stop run.
 
@@ -109,10 +119,21 @@ If successful:
 2. Add completion comment prefixed with `[AUTOPILOT_DONE]`
 3. Include all fields in section 8
 
+If human input is required:
+1. Move task to `needs_input`
+2. Set `needs_input_questions` with explicit questions/options
+3. Add comment prefixed `[AUTOPILOT_NEEDS_INPUT]`
+
+If externally blocked:
+1. Move task to `blocked`
+2. Add comment prefixed `[AUTOPILOT_BLOCKED]`
+
 If unsuccessful:
-1. Keep task as `in-progress` or move back to `todo` (depending on partial progress)
-2. Add comment prefixed `[AUTOPILOT_FAILED]`
-3. Include failure reason + next step
+1. Increment `attempt_count`
+2. If `attempt_count < max_attempts`, move task back to `todo`
+3. Else move task to `failed`
+4. Add comment prefixed `[AUTOPILOT_FAILED]`
+5. Include failure reason + next step
 
 ---
 

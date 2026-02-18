@@ -7,22 +7,33 @@ type Task = {
   id: number;
   title: string;
   description: string | null;
-  status: 'backlog' | 'todo' | 'in_progress' | 'done';
+  acceptance_criteria?: string | null;
+  status: 'backlog' | 'todo' | 'in_progress' | 'needs_input' | 'blocked' | 'done' | 'failed';
   position: number;
   priority: 'low' | 'medium' | 'high';
   assignee: string | null;
   due_at: string | null;
   session_id: string | null;
+  attempt_count?: number;
+  max_attempts?: number;
+  claimed_by?: string | null;
+  claimed_at?: string | null;
+  last_error?: string | null;
+  last_run_at?: string | null;
+  needs_input_questions?: string | null;
+  input_deadline_at?: string | null;
   comment_count: number;
 };
 
 type Comment = { id: number; task_id: number; body: string; created_at: string };
 
-const STATUSES: Task['status'][] = ['backlog', 'todo', 'in_progress', 'done'];
+const STATUSES: Task['status'][] = ['backlog', 'todo', 'in_progress', 'needs_input', 'blocked', 'done', 'failed'];
 const PRIORITIES: Task['priority'][] = ['high', 'medium', 'low'];
 
 function prettyStatus(s: Task['status']) {
-  return s === 'in_progress' ? 'In Progress' : s[0].toUpperCase() + s.slice(1);
+  if (s === 'in_progress') return 'In Progress';
+  if (s === 'needs_input') return 'Needs Input';
+  return s[0].toUpperCase() + s.slice(1);
 }
 
 export function ScrumBoardClient({ appIds }: { appIds: string[] }) {
@@ -77,7 +88,15 @@ export function ScrumBoardClient({ appIds }: { appIds: string[] }) {
   }, [appId]);
 
   const grouped = useMemo(() => {
-    const g: Record<Task['status'], Task[]> = { backlog: [], todo: [], in_progress: [], done: [] };
+    const g: Record<Task['status'], Task[]> = {
+      backlog: [],
+      todo: [],
+      in_progress: [],
+      needs_input: [],
+      blocked: [],
+      done: [],
+      failed: []
+    };
     for (const t of tasks) g[t.status].push(t);
     return g;
   }, [tasks]);
@@ -191,7 +210,7 @@ export function ScrumBoardClient({ appIds }: { appIds: string[] }) {
           </div>
           <div className="flex items-center gap-2">
             <div className="text-xs text-zinc-500">
-              {tasks.length} tasks · backlog {grouped.backlog.length} · todo {grouped.todo.length} · in-progress {grouped.in_progress.length} · done {grouped.done.length}
+              {tasks.length} tasks · backlog {grouped.backlog.length} · todo {grouped.todo.length} · in-progress {grouped.in_progress.length} · needs-input {grouped.needs_input.length} · blocked {grouped.blocked.length} · done {grouped.done.length} · failed {grouped.failed.length}
             </div>
             <Button onClick={() => setCreateOpen(true)}>+ New task</Button>
           </div>

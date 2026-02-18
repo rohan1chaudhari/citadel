@@ -11,12 +11,21 @@ type TaskRow = {
   board_id: number;
   title: string;
   description: string | null;
+  acceptance_criteria: string | null;
   status: string;
   position: number;
   priority: string;
   assignee: string | null;
   due_at: string | null;
   session_id: string | null;
+  attempt_count: number;
+  max_attempts: number;
+  claimed_by: string | null;
+  claimed_at: string | null;
+  last_error: string | null;
+  last_run_at: string | null;
+  needs_input_questions: string | null;
+  input_deadline_at: string | null;
   created_at: string;
   updated_at: string | null;
   completed_at: string | null;
@@ -32,6 +41,11 @@ function toIsoOrNull(v: unknown): string | null {
   const d = new Date(s);
   if (Number.isNaN(d.getTime())) return null;
   return d.toISOString();
+}
+
+function toIntOrDefault(v: unknown, fallback: number) {
+  const n = Number(v);
+  return Number.isFinite(n) ? Math.trunc(n) : fallback;
 }
 
 function nextPosition(boardId: number, status: string): number {
@@ -51,7 +65,10 @@ export async function GET(req: Request) {
   const boardId = getOrCreateBoardId(appId);
   const tasks = dbQuery<TaskRow>(
     APP_ID,
-    `SELECT id, board_id, title, description, status, position, priority, assignee, due_at, session_id, created_at, updated_at, completed_at
+    `SELECT
+      id, board_id, title, description, acceptance_criteria, status, position, priority, assignee, due_at, session_id,
+      attempt_count, max_attempts, claimed_by, claimed_at, last_error, last_run_at, needs_input_questions, input_deadline_at,
+      created_at, updated_at, completed_at
      FROM tasks
      WHERE board_id = ?
      ORDER BY status ASC, position ASC, id ASC`,
@@ -68,9 +85,17 @@ export async function GET(req: Request) {
   const out = tasks
     .map((t) => ({ ...t, comment_count: counts.get(Number(t.id)) ?? 0 }))
     .sort((a, b) => {
-      const sOrder: Record<string, number> = { backlog: 0, todo: 1, in_progress: 2, done: 3 };
-      const sa = sOrder[a.status] ?? 9;
-      const sb = sOrder[b.status] ?? 9;
+      const sOrder: Record<string, number> = {
+        backlog: 0,
+        todo: 1,
+        in_progress: 2,
+        needs_input: 3,
+        blocked: 4,
+        done: 5,
+        failed: 6
+      };
+      const sa = sOrder[a.status] ?? 99;
+      const sb = sOrder[b.status] ?? 99;
       if (sa !== sb) return sa - sb;
       const pa = priorityRank(a.priority);
       const pb = priorityRank(b.priority);
@@ -89,11 +114,20 @@ export async function POST(req: Request) {
   const appId = String(body?.appId ?? '').trim();
   const title = String(body?.title ?? '').trim().slice(0, 200);
   const description = String(body?.description ?? '').trim().slice(0, 5000);
+  const acceptanceCriteria = String(body?.acceptance_criteria ?? body?.acceptanceCriteria ?? '').trim().slice(0, 5000) || null;
   const status = normalizeStatus(body?.status);
   const priority = normalizePriority(body?.priority);
   const assignee = String(body?.assignee ?? '').trim().slice(0, 120) || null;
   const dueAt = toIsoOrNull(body?.due_at ?? body?.dueAt);
   const sessionId = String(body?.session_id ?? body?.sessionId ?? '').trim().slice(0, 120) || null;
+  const attemptCount = Math.max(0, toIntOrDefault(body?.attempt_count ?? body?.attemptCount, 0));
+  const maxAttempts = Math.max(1, toIntOrDefault(body?.max_attempts ?? body?.maxAttempts, 3));
+  const claimedBy = String(body?.claimed_by ?? body?.claimedBy ?? '').trim().slice(0, 120) || null;
+  const claimedAt = toIsoOrNull(body?.claimed_at ?? body?.claimedAt);
+  const lastError = String(body?.last_error ?? body?.lastError ?? '').trim().slice(0, 4000) || null;
+  const lastRunAt = toIsoOrNull(body?.last_run_at ?? body?.lastRunAt);
+  const needsInputQuestions = String(body?.needs_input_questions ?? body?.needsInputQuestions ?? '').trim().slice(0, 6000) || null;
+  const inputDeadlineAt = toIsoOrNull(body?.input_deadline_at ?? body?.inputDeadlineAt);
 
   if (!appId) return NextResponse.json({ ok: false, error: 'appId required' }, { status: 400 });
   if (!title) return NextResponse.json({ ok: false, error: 'title required' }, { status: 400 });
@@ -103,13 +137,20 @@ export async function POST(req: Request) {
   const position = nextPosition(boardId, status);
   dbExec(
     APP_ID,
-    `INSERT INTO tasks (board_id, title, description, status, position, priority, assignee, due_at, session_id, created_at, updated_at, completed_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [boardId, title, description || null, status, position, priority, assignee, dueAt, sessionId, now, now, status === 'done' ? now : null]
+    `INSERT INTO tasks (
+      board_id, title, description, acceptance_criteria, status, position, priority, assignee, due_at, session_id,
+      attempt_count, max_attempts, claimed_by, claimed_at, last_error, last_run_at, needs_input_questions, input_deadline_at,
+      created_at, updated_at, completed_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      boardId, title, description || null, acceptanceCriteria, status, position, priority, assignee, dueAt, sessionId,
+      attemptCount, maxAttempts, claimedBy, claimedAt, lastError, lastRunAt, needsInputQuestions, inputDeadlineAt,
+      now, now, status === 'done' ? now : null
+    ]
   );
 
   const id = dbQuery<{ id: number }>(APP_ID, `SELECT last_insert_rowid() as id`)[0]?.id;
-  audit(APP_ID, 'scrum.tasks.create', { appId, boardId, id, status, priority, assignee, dueAt });
+  audit(APP_ID, 'scrum.tasks.create', { appId, boardId, id, status, priority });
   return NextResponse.json({ ok: true, id });
 }
 
@@ -127,6 +168,10 @@ export async function PATCH(req: Request) {
 
   const title = typeof body?.title === 'string' ? String(body.title).trim().slice(0, 200) : row.title;
   const description = typeof body?.description === 'string' ? String(body.description).trim().slice(0, 5000) : row.description;
+  const acceptanceCriteria = body?.acceptance_criteria !== undefined || body?.acceptanceCriteria !== undefined
+    ? String(body?.acceptance_criteria ?? body?.acceptanceCriteria ?? '').trim().slice(0, 5000) || null
+    : row.acceptance_criteria;
+
   const status = body?.status != null ? normalizeStatus(body.status) : (row.status as any);
   const priority = body?.priority != null ? normalizePriority(body.priority) : (row.priority as any);
   const assignee = body?.assignee !== undefined
@@ -140,6 +185,38 @@ export async function PATCH(req: Request) {
   const sessionId = body?.session_id !== undefined || body?.sessionId !== undefined
     ? String(body?.session_id ?? body?.sessionId ?? '').trim().slice(0, 120) || null
     : row.session_id;
+
+  const attemptCount = body?.attempt_count !== undefined || body?.attemptCount !== undefined
+    ? Math.max(0, toIntOrDefault(body?.attempt_count ?? body?.attemptCount, row.attempt_count))
+    : row.attempt_count;
+
+  const maxAttempts = body?.max_attempts !== undefined || body?.maxAttempts !== undefined
+    ? Math.max(1, toIntOrDefault(body?.max_attempts ?? body?.maxAttempts, row.max_attempts))
+    : row.max_attempts;
+
+  const claimedBy = body?.claimed_by !== undefined || body?.claimedBy !== undefined
+    ? String(body?.claimed_by ?? body?.claimedBy ?? '').trim().slice(0, 120) || null
+    : row.claimed_by;
+
+  const claimedAt = body?.claimed_at !== undefined || body?.claimedAt !== undefined
+    ? toIsoOrNull(body?.claimed_at ?? body?.claimedAt)
+    : row.claimed_at;
+
+  const lastError = body?.last_error !== undefined || body?.lastError !== undefined
+    ? String(body?.last_error ?? body?.lastError ?? '').trim().slice(0, 4000) || null
+    : row.last_error;
+
+  const lastRunAt = body?.last_run_at !== undefined || body?.lastRunAt !== undefined
+    ? toIsoOrNull(body?.last_run_at ?? body?.lastRunAt)
+    : row.last_run_at;
+
+  const needsInputQuestions = body?.needs_input_questions !== undefined || body?.needsInputQuestions !== undefined
+    ? String(body?.needs_input_questions ?? body?.needsInputQuestions ?? '').trim().slice(0, 6000) || null
+    : row.needs_input_questions;
+
+  const inputDeadlineAt = body?.input_deadline_at !== undefined || body?.inputDeadlineAt !== undefined
+    ? toIsoOrNull(body?.input_deadline_at ?? body?.inputDeadlineAt)
+    : row.input_deadline_at;
 
   const now = new Date().toISOString();
 
@@ -167,18 +244,22 @@ export async function PATCH(req: Request) {
   dbExec(
     APP_ID,
     `UPDATE tasks
-     SET board_id = ?, title = ?, description = ?, status = ?, position = ?, priority = ?, assignee = ?, due_at = ?, session_id = ?, updated_at = ?, completed_at = ?
+     SET board_id = ?, title = ?, description = ?, acceptance_criteria = ?, status = ?, position = ?, priority = ?, assignee = ?, due_at = ?, session_id = ?,
+         attempt_count = ?, max_attempts = ?, claimed_by = ?, claimed_at = ?, last_error = ?, last_run_at = ?, needs_input_questions = ?, input_deadline_at = ?,
+         updated_at = ?, completed_at = ?
      WHERE id = ?`,
-    [targetBoardId, title, description, status, position, priority, assignee, dueAt, sessionId, now, completedAt, id]
+    [
+      targetBoardId, title, description, acceptanceCriteria, status, position, priority, assignee, dueAt, sessionId,
+      attemptCount, maxAttempts, claimedBy, claimedAt, lastError, lastRunAt, needsInputQuestions, inputDeadlineAt,
+      now, completedAt, id
+    ]
   );
 
   if (body?.comment) {
     const comment = String(body.comment).trim().slice(0, 4000);
-    if (comment) {
-      dbExec(APP_ID, `INSERT INTO comments (task_id, body, created_at) VALUES (?, ?, ?)`, [id, comment, now]);
-    }
+    if (comment) dbExec(APP_ID, `INSERT INTO comments (task_id, body, created_at) VALUES (?, ?, ?)`, [id, comment, now]);
   }
 
-  audit(APP_ID, 'scrum.tasks.update', { id, status, priority, assignee, dueAt });
+  audit(APP_ID, 'scrum.tasks.update', { id, status, priority, attemptCount, maxAttempts });
   return NextResponse.json({ ok: true });
 }
