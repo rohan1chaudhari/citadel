@@ -144,12 +144,9 @@ export function ScrumBoardClient({ appIds }: { appIds: string[] }) {
     const data = await res.json();
     if (!res.ok || !data?.ok) return;
 
-    const movedAway = mTargetBoard !== appId;
     await loadTasks();
-    if (movedAway) {
-      setOpenTaskId(null);
-      setComments([]);
-    }
+    setOpenTaskId(null);
+    setComments([]);
   }
 
   async function moveTask(t: Task, dir: 'up' | 'down') {
