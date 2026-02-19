@@ -566,7 +566,7 @@ export default function ScrumBoardClient({ appIds, externalIds = [] }: { appIds:
       {createOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 sm:p-6" onClick={() => setCreateOpen(false)}>
           <div
-            className="w-full max-w-xl overflow-visible rounded-xl bg-white p-4 sm:p-6 shadow-2xl sm:max-h-[90vh] sm:overflow-auto"
+            className="max-h-[90vh] w-full max-w-xl overflow-auto rounded-xl bg-white p-4 sm:p-6 shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="mb-4 flex items-center justify-between">
@@ -637,7 +637,7 @@ export default function ScrumBoardClient({ appIds, externalIds = [] }: { appIds:
       {openTask ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 sm:p-6" onClick={() => setOpenTaskId(null)}>
           <div
-            className="w-full max-w-2xl overflow-visible rounded-xl bg-white p-4 sm:p-6 shadow-2xl sm:max-h-[90vh] sm:overflow-auto"
+            className="max-h-[90vh] w-full max-w-2xl overflow-auto rounded-xl bg-white p-4 sm:p-6 shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="mb-4 flex items-center justify-between">

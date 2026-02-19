@@ -85,8 +85,8 @@ Execution contract:
 8) Add structured comment with debug metadata and stop.`;
 
   try {
-    // Schedule 5 seconds from now in ISO format
-    const runAt = new Date(Date.now() + 5000).toISOString();
+    // Schedule to run immediately
+    const runAt = new Date(Date.now() + 1000).toISOString();
 
     // Call openclaw cron add with proper flags
     const args = [
