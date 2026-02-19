@@ -1,13 +1,35 @@
 import { NextResponse } from 'next/server';
 import { spawn } from 'child_process';
 import { audit } from '@/lib/audit';
+import { dbQuery } from '@/lib/db';
 
 export const runtime = 'nodejs';
 const APP_ID = 'scrum-board';
 
 /**
+ * Check if there are any eligible tasks (todo status with attempts remaining)
+ * for the given app. Returns the count of eligible tasks.
+ */
+function countEligibleTasks(appId: string): number {
+  const result = dbQuery<{ count: number }>(
+    APP_ID,
+    `
+    SELECT COUNT(*) as count
+    FROM tasks t
+    JOIN boards b ON t.board_id = b.id
+    WHERE b.app_id = ?
+      AND t.status = 'todo'
+      AND t.attempt_count < t.max_attempts
+    `,
+    [appId]
+  );
+  return result[0]?.count ?? 0;
+}
+
+/**
  * Trigger an autopilot agent run for a selected app.
  * Adds a one-time cron job via OpenClaw CLI.
+ * Only schedules if there are eligible tasks to avoid wasting tokens.
  */
 export async function POST(req: Request) {
   const body = await req.json().catch(() => ({} as any));
@@ -21,6 +43,21 @@ export async function POST(req: Request) {
   const cronJobId = `sb-${Date.now()}`;
   const cronRunTs = new Date().toISOString();
   const repoPath = '/home/rohanchaudhari/personal/citadel';
+
+  // Check for eligible tasks before starting session to save tokens
+  const eligibleCount = countEligibleTasks(appId);
+  if (eligibleCount === 0) {
+    audit(APP_ID, 'scrum.trigger_agent_skipped', {
+      appId,
+      appName,
+      reason: 'no_eligible_tasks',
+    });
+    return NextResponse.json({
+      ok: false,
+      skipped: true,
+      message: 'No eligible tasks in todo status. Autopilot session not started to save tokens.',
+    });
+  }
 
   // Build the agent turn message following AUTOPILOT.md
   const message = `Autopilot cycle for Citadel app: ${appName || appId} (${appId})
@@ -97,9 +134,10 @@ Execution contract:
 
     return NextResponse.json({
       ok: true,
-      message: 'Agent scheduled',
+      message: `Agent scheduled (${eligibleCount} eligible task${eligibleCount === 1 ? '' : 's'})`,
       cronJobId: result.id || cronJobId,
       runAt,
+      eligibleCount,
     });
   } catch (err: any) {
     audit(APP_ID, 'scrum.trigger_agent_failed', { appId, error: err?.message });
