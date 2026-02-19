@@ -24,6 +24,7 @@ export function TiptapEditor({ value, onChange, placeholder }: TiptapEditorProps
       }),
     ],
     content: value,
+    immediatelyRender: false,
     onUpdate: ({ editor }) => {
       onChange(editor.getText());
     },
