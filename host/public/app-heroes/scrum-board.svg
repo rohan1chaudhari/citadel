@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 200">
+  <defs>
+    <linearGradient id="scrumGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#2d3561"/>
+      <stop offset="100%" style="stop-color:#1a1a2e"/>
+    </linearGradient>
+    <linearGradient id="cardGrad1" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#e94560"/>
+      <stop offset="100%" style="stop-color:#c73e54"/>
+    </linearGradient>
+    <linearGradient id="cardGrad2" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#0f3460"/>
+      <stop offset="100%" style="stop-color:#0a2545"/>
+    </linearGradient>
+    <linearGradient id="cardGrad3" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#16c79a"/>
+      <stop offset="100%" style="stop-color:#12a37d"/>
+    </linearGradient>
+  </defs>
+  <rect fill="url(#scrumGrad)" width="300" height="200"/>
+  <!-- Kanban columns -->
+  <rect x="30" y="60" width="70" height="120" fill="rgba(255,255,255,0.05)" rx="6"/>
+  <rect x="115" y="60" width="70" height="120" fill="rgba(255,255,255,0.05)" rx="6"/>
+  <rect x="200" y="60" width="70" height="120" fill="rgba(255,255,255,0.05)" rx="6"/>
+  <!-- Cards -->
+  <rect x="40" y="80" width="50" height="30" fill="url(#cardGrad1)" rx="4"/>
+  <rect x="40" y="120" width="50" height="30" fill="url(#cardGrad2)" rx="4"/>
+  <rect x="125" y="90" width="50" height="30" fill="url(#cardGrad3)" rx="4"/>
+  <rect x="210" y="85" width="50" height="30" fill="url(#cardGrad1)" rx="4"/>
+  <!-- Column headers -->
+  <rect x="40" y="70" width="20" height="4" fill="rgba(255,255,255,0.4)" rx="2"/>
+  <rect x="125" y="70" width="20" height="4" fill="rgba(255,255,255,0.4)" rx="2"/>
+  <rect x="210" y="70" width="20" height="4" fill="rgba(255,255,255,0.4)" rx="2"/>
+  <!-- Title -->
+  <text x="150" y="40" text-anchor="middle" fill="#fff" font-family="system-ui, sans-serif" font-size="18" font-weight="600">Scrum Board</text>
+</svg>

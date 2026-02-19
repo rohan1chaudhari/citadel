@@ -1,5 +1,6 @@
 import { Card, LinkA, Shell } from '@/components/Shell';
 import { listApps } from '@/lib/registry';
+import Image from 'next/image';
 
 export const runtime = 'nodejs';
 
@@ -8,42 +9,37 @@ export default async function HomePage() {
 
   return (
     <Shell title="Home" subtitle="Your local-first app hub">
-      <Card>
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-sm font-semibold text-zinc-900">Installed apps</h2>
-            <p className="mt-1 text-sm text-zinc-600">Discovered from <code className="rounded bg-zinc-100 px-1 py-0.5">apps/*/app.yaml</code></p>
-          </div>
-          <div className="text-xs text-zinc-500">{apps.length} app{apps.length === 1 ? '' : 's'}</div>
-        </div>
-
-        <div className="mt-4 grid gap-3">
-          {apps.map((a) => (
-            <a
-              key={a.id}
-              href={`/apps/${a.id}`}
-              className="group rounded-lg border border-zinc-200 bg-white p-3 hover:bg-zinc-50"
-            >
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="text-sm font-medium text-zinc-900 group-hover:underline">{a.name}</div>
-                  <div className="mt-1 text-xs text-zinc-500">
-                    {a.id}{a.version ? ` · v${a.version}` : ''}
-                  </div>
-                </div>
-                <div className="text-xs text-zinc-500">Open →</div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {apps.map((a) => (
+          <a
+            key={a.id}
+            href={`/apps/${a.id}`}
+            className="group rounded-xl border border-zinc-200 bg-white overflow-hidden hover:shadow-lg transition-shadow"
+          >
+            <div className="relative w-full h-[150px]">
+              <Image
+                src={`/app-heroes/${a.id}.svg`}
+                alt={`${a.name} hero image`}
+                fill
+                className="object-cover"
+              />
+            </div>
+            <div className="p-3">
+              <div className="text-sm font-medium text-zinc-900 group-hover:text-zinc-700">{a.name}</div>
+              <div className="mt-0.5 text-xs text-zinc-500">
+                {a.id}{a.version ? ` · v${a.version}` : ''}
               </div>
-            </a>
-          ))}
-        </div>
+            </div>
+          </a>
+        ))}
+      </div>
 
-        <div className="mt-4 flex flex-wrap gap-3">
-          <LinkA href="/apps/scrum-board">Open Scrum Board</LinkA>
-          <LinkA href="/apps/soumil-mood-tracker">Open Soumil Mood Tracker</LinkA>
-          <LinkA href="/api/apps/smart-notes/health" target="_blank" rel="noreferrer">API health (smart-notes)</LinkA>
-          <LinkA href="/api/apps/gym-tracker/health" target="_blank" rel="noreferrer">API health (gym-tracker)</LinkA>
-          <LinkA href="/api/apps/scrum-board/health" target="_blank" rel="noreferrer">API health (scrum-board)</LinkA>
-          <LinkA href="/api/apps/soumil-mood-tracker/health" target="_blank" rel="noreferrer">API health (soumil-mood-tracker)</LinkA>
+      <Card className="mt-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="text-sm text-zinc-600">
+            {apps.length} app{apps.length === 1 ? '' : 's'} installed
+          </div>
+          <LinkA href="/status">View System Status →</LinkA>
         </div>
       </Card>
     </Shell>
