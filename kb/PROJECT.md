@@ -1,43 +1,45 @@
-# Citadel — Project Knowledge Base
+# Citadel — One-Pager
 
-Citadel is a **local-first personal app hub**: one Next.js host that serves multiple isolated “apps” (Smart Notes, Gym Tracker, etc.) under a single deployment.
+**Local-first personal app hub**: one Next.js host runs multiple isolated apps (Smart Notes, Gym Tracker, etc.) under a single deployment.
 
-## Core decisions (MVP)
-- **Single Next.js host app** (no separate Next.js apps per module)
-- **Same-process runtime** (no per-app containers yet)
-- **Isolation** via:
-  - **1 SQLite DB file per app**: `data/apps/<appId>/db.sqlite`
-  - **1 storage root per app**: `data/apps/<appId>/...`
-- **Generic SQL API** exposed internally, but **host-enforced** (apps don’t get DB access directly)
-- **Light SQL guardrails**:
-  - block multi-statement (`;`)
-  - block obvious escape hatches (`ATTACH`, `DETACH`, `PRAGMA`, `VACUUM`)
-- **Audit**: MVP logs JSON records to stdout
+## Architecture
+- **Single Next.js host** — control plane + runtime (UI routes + API routes)
+- **Same-process runtime** — no containers yet
+- **Deny-by-default** — apps declare permissions in `app.yaml`, user approves
+- **Audit** — JSON logs to stdout
 
-## Repo layout
-- `host/` — Next.js app host (UI routes + API routes + isolation enforcement)
-- `apps/` — app manifests (`app.yaml`) + placeholder app packages
-- `core/` — platform spec / shared concepts
-- `data/` — runtime data (gitignored)
-- `kb/` — this knowledge base
+## Isolation (enforced by host)
+| Resource | Rule |
+|----------|------|
+| Database | One SQLite file per app: `data/apps/<appId>/db.sqlite`. No cross-app queries. |
+| Storage | Per-app root: `data/apps/<appId>/`. Traversal (`../`) blocked. |
+| Network | No direct outbound calls (MVP). |
+| SQL API | `db.query(appId, sql, params)` — host picks DB, parameterized only. Guardrails block `;`, `ATTACH`, `DETACH`, `PRAGMA`, `VACUUM`. |
 
-## How to run
-```bash
-cd /home/rohanchaudhari/personal/citadel/host
-npm install
-npm run dev
-# open http://localhost:3000
+## Repo Layout
+```
+host/          # Next.js app (routing, auth, permissions, audit)
+apps/<id>/     # App packages (UI + server routes + migrations + app.yaml)
+core/          # Shared libs (permissions, isolation, orchestration, audit)
+data/          # Runtime data (gitignored)
+kb/            # Knowledge base
 ```
 
-## Current apps
-- `smart-notes`
-  - UI: `/apps/smart-notes`
-  - API: `/api/apps/smart-notes/notes` (+ update/delete)
-- `gym-tracker`
-  - UI: `/apps/gym-tracker`
-  - API: `/api/apps/gym-tracker/entries`
+## Current Apps
+| App | UI | API | State |
+|-----|----|-----|-------|
+| smart-notes | `/apps/smart-notes` | `/api/apps/smart-notes/notes` | MVP — capture/list/search/edit/delete |
+| gym-tracker | `/apps/gym-tracker` | `/api/apps/gym-tracker/entries` | MVP 2 — log + storage touch |
 
-## Notion
-Project is tracked in Notion (project home + tasks + specs). Keep the canonical roadmap there; keep implementation details and “how it works” here.
+## Run Locally
+```bash
+cd host/
+npm install
+npm run dev   # http://localhost:3000
+```
 
-- PRD / Brain dump: https://www.notion.so/Personal-App-Hub-OpenClaw-for-Apps-PRD-Brain-Dump-3097c2df0e2e80098e09fcdbe0438561
+## Key Decisions
+- One Next.js app (not separate per-module)
+- SQLite per-app (not shared DB with schemas)
+- Tailwind CSS for UI
+- `node:sqlite` is experimental (expected warning)
