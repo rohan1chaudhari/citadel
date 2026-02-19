@@ -20,13 +20,14 @@ export function TiptapEditor({ value, onChange, placeholder }: TiptapEditorProps
         },
       }),
       Placeholder.configure({
-        placeholder: placeholder || 'Write in Markdown…',
+        placeholder: placeholder || 'Write your note…',
       }),
     ],
     content: value,
     immediatelyRender: false,
     onUpdate: ({ editor }) => {
-      onChange(editor.getText());
+      // Save HTML instead of plain text to preserve formatting
+      onChange(editor.getHTML());
     },
     editorProps: {
       attributes: {
@@ -37,7 +38,7 @@ export function TiptapEditor({ value, onChange, placeholder }: TiptapEditorProps
 
   // Sync external value changes
   useEffect(() => {
-    if (editor && editor.getText() !== value) {
+    if (editor && editor.getHTML() !== value) {
       editor.commands.setContent(value);
     }
   }, [editor, value]);
@@ -56,7 +57,7 @@ export function TiptapEditor({ value, onChange, placeholder }: TiptapEditorProps
   return (
     <div className="rounded-lg border border-zinc-200 bg-white overflow-hidden">
       {/* Toolbar */}
-      <div className="flex items-center gap-1 border-b border-zinc-200 bg-zinc-50 px-2 py-1.5">
+      <div className="flex items-center gap-1 border-b border-zinc-200 bg-zinc-50 px-2 py-1.5 overflow-x-auto">
         <button
           type="button"
           onClick={() => editor.chain().focus().toggleBold().run()}
