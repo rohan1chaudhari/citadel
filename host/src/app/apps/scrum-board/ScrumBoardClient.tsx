@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { Button, Card, Input, Label, Textarea } from '@/components/Shell';
 
 type Task = {
@@ -83,7 +84,14 @@ function PriorityBadge({ p }: { p: Task['priority'] }) {
 }
 
 export default function ScrumBoardClient({ appIds }: { appIds: string[] }) {
-  const [appId, setAppId] = useState(appIds[0] ?? 'smart-notes');
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  
+  // Initialize appId from URL or default to first app
+  const urlAppId = searchParams?.get('app');
+  const initialAppId = urlAppId && appIds.includes(urlAppId) ? urlAppId : (appIds[0] ?? 'smart-notes');
+  
+  const [appId, setAppId] = useState(initialAppId);
   const [tasks, setTasks] = useState<Task[]>([]);
 
   // Create form (invoked via modal; board selection stays separate)
@@ -308,7 +316,14 @@ export default function ScrumBoardClient({ appIds }: { appIds: string[] }) {
             <Label>Board</Label>
             <select
               value={appId}
-              onChange={(e) => setAppId(e.target.value)}
+              onChange={(e) => {
+                const newAppId = e.target.value;
+                setAppId(newAppId);
+                // Sync to URL
+                const params = new URLSearchParams(searchParams?.toString() ?? '');
+                params.set('app', newAppId);
+                router.replace(`/apps/scrum-board?${params.toString()}`, { scroll: false });
+              }}
               className="mt-1 w-full sm:w-64 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm"
             >
               {appIds.map((id) => (

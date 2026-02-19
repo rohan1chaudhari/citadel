@@ -1,6 +1,7 @@
 import { Shell } from '@/components/Shell';
 import { listApps } from '@/lib/registry';
 import { ensureScrumBoardSchema } from '@/lib/scrumBoardSchema';
+import { Suspense } from 'react';
 import ScrumBoardClient from './ScrumBoardClient';
 
 export const runtime = 'nodejs';
@@ -16,7 +17,9 @@ export default async function ScrumBoardPage() {
 
   return (
     <Shell title="Scrum Board" subtitle="Manage tasks and trigger agent runs per app">
-      <ScrumBoardClient appIds={appIds} />
+      <Suspense fallback={<div className="p-8 text-zinc-500">Loading board...</div>}>
+        <ScrumBoardClient appIds={appIds} />
+      </Suspense>
     </Shell>
   );
 }
