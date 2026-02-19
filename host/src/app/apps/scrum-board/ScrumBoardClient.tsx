@@ -1,99 +1,215 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Card, Button, Label, LinkA } from '@/components/Shell';
-
-type TaskStatus =
-  | 'backlog'
-  | 'todo'
-  | 'in_progress'
-  | 'needs_input'
-  | 'blocked'
-  | 'done'
-  | 'failed';
+import { Button, Card, Input, Label, Textarea } from '@/components/Shell';
 
 type Task = {
   id: number;
   title: string;
-  status: TaskStatus;
-  priority: 'high' | 'medium' | 'low';
+  description: string | null;
+  acceptance_criteria?: string | null;
+  status: 'backlog' | 'todo' | 'in_progress' | 'needs_input' | 'blocked' | 'done' | 'failed';
+  position: number;
+  priority: 'low' | 'medium' | 'high';
   assignee: string | null;
-  claimed_by: string | null;
-  claimed_at: string | null;
-  attempt_count: number;
-  max_attempts: number;
+  due_at: string | null;
+  session_id: string | null;
+  attempt_count?: number;
+  max_attempts?: number;
+  claimed_by?: string | null;
+  claimed_at?: string | null;
+  last_error?: string | null;
+  last_run_at?: string | null;
+  needs_input_questions?: string | null;
+  input_deadline_at?: string | null;
   comment_count: number;
-  created_at: string;
-  updated_at: string | null;
 };
 
-const APPS = [
-  { id: 'smart-notes', name: 'Smart Notes' },
-  { id: 'gym-tracker', name: 'Gym Tracker' },
-  { id: 'soumil-mood-tracker', name: 'Mood Tracker' },
-  { id: 'scrum-board', name: 'Scrum Board' },
-  { id: 'citadel', name: 'Citadel (Host)' },
-];
+type Comment = { id: number; task_id: number; body: string; created_at: string };
 
-const STATUS_ORDER: Record<TaskStatus, number> = {
-  backlog: 0,
-  todo: 1,
-  in_progress: 2,
-  needs_input: 3,
-  blocked: 4,
-  done: 5,
-  failed: 6,
-};
+const STATUSES: Task['status'][] = ['backlog', 'todo', 'in_progress', 'needs_input', 'blocked', 'done', 'failed'];
+const PRIORITIES: Task['priority'][] = ['high', 'medium', 'low'];
 
-const STATUS_LABEL: Record<TaskStatus, string> = {
-  backlog: 'Backlog',
-  todo: 'To Do',
-  in_progress: 'In Progress',
-  needs_input: 'Needs Input',
-  blocked: 'Blocked',
-  done: 'Done',
-  failed: 'Failed',
-};
+function prettyStatus(s: Task['status']) {
+  if (s === 'in_progress') return 'In Progress';
+  if (s === 'needs_input') return 'Needs Input';
+  return s[0].toUpperCase() + s.slice(1);
+}
 
-export default function ScrumBoardPage() {
-  const [selectedApp, setSelectedApp] = useState<string>(APPS[0].id);
-  const [tasks, setTasks] = useState<Task[] | null>(null);
-  const [loading, setLoading] = useState(false);
+function sessionLogUrl(sessionId: string) {
+  const sid = String(sessionId || '').trim();
+  return `/apps/scrum-master/sessions/${encodeURIComponent(sid)}`;
+}
+
+export default function ScrumBoardClient({ appIds }: { appIds: string[] }) {
+  const [appId, setAppId] = useState(appIds[0] ?? 'smart-notes');
+  const [tasks, setTasks] = useState<Task[]>([]);
+
+  // Create form (invoked via modal; board selection stays separate)
+  const [createOpen, setCreateOpen] = useState(false);
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [priority, setPriority] = useState<Task['priority']>('medium');
+  const [assignee, setAssignee] = useState('');
+  const [dueAt, setDueAt] = useState('');
+  const [sessionId, setSessionId] = useState('');
+
+  // Modal state
+  const [openTaskId, setOpenTaskId] = useState<number | null>(null);
+  const [mTitle, setMTitle] = useState('');
+  const [mDescription, setMDescription] = useState('');
+  const [mStatus, setMStatus] = useState<Task['status']>('backlog');
+  const [mPriority, setMPriority] = useState<Task['priority']>('medium');
+  const [mAssignee, setMAssignee] = useState('');
+  const [mDueAt, setMDueAt] = useState('');
+  const [mSessionId, setMSessionId] = useState('');
+  const [mTargetBoard, setMTargetBoard] = useState('');
+
+  // Comments in modal
+  const [comments, setComments] = useState<Comment[]>([]);
+  const [commentText, setCommentText] = useState('');
+
+  // Trigger agent state
   const [triggering, setTriggering] = useState(false);
   const [triggerResult, setTriggerResult] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
 
   async function loadTasks() {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch(`/api/apps/scrum-board/tasks?app=${encodeURIComponent(selectedApp)}`);
-      const data = await res.json();
-      if (!data.ok) throw new Error(data.error || 'Failed to load tasks');
-      setTasks(data.tasks || []);
-    } catch (e: any) {
-      setError(e?.message || 'Error');
-    } finally {
-      setLoading(false);
+    const res = await fetch(`/api/apps/scrum-board/tasks?app=${encodeURIComponent(appId)}`, { cache: 'no-store' });
+    const data = await res.json();
+    const nextTasks = (data?.tasks ?? []) as Task[];
+    setTasks(nextTasks);
+
+    if (openTaskId && !nextTasks.some((t) => t.id === openTaskId)) {
+      setOpenTaskId(null);
+      setComments([]);
     }
+  }
+
+  async function loadComments(taskId: number) {
+    const res = await fetch(`/api/apps/scrum-board/comments?taskId=${taskId}`, { cache: 'no-store' });
+    const data = await res.json();
+    setComments((data?.comments ?? []) as Comment[]);
   }
 
   useEffect(() => {
     loadTasks();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedApp]);
+  }, [appId]);
+
+  const grouped = useMemo(() => {
+    const g: Record<Task['status'], Task[]> = {
+      backlog: [],
+      todo: [],
+      in_progress: [],
+      needs_input: [],
+      blocked: [],
+      done: [],
+      failed: []
+    };
+    for (const t of tasks) g[t.status].push(t);
+    return g;
+  }, [tasks]);
+
+  const openTask = useMemo(() => tasks.find((t) => t.id === openTaskId) ?? null, [tasks, openTaskId]);
+
+  async function createTask() {
+    const res = await fetch('/api/apps/scrum-board/tasks', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        appId,
+        title,
+        description,
+        priority,
+        assignee: assignee || null,
+        due_at: dueAt || null,
+        session_id: sessionId || null,
+        status: 'backlog'
+      })
+    });
+    const data = await res.json();
+    if (!res.ok || !data?.ok) return;
+
+    setTitle('');
+    setDescription('');
+    setPriority('medium');
+    setAssignee('');
+    setDueAt('');
+    setSessionId('');
+    await loadTasks();
+  }
+
+  function openModal(t: Task) {
+    setOpenTaskId(t.id);
+    setMTitle(t.title ?? '');
+    setMDescription(t.description ?? '');
+    setMStatus(t.status);
+    setMPriority(t.priority);
+    setMAssignee(t.assignee ?? '');
+    setMDueAt(t.due_at ? new Date(t.due_at).toISOString().slice(0, 16) : '');
+    setMSessionId(t.session_id ?? '');
+    setMTargetBoard(appId);
+    loadComments(t.id);
+  }
+
+  async function saveModal() {
+    if (!openTaskId) return;
+    const res = await fetch('/api/apps/scrum-board/tasks', {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        id: openTaskId,
+        title: mTitle,
+        description: mDescription,
+        status: mStatus,
+        priority: mPriority,
+        assignee: mAssignee || null,
+        due_at: mDueAt || null,
+        session_id: mSessionId || null,
+        targetAppId: mTargetBoard
+      })
+    });
+    const data = await res.json();
+    if (!res.ok || !data?.ok) return;
+
+    await loadTasks();
+    setOpenTaskId(null);
+    setComments([]);
+  }
+
+  async function moveTask(t: Task, dir: 'up' | 'down') {
+    await fetch('/api/apps/scrum-board/tasks', {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ id: t.id, move: dir })
+    });
+    await loadTasks();
+  }
+
+  async function addComment() {
+    if (!openTaskId) return;
+    const res = await fetch('/api/apps/scrum-board/comments', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ taskId: openTaskId, body: commentText })
+    });
+    const data = await res.json();
+    if (!res.ok || !data?.ok) return;
+    setCommentText('');
+    await loadComments(openTaskId);
+    await loadTasks();
+  }
 
   async function triggerAgent() {
     setTriggering(true);
     setTriggerResult(null);
     try {
-      const app = APPS.find((a) => a.id === selectedApp);
       const res = await fetch('/api/apps/scrum-board/trigger', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
-          appId: selectedApp,
-          appName: app?.name || selectedApp,
+          appId,
+          appName: appId,
         }),
       });
       const data = await res.json();
@@ -106,92 +222,211 @@ export default function ScrumBoardPage() {
     }
   }
 
-  const grouped = useMemo(() => {
-    const map: Record<string, Task[]> = {};
-    for (const t of tasks || []) {
-      const k = t.status || 'backlog';
-      if (!map[k]) map[k] = [];
-      map[k].push(t);
-    }
-    return map;
-  }, [tasks]);
-
   return (
     <div className="space-y-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-        <div className="flex-1">
-          <Label>Select App</Label>
-          <select
-            className="mt-1 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm"
-            value={selectedApp}
-            onChange={(e) => setSelectedApp(e.target.value)}
-          >
-            {APPS.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.name}
-              </option>
-            ))}
-          </select>
+      {/* Top control layer: board selection separate from create form */}
+      <Card>
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <Label>Board</Label>
+            <select
+              value={appId}
+              onChange={(e) => setAppId(e.target.value)}
+              className="mt-1 w-64 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm"
+            >
+              {appIds.map((id) => (
+                <option key={id} value={id}>{id}</option>
+              ))}
+            </select>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="text-xs text-zinc-500">
+              {tasks.length} tasks · backlog {grouped.backlog.length} · todo {grouped.todo.length} · in-progress {grouped.in_progress.length} · needs-input {grouped.needs_input.length} · blocked {grouped.blocked.length} · done {grouped.done.length} · failed {grouped.failed.length}
+            </div>
+            <Button variant="secondary" onClick={triggerAgent} disabled={triggering}>
+              {triggering ? 'Triggering…' : 'Trigger Agent'}
+            </Button>
+            <Button onClick={() => setCreateOpen(true)}>+ New task</Button>
+          </div>
         </div>
-        <Button onClick={triggerAgent} disabled={triggering}>
-          {triggering ? 'Triggering…' : 'Trigger Agent'}
-        </Button>
-        <Button variant="secondary" onClick={loadTasks} disabled={loading}>
-          {loading ? 'Loading…' : 'Refresh'}
-        </Button>
+        {triggerResult && (
+          <div className="mt-2 text-xs text-zinc-600">{triggerResult}</div>
+        )}
+      </Card>
+
+      {/* Minimal board cards */}
+      <div className="grid gap-3 lg:grid-cols-4">
+        {STATUSES.map((s) => (
+          <Card key={s} className="space-y-2">
+            <div className="text-sm font-semibold">{prettyStatus(s)} <span className="text-zinc-500">({grouped[s].length})</span></div>
+            <div className="space-y-2">
+              {grouped[s].map((t) => (
+                <div
+                  key={t.id}
+                  onClick={() => openModal(t)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      openModal(t);
+                    }
+                  }}
+                  role="button"
+                  tabIndex={0}
+                  className="w-full cursor-pointer rounded-lg border border-zinc-200 p-2 text-left hover:border-zinc-400"
+                >
+                  <div className="truncate text-sm font-medium text-zinc-900">{t.title}</div>
+                  <div className="mt-1 text-[11px] text-zinc-500">
+                    p:{t.priority[0].toUpperCase()} · #{t.position} · c:{t.comment_count}
+                  </div>
+                  {t.session_id ? (
+                    <div className="mt-2">
+                      <button
+                        type="button"
+                        className="rounded border border-zinc-300 px-2 py-1 text-[11px] text-zinc-700 hover:bg-zinc-50"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          window.open(sessionLogUrl(t.session_id as string), '_blank', 'noopener,noreferrer');
+                        }}
+                      >
+                        {t.status === 'in_progress' ? '🔴 Live session' : 'View session log'}
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          </Card>
+        ))}
       </div>
 
-      {triggerResult && (
-        <div className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-700">
-          {triggerResult}
-        </div>
-      )}
+      {/* Create task modal */}
+      {createOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-3" onClick={() => setCreateOpen(false)}>
+          <div className="max-h-[92vh] w-full max-w-xl overflow-auto rounded-xl bg-white p-4 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="text-base font-semibold">Create task</h3>
+              <button className="rounded border border-zinc-200 px-2 py-1 text-xs" onClick={() => setCreateOpen(false)}>Close</button>
+            </div>
 
-      {error && <div className="text-sm text-red-600">{error}</div>}
-
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {Object.entries(grouped)
-          .sort((a, b) => (STATUS_ORDER[a[0] as TaskStatus] ?? 99) - (STATUS_ORDER[b[0] as TaskStatus] ?? 99))
-          .map(([status, items]) => (
-            <div key={status} className="space-y-2">
-              <div className="flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-zinc-900">{STATUS_LABEL[status as TaskStatus]}</h3>
-                <span className="text-xs text-zinc-500">{items.length}</span>
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="md:col-span-2">
+                <Label>Title</Label>
+                <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Task title" />
               </div>
-              <div className="space-y-2">
-                {items.map((t) => (
-                  <Card key={t.id} className="space-y-2">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="text-sm font-medium text-zinc-900">{t.title}</div>
-                      <PriorityBadge p={t.priority} />
-                    </div>
-                    <div className="flex items-center gap-2 text-xs text-zinc-500">
-                      {t.assignee && <span>@{t.assignee}</span>}
-                      {t.claimed_by && <span className="text-amber-600">claimed by {t.claimed_by}</span>}
-                    </div>
-                    <div className="flex items-center justify-between text-xs">
-                      <div className="flex items-center gap-3">
-                        <span className="text-zinc-500">{t.comment_count} comments</span>
-                        <span className="text-zinc-500">attempt {t.attempt_count}/{t.max_attempts}</span>
-                      </div>
-                      <LinkA href={`/apps/scrum-board/task/${t.id}`}>Open</LinkA>
-                    </div>
-                  </Card>
-                ))}
+              <div className="md:col-span-2">
+                <Label>Description</Label>
+                <Textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} placeholder="Task description" />
+              </div>
+              <div>
+                <Label>Priority</Label>
+                <select value={priority} onChange={(e) => setPriority(e.target.value as Task['priority'])} className="mt-1 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm">
+                  <option value="high">high</option>
+                  <option value="medium">medium</option>
+                  <option value="low">low</option>
+                </select>
+              </div>
+              <div>
+                <Label>Assignee</Label>
+                <Input value={assignee} onChange={(e) => setAssignee(e.target.value)} placeholder="e.g. rohan" />
+              </div>
+              <div>
+                <Label>Due date</Label>
+                <Input type="datetime-local" value={dueAt} onChange={(e) => setDueAt(e.target.value)} />
+              </div>
+              <div>
+                <Label>Session ID</Label>
+                <Input value={sessionId} onChange={(e) => setSessionId(e.target.value)} placeholder="execution session id" />
               </div>
             </div>
-          ))}
-      </div>
 
-      {!loading && tasks?.length === 0 && (
-        <div className="text-sm text-zinc-500">No tasks for {APPS.find((a) => a.id === selectedApp)?.name}.</div>
-      )}
+            <div className="mt-3">
+              <Button
+                onClick={async () => {
+                  await createTask();
+                  setCreateOpen(false);
+                }}
+                disabled={!title.trim()}
+              >
+                Create task
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {/* Task modal */}
+      {openTask ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-3" onClick={() => setOpenTaskId(null)}>
+          <div className="max-h-[92vh] w-full max-w-2xl overflow-auto rounded-xl bg-white p-4 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="text-base font-semibold">Task #{openTask.id}</h3>
+              <button className="rounded border border-zinc-200 px-2 py-1 text-xs" onClick={() => setOpenTaskId(null)}>Close</button>
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="md:col-span-2">
+                <Label>Title</Label>
+                <Input value={mTitle} onChange={(e) => setMTitle(e.target.value)} />
+              </div>
+              <div className="md:col-span-2">
+                <Label>Description</Label>
+                <Textarea rows={4} value={mDescription} onChange={(e) => setMDescription(e.target.value)} />
+              </div>
+              <div>
+                <Label>Status</Label>
+                <select value={mStatus} onChange={(e) => setMStatus(e.target.value as Task['status'])} className="mt-1 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm">
+                  {STATUSES.map((s) => <option key={s} value={s}>{prettyStatus(s)}</option>)}
+                </select>
+              </div>
+              <div>
+                <Label>Priority</Label>
+                <select value={mPriority} onChange={(e) => setMPriority(e.target.value as Task['priority'])} className="mt-1 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm">
+                  {PRIORITIES.map((p) => <option key={p} value={p}>{p}</option>)}
+                </select>
+              </div>
+              <div>
+                <Label>Assignee</Label>
+                <Input value={mAssignee} onChange={(e) => setMAssignee(e.target.value)} />
+              </div>
+              <div>
+                <Label>Due date</Label>
+                <Input type="datetime-local" value={mDueAt} onChange={(e) => setMDueAt(e.target.value)} />
+              </div>
+              <div>
+                <Label>Session ID</Label>
+                <Input value={mSessionId} onChange={(e) => setMSessionId(e.target.value)} />
+              </div>
+              <div>
+                <Label>Move to board</Label>
+                <select value={mTargetBoard} onChange={(e) => setMTargetBoard(e.target.value)} className="mt-1 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm">
+                  {appIds.map((id) => <option key={id} value={id}>{id}</option>)}
+                </select>
+              </div>
+            </div>
+
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Button onClick={saveModal}>Save</Button>
+              <button className="rounded border border-zinc-200 px-2 py-1 text-xs" onClick={() => moveTask(openTask, 'up')}>Move up</button>
+              <button className="rounded border border-zinc-200 px-2 py-1 text-xs" onClick={() => moveTask(openTask, 'down')}>Move down</button>
+            </div>
+
+            <div className="mt-5 space-y-2">
+              <div className="text-sm font-semibold">Comments</div>
+              {comments.map((c) => (
+                <div key={c.id} className="rounded border border-zinc-200 p-2 text-sm">
+                  <div className="whitespace-pre-wrap">{c.body}</div>
+                  <div className="mt-1 text-xs text-zinc-500">{c.created_at}</div>
+                </div>
+              ))}
+              {comments.length === 0 ? <p className="text-sm text-zinc-500">No comments yet.</p> : null}
+              <Textarea value={commentText} onChange={(e) => setCommentText(e.target.value)} rows={3} placeholder="Add comment" />
+              <div>
+                <Button onClick={addComment} disabled={!commentText.trim()}>Add comment</Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
-}
-
-function PriorityBadge({ p }: { p: Task['priority'] }) {
-  const color =
-    p === 'high' ? 'bg-red-100 text-red-700' : p === 'medium' ? 'bg-amber-100 text-amber-700' : 'bg-zinc-100 text-zinc-700';
-  return <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium uppercase ${color}`}>{p}</span>;
 }
