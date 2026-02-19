@@ -41,8 +41,6 @@ async function fetchEntries() {
      LIMIT 180`
   );
 
-  // node:sqlite can return row objects with non-plain prototypes.
-  // Convert each row to a plain object before passing to a Client Component.
   return rows.map((r) => ({ ...r }));
 }
 
