@@ -1,18 +1,12 @@
 import { Shell } from '@/components/Shell';
-import { listApps } from '@/lib/registry';
-import { ensureScrumBoardSchema } from '@/lib/scrumBoardSchema';
-import { ScrumBoardClient } from './ScrumBoardClient';
+import ScrumBoardClient from './ScrumBoardClient';
 
 export const runtime = 'nodejs';
 
-export default async function ScrumBoardPage() {
-  ensureScrumBoardSchema();
-  const apps = await listApps();
-  const appIds = apps.map((a) => a.id);
-
+export default function ScrumBoardPage() {
   return (
-    <Shell title="Scrum Board" subtitle="One board per app · Steps 1-4 enabled (priority, assignee, due date, manual order)">
-      <ScrumBoardClient appIds={appIds} />
+    <Shell title="Scrum Board" subtitle="Manage tasks and trigger agent runs per app">
+      <ScrumBoardClient />
     </Shell>
   );
 }
