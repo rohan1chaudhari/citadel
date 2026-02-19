@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { Button, Card, Input, Label, LinkA } from '@/components/Shell';
+import { TiptapEditor } from '@/components/TiptapEditor';
 
 type Note = {
   id: number;
@@ -112,189 +113,6 @@ function sortNotes(list: Note[]) {
     if (dt !== 0) return dt;
     return (b.id ?? 0) - (a.id ?? 0);
   });
-}
-
-// Inline markdown renderer - converts markdown patterns to HTML-like display
-function renderInlineMarkdown(text: string): React.ReactNode[] {
-  const lines = text.split('\n');
-  return lines.map((line, lineIdx) => {
-    const elements: React.ReactNode[] = [];
-    let remaining = line;
-    let key = 0;
-
-    // Helper to add text
-    const addText = (text: string) => {
-      if (text) elements.push(<span key={`${lineIdx}-${key++}`}>{text}</span>);
-    };
-
-    // Process inline patterns
-    while (remaining.length > 0) {
-      // Check for patterns
-      const patterns = [
-        { regex: /^#{1,6}\s+(.+)$/, type: 'heading' as const },
-        { regex: /^\*\*(.+?)\*\*/, type: 'bold' as const },
-        { regex: /^__(.+?)__/, type: 'bold' as const },
-        { regex: /^\*(.+?)\*/, type: 'italic' as const },
-        { regex: /^_(.+?)_/, type: 'italic' as const },
-        { regex: /^`(.+?)`/, type: 'code' as const },
-        { regex: /^\[(.+?)\]\((.+?)\)/, type: 'link' as const },
-        { regex: /^!\[(.+?)\]\((.+?)\)/, type: 'image' as const },
-        { regex: /^~~(.+?)~~/, type: 'strike' as const },
-      ];
-
-      let matched = false;
-      for (const pattern of patterns) {
-        const match = remaining.match(pattern.regex);
-        if (match) {
-          const [fullMatch, ...groups] = match;
-          
-          switch (pattern.type) {
-            case 'heading':
-              const level = fullMatch.match(/^#{1,6}/)?.[0].length ?? 1;
-              const sizes = ['text-2xl', 'text-xl', 'text-lg', 'text-base', 'text-sm', 'text-xs'];
-              elements.push(
-                <span key={`${lineIdx}-${key++}`} className={`font-bold ${sizes[level - 1]} text-zinc-900`}>
-                  {groups[0]}
-                </span>
-              );
-              remaining = remaining.slice(fullMatch.length);
-              matched = true;
-              break;
-            case 'bold':
-              elements.push(
-                <strong key={`${lineIdx}-${key++}`} className="font-semibold text-zinc-900">{groups[0]}</strong>
-              );
-              remaining = remaining.slice(fullMatch.length);
-              matched = true;
-              break;
-            case 'italic':
-              elements.push(
-                <em key={`${lineIdx}-${key++}`} className="italic text-zinc-800">{groups[0]}</em>
-              );
-              remaining = remaining.slice(fullMatch.length);
-              matched = true;
-              break;
-            case 'code':
-              elements.push(
-                <code key={`${lineIdx}-${key++}`} className="rounded bg-zinc-100 px-1.5 py-0.5 text-sm font-mono text-zinc-800">
-                  {groups[0]}
-                </code>
-              );
-              remaining = remaining.slice(fullMatch.length);
-              matched = true;
-              break;
-            case 'link':
-              elements.push(
-                <a key={`${lineIdx}-${key++}`} href={groups[1]} className="text-blue-600 underline hover:text-blue-800" target="_blank" rel="noopener noreferrer">
-                  {groups[0]}
-                </a>
-              );
-              remaining = remaining.slice(fullMatch.length);
-              matched = true;
-              break;
-            case 'strike':
-              elements.push(
-                <del key={`${lineIdx}-${key++}`} className="text-zinc-500 line-through">{groups[0]}</del>
-              );
-              remaining = remaining.slice(fullMatch.length);
-              matched = true;
-              break;
-          }
-          if (matched) break;
-        }
-      }
-
-      if (!matched) {
-        // No pattern matched, take first char
-        addText(remaining[0]);
-        remaining = remaining.slice(1);
-      }
-    }
-
-    return (
-      <div key={lineIdx} className="min-h-[1.5em]">
-        {elements.length > 0 ? elements : <br />}
-      </div>
-    );
-  });
-}
-
-// Inline Markdown Editor Component
-function InlineMarkdownEditor({
-  value,
-  onChange,
-  placeholder,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-  placeholder?: string;
-}) {
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const previewRef = useRef<HTMLDivElement>(null);
-  const [isFocused, setIsFocused] = useState(false);
-
-  // Sync scroll between textarea and preview
-  const handleScroll = () => {
-    if (textareaRef.current && previewRef.current) {
-      previewRef.current.scrollTop = textareaRef.current.scrollTop;
-    }
-  };
-
-  // Handle tab key for indentation
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Tab') {
-      e.preventDefault();
-      const target = e.currentTarget;
-      const start = target.selectionStart;
-      const end = target.selectionEnd;
-      const newValue = value.substring(0, start) + '  ' + value.substring(end);
-      onChange(newValue);
-      // Set cursor position after tab
-      setTimeout(() => {
-        target.selectionStart = target.selectionEnd = start + 2;
-      }, 0);
-    }
-  };
-
-  return (
-    <div className="relative min-h-[300px] rounded-lg border border-zinc-200 bg-white overflow-hidden">
-      {/* Preview layer - shown behind textarea */}
-      <div
-        ref={previewRef}
-        className="absolute inset-0 p-3 overflow-y-auto pointer-events-none"
-        style={{ fontFamily: 'inherit' }}
-      >
-        {value ? (
-          <div className="text-sm text-zinc-700 whitespace-pre-wrap">
-            {renderInlineMarkdown(value)}
-          </div>
-        ) : (
-          <span className="text-zinc-400 text-sm">{placeholder || 'Write something...'}</span>
-        )}
-      </div>
-      
-      {/* Textarea layer - transparent but captures input */}
-      <textarea
-        ref={textareaRef}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        onScroll={handleScroll}
-        onKeyDown={handleKeyDown}
-        onFocus={() => setIsFocused(true)}
-        onBlur={() => setIsFocused(false)}
-        placeholder={placeholder}
-        className="absolute inset-0 w-full h-full p-3 text-sm text-transparent bg-transparent caret-zinc-900 resize-none outline-none"
-        spellCheck={false}
-        style={{ 
-          fontFamily: 'inherit',
-          lineHeight: '1.5',
-        }}
-      />
-      
-      {/* Focus indicator */}
-      <div className={`absolute inset-0 border-2 rounded-lg pointer-events-none transition-colors ${isFocused ? 'border-zinc-900/20' : 'border-transparent'}`} />
-    </div>
-  );
 }
 
 export function SmartNotesClient({ initialNotes }: { initialNotes: Note[] }) {
@@ -798,14 +616,11 @@ export function SmartNotesClient({ initialNotes }: { initialNotes: Note[] }) {
             </div>
 
             <div className="mt-3">
-              <div className="flex items-center justify-between mb-2">
-                <Label>Note</Label>
-                <span className="text-xs text-zinc-400">Type **bold**, *italic*, `code`, # heading</span>
-              </div>
-              <InlineMarkdownEditor
+              <Label>Note</Label>
+              <TiptapEditor
                 value={body}
                 onChange={onChangeBody}
-                placeholder="Write in Markdown… patterns render inline as you type"
+                placeholder="Write your note…"
               />
             </div>
           </Card>
