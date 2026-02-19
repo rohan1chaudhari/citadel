@@ -3,7 +3,8 @@
 **Goal:** One scheduled run = one task executed safely.
 
 ## Scope
-Apps: `smart-notes`, `gym-tracker`, `soumil-mood-tracker`, `scrum-board`
+**Apps:** `smart-notes`, `gym-tracker`, `soumil-mood-tracker`  
+**Meta:** `scrum-board` (board maintenance), `citadel` (host/platform — control plane, not a user app)
 
 Task statuses: `todo` → `in_progress` → `done`/`needs_input`/`blocked`/`failed`
 
