@@ -25,11 +25,12 @@ data/          # Runtime data (gitignored)
 kb/            # Knowledge base
 ```
 
-## Current Apps
-| App | UI | API | State |
-|-----|----|-----|-------|
-| smart-notes | `/apps/smart-notes` | `/api/apps/smart-notes/notes` | MVP — capture/list/search/edit/delete |
-| gym-tracker | `/apps/gym-tracker` | `/api/apps/gym-tracker/entries` | MVP 2 — log + storage touch |
+## Apps + Host
+| Name | Type | UI | API | State |
+|------|------|----|-----|-------|
+| smart-notes | App | `/apps/smart-notes` | `/api/apps/smart-notes/notes` | MVP |
+| gym-tracker | App | `/apps/gym-tracker` | `/api/apps/gym-tracker/entries` | MVP 2 |
+| citadel | Host | — | `/api/*` | Control plane (routing, auth, permissions, audit, registry) |
 
 ## Run Locally
 ```bash
