@@ -128,6 +128,7 @@ export async function POST(req: Request) {
   const lastRunAt = toIsoOrNull(body?.last_run_at ?? body?.lastRunAt);
   const needsInputQuestions = String(body?.needs_input_questions ?? body?.needsInputQuestions ?? '').trim().slice(0, 6000) || null;
   const inputDeadlineAt = toIsoOrNull(body?.input_deadline_at ?? body?.inputDeadlineAt);
+  const triggerImmediately = Boolean(body?.trigger_immediately ?? body?.triggerImmediately);
 
   if (!appId) return NextResponse.json({ ok: false, error: 'appId required' }, { status: 400 });
   if (!title) return NextResponse.json({ ok: false, error: 'title required' }, { status: 400 });
@@ -150,7 +151,21 @@ export async function POST(req: Request) {
   );
 
   const id = dbQuery<{ id: number }>(APP_ID, `SELECT last_insert_rowid() as id`)[0]?.id;
-  audit(APP_ID, 'scrum.tasks.create', { appId, boardId, id, status, priority });
+  audit(APP_ID, 'scrum.tasks.create', { appId, boardId, id, status, priority, triggerImmediately });
+
+  // Trigger autopilot immediately if requested
+  if (triggerImmediately && id) {
+    try {
+      // Import trigger logic dynamically to avoid circular deps
+      const { triggerAutopilot } = await import('@/lib/triggerAutopilot');
+      const triggerResult = await triggerAutopilot(appId, appId);
+      return NextResponse.json({ ok: true, id, triggered: true, triggerResult });
+    } catch (err: any) {
+      // Return success for task creation but note trigger failure
+      return NextResponse.json({ ok: true, id, triggered: false, triggerError: err?.message || 'Trigger failed' });
+    }
+  }
+
   return NextResponse.json({ ok: true, id });
 }
 
