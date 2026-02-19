@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Button, Card, Input, Label, Textarea } from '@/components/Shell';
+import { getExternalProject } from '@/lib/externalProjects';
 
 type Task = {
   id: number;
@@ -83,13 +84,19 @@ function PriorityBadge({ p }: { p: Task['priority'] }) {
   );
 }
 
-export default function ScrumBoardClient({ appIds }: { appIds: string[] }) {
+export default function ScrumBoardClient({ appIds, externalIds = [] }: { appIds: string[]; externalIds?: string[] }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   
+  // Combine all board IDs (apps + external projects)
+  const allBoardIds = useMemo(() => [...appIds, ...externalIds], [appIds, externalIds]);
+  
+  // Check if current board is external
+  const isExternal = (id: string) => externalIds.includes(id);
+  
   // Initialize appId from URL or default to first app
   const urlAppId = searchParams?.get('app');
-  const initialAppId = urlAppId && appIds.includes(urlAppId) ? urlAppId : (appIds[0] ?? 'smart-notes');
+  const initialAppId = urlAppId && allBoardIds.includes(urlAppId) ? urlAppId : (allBoardIds[0] ?? 'smart-notes');
   
   const [appId, setAppId] = useState(initialAppId);
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -326,9 +333,18 @@ export default function ScrumBoardClient({ appIds }: { appIds: string[] }) {
               }}
               className="mt-1 w-full sm:w-64 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm"
             >
-              {appIds.map((id) => (
-                <option key={id} value={id}>{id}</option>
-              ))}
+              <optgroup label="Citadel Apps">
+                {appIds.map((id) => (
+                  <option key={id} value={id}>{id}</option>
+                ))}
+              </optgroup>
+              {externalIds.length > 0 && (
+                <optgroup label="External Projects">
+                  {externalIds.map((id) => (
+                    <option key={id} value={id}>🌐 {id}</option>
+                  ))}
+                </optgroup>
+              )}
             </select>
           </div>
           
@@ -361,6 +377,56 @@ export default function ScrumBoardClient({ appIds }: { appIds: string[] }) {
         {triggerResult && (
           <div className="mt-2 text-xs text-zinc-600">{triggerResult}</div>
         )}
+
+        {/* External Project Info Panel */}
+        {isExternal(appId) && (() => {
+          const project = getExternalProject(appId);
+          if (!project) return null;
+          return (
+            <div className="mt-3 p-3 rounded-lg border border-indigo-200 bg-indigo-50/50">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
+                <div className="flex items-center gap-2">
+                  <span className="text-lg">🌐</span>
+                  <span className="font-medium text-indigo-900">{project.name}</span>
+                  {project.description && (
+                    <span className="text-xs text-indigo-600 hidden sm:inline">— {project.description}</span>
+                  )}
+                </div>
+                <div className="flex gap-2 sm:ml-auto">
+                  {project.liveUrl && (
+                    <a 
+                      href={project.liveUrl} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-white bg-indigo-600 rounded hover:bg-indigo-700 transition"
+                    >
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                      </svg>
+                      Live Site
+                    </a>
+                  )}
+                  {project.repoUrl && (
+                    <a 
+                      href={project.repoUrl} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-indigo-700 bg-white border border-indigo-200 rounded hover:bg-indigo-50 transition"
+                    >
+                      <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
+                        <path fillRule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" clipRule="evenodd" />
+                      </svg>
+                      Repo
+                    </a>
+                  )}
+                </div>
+              </div>
+              {project.description && (
+                <p className="mt-2 text-xs text-indigo-600 sm:hidden">{project.description}</p>
+              )}
+            </div>
+          );
+        })()}
       </Card>
 
       {/* Mobile filter - only show on small screens */}
@@ -499,8 +565,8 @@ export default function ScrumBoardClient({ appIds }: { appIds: string[] }) {
       {/* Create task modal */}
       {createOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 sm:p-6" onClick={() => setCreateOpen(false)}>
-          <div 
-            className="max-h-[90vh] w-full max-w-xl overflow-auto rounded-xl bg-white p-4 sm:p-6 shadow-2xl" 
+          <div
+            className="w-full max-w-xl overflow-visible rounded-xl bg-white p-4 sm:p-6 shadow-2xl sm:max-h-[90vh] sm:overflow-auto"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="mb-4 flex items-center justify-between">
@@ -570,8 +636,8 @@ export default function ScrumBoardClient({ appIds }: { appIds: string[] }) {
       {/* Task modal */}
       {openTask ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 sm:p-6" onClick={() => setOpenTaskId(null)}>
-          <div 
-            className="max-h-[90vh] w-full max-w-2xl overflow-auto rounded-xl bg-white p-4 sm:p-6 shadow-2xl" 
+          <div
+            className="w-full max-w-2xl overflow-visible rounded-xl bg-white p-4 sm:p-6 shadow-2xl sm:max-h-[90vh] sm:overflow-auto"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="mb-4 flex items-center justify-between">
@@ -620,7 +686,14 @@ export default function ScrumBoardClient({ appIds }: { appIds: string[] }) {
               <div>
                 <Label>Move to board</Label>
                 <select value={mTargetBoard} onChange={(e) => setMTargetBoard(e.target.value)} className="mt-1 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm">
-                  {appIds.map((id) => <option key={id} value={id}>{id}</option>)}
+                  <optgroup label="Citadel Apps">
+                    {appIds.map((id) => <option key={id} value={id}>{id}</option>)}
+                  </optgroup>
+                  {externalIds.length > 0 && (
+                    <optgroup label="External Projects">
+                      {externalIds.map((id) => <option key={id} value={id}>🌐 {id}</option>)}
+                    </optgroup>
+                  )}
                 </select>
               </div>
             </div>
