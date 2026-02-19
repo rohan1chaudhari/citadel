@@ -30,6 +30,16 @@ type Comment = { id: number; task_id: number; body: string; created_at: string }
 const STATUSES: Task['status'][] = ['backlog', 'todo', 'in_progress', 'needs_input', 'blocked', 'done', 'failed'];
 const PRIORITIES: Task['priority'][] = ['high', 'medium', 'low'];
 
+const STATUS_COLORS: Record<Task['status'], string> = {
+  backlog: 'bg-zinc-100',
+  todo: 'bg-blue-50',
+  in_progress: 'bg-amber-50',
+  needs_input: 'bg-purple-50',
+  blocked: 'bg-red-50',
+  done: 'bg-green-50',
+  failed: 'bg-rose-50',
+};
+
 function prettyStatus(s: Task['status']) {
   if (s === 'in_progress') return 'In Progress';
   if (s === 'needs_input') return 'Needs Input';
@@ -39,6 +49,19 @@ function prettyStatus(s: Task['status']) {
 function sessionLogUrl(sessionId: string) {
   const sid = String(sessionId || '').trim();
   return `/apps/scrum-master/sessions/${encodeURIComponent(sid)}`;
+}
+
+function PriorityBadge({ p }: { p: Task['priority'] }) {
+  const colors = {
+    high: 'bg-red-100 text-red-700',
+    medium: 'bg-amber-100 text-amber-700',
+    low: 'bg-zinc-100 text-zinc-600',
+  };
+  return (
+    <span className={`inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium uppercase ${colors[p]}`}>
+      {p}
+    </span>
+  );
 }
 
 export default function ScrumBoardClient({ appIds }: { appIds: string[] }) {
@@ -72,6 +95,9 @@ export default function ScrumBoardClient({ appIds }: { appIds: string[] }) {
   // Trigger agent state
   const [triggering, setTriggering] = useState(false);
   const [triggerResult, setTriggerResult] = useState<string | null>(null);
+
+  // Mobile status filter
+  const [mobileFilter, setMobileFilter] = useState<Task['status'] | 'all'>('all');
 
   async function loadTasks() {
     const res = await fetch(`/api/apps/scrum-board/tasks?app=${encodeURIComponent(appId)}`, { cache: 'no-store' });
@@ -222,93 +248,182 @@ export default function ScrumBoardClient({ appIds }: { appIds: string[] }) {
     }
   }
 
+  const visibleStatuses = mobileFilter === 'all' ? STATUSES : [mobileFilter];
+
   return (
     <div className="space-y-4">
-      {/* Top control layer: board selection separate from create form */}
+      {/* Top controls - stacked on mobile */}
       <Card>
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <div>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div className="w-full sm:w-auto">
             <Label>Board</Label>
             <select
               value={appId}
               onChange={(e) => setAppId(e.target.value)}
-              className="mt-1 w-64 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm"
+              className="mt-1 w-full sm:w-64 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm"
             >
               {appIds.map((id) => (
                 <option key={id} value={id}>{id}</option>
               ))}
             </select>
           </div>
-          <div className="flex items-center gap-2">
-            <div className="text-xs text-zinc-500">
-              {tasks.length} tasks · backlog {grouped.backlog.length} · todo {grouped.todo.length} · in-progress {grouped.in_progress.length} · needs-input {grouped.needs_input.length} · blocked {grouped.blocked.length} · done {grouped.done.length} · failed {grouped.failed.length}
+          
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <div className="text-xs text-zinc-500 order-2 sm:order-1">
+              {tasks.length} tasks · todo {grouped.todo.length} · in-progress {grouped.in_progress.length}
             </div>
-            <Button variant="secondary" onClick={triggerAgent} disabled={triggering}>
-              {triggering ? 'Triggering…' : 'Trigger Agent'}
-            </Button>
-            <Button onClick={() => setCreateOpen(true)}>+ New task</Button>
+            <div className="flex gap-2 order-1 sm:order-2">
+              <Button variant="secondary" onClick={triggerAgent} disabled={triggering} className="flex-1 sm:flex-none">
+                {triggering ? '…' : 'Trigger'}
+              </Button>
+              <Button onClick={() => setCreateOpen(true)} className="flex-1 sm:flex-none">
+                + New
+              </Button>
+            </div>
           </div>
         </div>
+        
         {triggerResult && (
           <div className="mt-2 text-xs text-zinc-600">{triggerResult}</div>
         )}
       </Card>
 
-      {/* Minimal board cards */}
-      <div className="grid gap-3 lg:grid-cols-4">
-        {STATUSES.map((s) => (
-          <Card key={s} className="space-y-2">
-            <div className="text-sm font-semibold">{prettyStatus(s)} <span className="text-zinc-500">({grouped[s].length})</span></div>
-            <div className="space-y-2">
-              {grouped[s].map((t) => (
-                <div
-                  key={t.id}
-                  onClick={() => openModal(t)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault();
-                      openModal(t);
-                    }
-                  }}
-                  role="button"
-                  tabIndex={0}
-                  className="w-full cursor-pointer rounded-lg border border-zinc-200 p-2 text-left hover:border-zinc-400"
-                >
-                  <div className="truncate text-sm font-medium text-zinc-900">{t.title}</div>
-                  <div className="mt-1 text-[11px] text-zinc-500">
-                    p:{t.priority[0].toUpperCase()} · #{t.position} · c:{t.comment_count}
-                  </div>
-                  {t.session_id ? (
-                    <div className="mt-2">
-                      <button
-                        type="button"
-                        className="rounded border border-zinc-300 px-2 py-1 text-[11px] text-zinc-700 hover:bg-zinc-50"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          window.open(sessionLogUrl(t.session_id as string), '_blank', 'noopener,noreferrer');
-                        }}
-                      >
-                        {t.status === 'in_progress' ? '🔴 Live session' : 'View session log'}
-                      </button>
+      {/* Mobile filter - only show on small screens */}
+      <div className="lg:hidden">
+        <Label>Filter status</Label>
+        <div className="mt-1 flex gap-2 overflow-x-auto pb-2">
+          <button
+            onClick={() => setMobileFilter('all')}
+            className={`whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-medium transition ${
+              mobileFilter === 'all' ? 'bg-zinc-900 text-white' : 'bg-zinc-100 text-zinc-700'
+            }`}
+          >
+            All ({tasks.length})
+          </button>
+          {STATUSES.map((s) => (
+            <button
+              key={s}
+              onClick={() => setMobileFilter(s)}
+              className={`whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-medium transition ${
+                mobileFilter === s ? 'bg-zinc-900 text-white' : 'bg-zinc-100 text-zinc-700'
+              }`}
+            >
+              {prettyStatus(s)} ({grouped[s].length})
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Board columns - horizontal scroll on mobile, grid on desktop */}
+      <div className="flex gap-3 overflow-x-auto pb-4 lg:grid lg:grid-cols-4 lg:overflow-visible snap-x snap-mandatory">
+        {visibleStatuses.map((s) => (
+          <div 
+            key={s} 
+            className="flex-shrink-0 w-[85vw] sm:w-[300px] lg:w-auto snap-start"
+          >
+            <Card className={`h-full max-h-[70vh] lg:max-h-[calc(100vh-280px)] flex flex-col ${STATUS_COLORS[s]}`}>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm font-semibold">{prettyStatus(s)}</span>
+                <span className="text-xs text-zinc-500 bg-white/60 rounded-full px-2 py-0.5">
+                  {grouped[s].length}
+                </span>
+              </div>
+              
+              <div className="flex-1 overflow-y-auto space-y-2 pr-1">
+                {grouped[s].map((t) => (
+                  <div
+                    key={t.id}
+                    onClick={() => openModal(t)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        openModal(t);
+                      }
+                    }}
+                    role="button"
+                    tabIndex={0}
+                    className="w-full cursor-pointer rounded-lg border border-zinc-200 bg-white p-3 text-left hover:border-zinc-400 hover:shadow-sm transition active:scale-[0.98]"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-medium text-zinc-900 line-clamp-2">{t.title}</div>
+                      </div>
+                      <PriorityBadge p={t.priority} />
                     </div>
-                  ) : null}
-                </div>
-              ))}
-            </div>
-          </Card>
+                    
+                    <div className="mt-2 flex items-center gap-2 text-[11px] text-zinc-500">
+                      <span>#{t.position}</span>
+                      {t.comment_count > 0 && (
+                        <span className="flex items-center gap-0.5">
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                          </svg>
+                          {t.comment_count}
+                        </span>
+                      )}
+                      {t.claimed_by && (
+                        <span className="text-amber-600 flex items-center gap-0.5">
+                          <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
+                          </svg>
+                          {t.claimed_by}
+                        </span>
+                      )}
+                    </div>
+                    
+                    {t.session_id ? (
+                      <div className="mt-2">
+                        <button
+                          type="button"
+                          className="inline-flex items-center gap-1 rounded border border-zinc-300 bg-white px-2 py-1 text-[11px] text-zinc-700 hover:bg-zinc-50 active:bg-zinc-100"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            window.open(sessionLogUrl(t.session_id as string), '_blank', 'noopener,noreferrer');
+                          }}
+                        >
+                          {t.status === 'in_progress' ? (
+                            <>
+                              <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+                              Live
+                            </>
+                          ) : (
+                            'View log'
+                          )}
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
+                ))}
+                
+                {grouped[s].length === 0 && (
+                  <div className="text-center py-8 text-xs text-zinc-400">
+                    No tasks
+                  </div>
+                )}
+              </div>
+            </Card>
+          </div>
         ))}
       </div>
 
       {/* Create task modal */}
       {createOpen ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-3" onClick={() => setCreateOpen(false)}>
-          <div className="max-h-[92vh] w-full max-w-xl overflow-auto rounded-xl bg-white p-4 shadow-xl" onClick={(e) => e.stopPropagation()}>
-            <div className="mb-3 flex items-center justify-between">
-              <h3 className="text-base font-semibold">Create task</h3>
-              <button className="rounded border border-zinc-200 px-2 py-1 text-xs" onClick={() => setCreateOpen(false)}>Close</button>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 sm:p-6" onClick={() => setCreateOpen(false)}>
+          <div 
+            className="max-h-[90vh] w-full max-w-xl overflow-auto rounded-xl bg-white p-4 sm:p-6 shadow-2xl" 
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-lg font-semibold">Create task</h3>
+              <button 
+                className="rounded-lg border border-zinc-200 px-3 py-1.5 text-sm hover:bg-zinc-50 active:bg-zinc-100" 
+                onClick={() => setCreateOpen(false)}
+              >
+                Close
+              </button>
             </div>
 
-            <div className="grid gap-3 md:grid-cols-2">
+            <div className="grid gap-4 md:grid-cols-2">
               <div className="md:col-span-2">
                 <Label>Title</Label>
                 <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Task title" />
@@ -339,13 +454,21 @@ export default function ScrumBoardClient({ appIds }: { appIds: string[] }) {
               </div>
             </div>
 
-            <div className="mt-3">
+            <div className="mt-4 flex flex-col-reverse sm:flex-row gap-2 sm:justify-end">
+              <Button
+                variant="secondary"
+                onClick={() => setCreateOpen(false)}
+                className="w-full sm:w-auto"
+              >
+                Cancel
+              </Button>
               <Button
                 onClick={async () => {
                   await createTask();
                   setCreateOpen(false);
                 }}
                 disabled={!title.trim()}
+                className="w-full sm:w-auto"
               >
                 Create task
               </Button>
@@ -356,14 +479,22 @@ export default function ScrumBoardClient({ appIds }: { appIds: string[] }) {
 
       {/* Task modal */}
       {openTask ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-3" onClick={() => setOpenTaskId(null)}>
-          <div className="max-h-[92vh] w-full max-w-2xl overflow-auto rounded-xl bg-white p-4 shadow-xl" onClick={(e) => e.stopPropagation()}>
-            <div className="mb-3 flex items-center justify-between">
-              <h3 className="text-base font-semibold">Task #{openTask.id}</h3>
-              <button className="rounded border border-zinc-200 px-2 py-1 text-xs" onClick={() => setOpenTaskId(null)}>Close</button>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 sm:p-6" onClick={() => setOpenTaskId(null)}>
+          <div 
+            className="max-h-[90vh] w-full max-w-2xl overflow-auto rounded-xl bg-white p-4 sm:p-6 shadow-2xl" 
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-lg font-semibold">Task #{openTask.id}</h3>
+              <button 
+                className="rounded-lg border border-zinc-200 px-3 py-1.5 text-sm hover:bg-zinc-50 active:bg-zinc-100" 
+                onClick={() => setOpenTaskId(null)}
+              >
+                Close
+              </button>
             </div>
 
-            <div className="grid gap-3 md:grid-cols-2">
+            <div className="grid gap-4 md:grid-cols-2">
               <div className="md:col-span-2">
                 <Label>Title</Label>
                 <Input value={mTitle} onChange={(e) => setMTitle(e.target.value)} />
@@ -404,16 +535,16 @@ export default function ScrumBoardClient({ appIds }: { appIds: string[] }) {
               </div>
             </div>
 
-            <div className="mt-3 flex flex-wrap gap-2">
+            <div className="mt-4 flex flex-wrap gap-2">
               <Button onClick={saveModal}>Save</Button>
-              <button className="rounded border border-zinc-200 px-2 py-1 text-xs" onClick={() => moveTask(openTask, 'up')}>Move up</button>
-              <button className="rounded border border-zinc-200 px-2 py-1 text-xs" onClick={() => moveTask(openTask, 'down')}>Move down</button>
+              <button className="rounded-lg border border-zinc-200 px-3 py-2 text-sm hover:bg-zinc-50 active:bg-zinc-100" onClick={() => moveTask(openTask, 'up')}>Move up</button>
+              <button className="rounded-lg border border-zinc-200 px-3 py-2 text-sm hover:bg-zinc-50 active:bg-zinc-100" onClick={() => moveTask(openTask, 'down')}>Move down</button>
             </div>
 
-            <div className="mt-5 space-y-2">
+            <div className="mt-6 space-y-3">
               <div className="text-sm font-semibold">Comments</div>
               {comments.map((c) => (
-                <div key={c.id} className="rounded border border-zinc-200 p-2 text-sm">
+                <div key={c.id} className="rounded-lg border border-zinc-200 p-3 text-sm">
                   <div className="whitespace-pre-wrap">{c.body}</div>
                   <div className="mt-1 text-xs text-zinc-500">{c.created_at}</div>
                 </div>
