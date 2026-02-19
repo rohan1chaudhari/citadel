@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { spawn } from 'child_process';
 import { audit } from '@/lib/audit';
 
 export const runtime = 'nodejs';
@@ -6,7 +7,7 @@ const APP_ID = 'scrum-board';
 
 /**
  * Trigger an autopilot agent run for a selected app.
- * This spawns an isolated OpenClaw session that follows AUTOPILOT.md.
+ * Adds a one-time cron job via OpenClaw CLI.
  */
 export async function POST(req: Request) {
   const body = await req.json().catch(() => ({} as any));
@@ -17,7 +18,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: 'appId required' }, { status: 400 });
   }
 
-  const cronJobId = `manual-${Date.now()}`;
+  const cronJobId = `sb-${Date.now()}`;
   const cronRunTs = new Date().toISOString();
   const repoPath = '/home/rohanchaudhari/personal/citadel';
 
@@ -46,27 +47,65 @@ Execution contract:
    - failed if retries exhausted; else increment attempt_count and return to todo
 8) Add structured comment with debug metadata and stop.`;
 
-  // For now, we return the message that *would* be sent.
-  // To wire this up:
-  // Option A: Call OpenClaw Gateway cron API to schedule an immediate run
-  // Option B: Call sessions_spawn via OpenClaw agent bridge
-  // Option C: Write to a queue that a local OpenClaw cron job picks up
+  try {
+    // Schedule 5 seconds from now in ISO format
+    const runAt = new Date(Date.now() + 5000).toISOString();
 
-  audit(APP_ID, 'scrum.trigger_agent', { appId, appName, cronJobId });
+    // Call openclaw cron add with proper flags
+    const args = [
+      'cron', 'add',
+      '--name', `autopilot-${appId}-${cronJobId}`,
+      '--session', 'isolated',
+      '--at', runAt,
+      '--message', message,
+      '--thinking', 'low',
+      '--timeout-seconds', '600',
+      '--delete-after-run',
+      '--json',
+    ];
 
-  // Placeholder: return the constructed message for debugging
-  // In production, this would actually spawn the agent via OpenClaw API
-  return NextResponse.json({
-    ok: true,
-    message: 'Agent trigger queued',
-    debug: {
+    // Execute and capture output
+    const child = spawn('openclaw', args, {
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+
+    let stdout = '';
+    let stderr = '';
+    child.stdout?.on('data', (d) => (stdout += d));
+    child.stderr?.on('data', (d) => (stderr += d));
+
+    const exitCode = await new Promise<number>((resolve) => child.on('close', resolve));
+
+    // Filter out config warnings from stderr
+    const cleanStderr = stderr
+      .split('\n')
+      .filter((l) => !l.includes('Config was last written'))
+      .join('\n')
+      .trim();
+
+    if (exitCode !== 0) {
+      throw new Error(cleanStderr || `openclaw exited ${exitCode}`);
+    }
+
+    const result = JSON.parse(stdout || '{}');
+
+    audit(APP_ID, 'scrum.trigger_agent', {
       appId,
       appName,
-      cronJobId,
-      cronRunTs,
-      agentMessage: message,
-      nextStep:
-        'Wire this to OpenClaw cron API or sessions_spawn to actually execute. For now, message is logged.',
-    },
-  });
+      cronJobId: result.id || cronJobId,
+    });
+
+    return NextResponse.json({
+      ok: true,
+      message: 'Agent scheduled',
+      cronJobId: result.id || cronJobId,
+      runAt,
+    });
+  } catch (err: any) {
+    audit(APP_ID, 'scrum.trigger_agent_failed', { appId, error: err?.message });
+    return NextResponse.json(
+      { ok: false, error: err?.message || 'Failed to schedule agent' },
+      { status: 502 }
+    );
+  }
 }
