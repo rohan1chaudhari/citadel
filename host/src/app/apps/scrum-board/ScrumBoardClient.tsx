@@ -248,7 +248,7 @@ export function ScrumBoardClient({ appIds }: { appIds: string[] }) {
                   <div className="mt-1 text-[11px] text-zinc-500">
                     p:{t.priority[0].toUpperCase()} · #{t.position} · c:{t.comment_count}
                   </div>
-                  {t.status === 'done' && t.session_id ? (
+                  {t.session_id ? (
                     <div className="mt-2">
                       <button
                         type="button"
@@ -258,7 +258,7 @@ export function ScrumBoardClient({ appIds }: { appIds: string[] }) {
                           window.open(sessionLogUrl(t.session_id as string), '_blank', 'noopener,noreferrer');
                         }}
                       >
-                        View session log
+                        {t.status === 'in_progress' ? '🔴 Live session' : 'View session log'}
                       </button>
                     </div>
                   ) : null}
