@@ -109,6 +109,9 @@ export default function ScrumBoardClient({ appIds, externalIds = [] }: { appIds:
   const [assignee, setAssignee] = useState('');
   const [dueAt, setDueAt] = useState('');
   const [sessionId, setSessionId] = useState('');
+  const [triggerImmediately, setTriggerImmediately] = useState(false);
+  const [createLoading, setCreateLoading] = useState(false);
+  const [createResult, setCreateResult] = useState<{ triggered?: boolean; message?: string } | null>(null);
 
   // Modal state
   const [openTaskId, setOpenTaskId] = useState<number | null>(null);
@@ -203,30 +206,68 @@ export default function ScrumBoardClient({ appIds, externalIds = [] }: { appIds:
   const openTask = useMemo(() => tasks.find((t) => t.id === openTaskId) ?? null, [tasks, openTaskId]);
 
   async function createTask() {
-    const res = await fetch('/api/apps/scrum-board/tasks', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        appId,
-        title,
-        description,
-        priority,
-        assignee: assignee || null,
-        due_at: dueAt || null,
-        session_id: sessionId || null,
-        status: 'backlog'
-      })
-    });
-    const data = await res.json();
-    if (!res.ok || !data?.ok) return;
+    setCreateLoading(true);
+    setCreateResult(null);
+    try {
+      const res = await fetch('/api/apps/scrum-board/tasks', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          appId,
+          title,
+          description,
+          priority,
+          assignee: assignee || null,
+          due_at: dueAt || null,
+          session_id: sessionId || null,
+          status: 'backlog',
+          trigger_immediately: triggerImmediately,
+        })
+      });
+      const data = await res.json();
+      if (!res.ok || !data?.ok) {
+        setCreateResult({ message: data?.error || 'Failed to create task' });
+        return;
+      }
 
+      // Show trigger result if immediate trigger was requested
+      if (triggerImmediately) {
+        if (data.triggered) {
+          setCreateResult({ 
+            triggered: true, 
+            message: `Task created and autopilot triggered! (${data.triggerResult?.eligibleCount || 1} eligible task${data.triggerResult?.eligibleCount === 1 ? '' : 's'})` 
+          });
+        } else {
+          setCreateResult({ 
+            triggered: false, 
+            message: `Task created but trigger failed: ${data.triggerError || 'Unknown error'}` 
+          });
+        }
+        // Keep modal open briefly to show result, then clear and close
+        setTimeout(() => {
+          resetCreateForm();
+          setCreateOpen(false);
+        }, 2000);
+      } else {
+        resetCreateForm();
+        setCreateOpen(false);
+      }
+
+      await loadTasks();
+    } finally {
+      setCreateLoading(false);
+    }
+  }
+
+  function resetCreateForm() {
     setTitle('');
     setDescription('');
     setPriority('medium');
     setAssignee('');
     setDueAt('');
     setSessionId('');
-    await loadTasks();
+    setTriggerImmediately(false);
+    setCreateResult(null);
   }
 
   function openModal(t: Task) {
@@ -608,25 +649,43 @@ export default function ScrumBoardClient({ appIds, externalIds = [] }: { appIds:
                 <Label>Session ID</Label>
                 <Input value={sessionId} onChange={(e) => setSessionId(e.target.value)} placeholder="execution session id" />
               </div>
+              <div className="md:col-span-2">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={triggerImmediately}
+                    onChange={(e) => setTriggerImmediately(e.target.checked)}
+                    className="w-4 h-4 rounded border-zinc-300 text-zinc-900 focus:ring-zinc-900"
+                  />
+                  <span className="text-sm text-zinc-700">Trigger autopilot immediately after creation</span>
+                </label>
+                <p className="text-xs text-zinc-500 mt-1 ml-6">
+                  Starts an autopilot run right away to work on this task.
+                </p>
+              </div>
             </div>
+
+            {createResult && (
+              <div className={`mt-4 p-3 rounded-lg text-sm ${createResult.triggered ? 'bg-green-50 text-green-700 border border-green-200' : createResult.message?.includes('created') ? 'bg-amber-50 text-amber-700 border border-amber-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
+                {createResult.message}
+              </div>
+            )}
 
             <div className="mt-4 flex flex-col-reverse sm:flex-row gap-2 sm:justify-end">
               <Button
                 variant="secondary"
                 onClick={() => setCreateOpen(false)}
+                disabled={createLoading}
                 className="w-full sm:w-auto"
               >
                 Cancel
               </Button>
               <Button
-                onClick={async () => {
-                  await createTask();
-                  setCreateOpen(false);
-                }}
-                disabled={!title.trim()}
+                onClick={createTask}
+                disabled={!title.trim() || createLoading}
                 className="w-full sm:w-auto"
               >
-                Create task
+                {createLoading ? 'Creating...' : triggerImmediately ? 'Create & Trigger' : 'Create task'}
               </Button>
             </div>
           </div>
