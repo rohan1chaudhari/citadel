@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { dbExec, dbQuery } from '@/lib/db';
 import { audit } from '@/lib/audit';
-import { ensureScrumBoardSchema, getOrCreateBoardId, normalizePriority, normalizeStatus } from '@/lib/scrumBoardSchema';
+import { ensureScrumBoardSchema, getOrCreateBoardId, normalizePriority, normalizeStatus, releaseAgentLock } from '@/lib/scrumBoardSchema';
 
 export const runtime = 'nodejs';
 const APP_ID = 'scrum-board';
@@ -29,6 +29,7 @@ type TaskRow = {
   created_at: string;
   updated_at: string | null;
   completed_at: string | null;
+  validation_rounds: number;
 };
 
 function priorityRank(p: string) {
@@ -68,7 +69,7 @@ export async function GET(req: Request) {
     `SELECT
       id, board_id, title, description, acceptance_criteria, status, position, priority, assignee, due_at, session_id,
       attempt_count, max_attempts, claimed_by, claimed_at, last_error, last_run_at, needs_input_questions, input_deadline_at,
-      created_at, updated_at, completed_at
+      created_at, updated_at, completed_at, validation_rounds
      FROM tasks
      WHERE board_id = ?
      ORDER BY status ASC, position ASC, id ASC`,
@@ -89,10 +90,11 @@ export async function GET(req: Request) {
         backlog: 0,
         todo: 1,
         in_progress: 2,
-        needs_input: 3,
-        blocked: 4,
-        done: 5,
-        failed: 6
+        validating: 3,
+        needs_input: 4,
+        blocked: 5,
+        done: 6,
+        failed: 7
       };
       const sa = sOrder[a.status] ?? 99;
       const sb = sOrder[b.status] ?? 99;
@@ -128,6 +130,7 @@ export async function POST(req: Request) {
   const lastRunAt = toIsoOrNull(body?.last_run_at ?? body?.lastRunAt);
   const needsInputQuestions = String(body?.needs_input_questions ?? body?.needsInputQuestions ?? '').trim().slice(0, 6000) || null;
   const inputDeadlineAt = toIsoOrNull(body?.input_deadline_at ?? body?.inputDeadlineAt);
+  const validationRounds = Math.max(0, toIntOrDefault(body?.validation_rounds ?? body?.validationRounds, 0));
   const triggerImmediately = Boolean(body?.trigger_immediately ?? body?.triggerImmediately);
 
   if (!appId) return NextResponse.json({ ok: false, error: 'appId required' }, { status: 400 });
@@ -141,12 +144,12 @@ export async function POST(req: Request) {
     `INSERT INTO tasks (
       board_id, title, description, acceptance_criteria, status, position, priority, assignee, due_at, session_id,
       attempt_count, max_attempts, claimed_by, claimed_at, last_error, last_run_at, needs_input_questions, input_deadline_at,
-      created_at, updated_at, completed_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      created_at, updated_at, completed_at, validation_rounds
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       boardId, title, description || null, acceptanceCriteria, status, position, priority, assignee, dueAt, sessionId,
       attemptCount, maxAttempts, claimedBy, claimedAt, lastError, lastRunAt, needsInputQuestions, inputDeadlineAt,
-      now, now, status === 'done' ? now : null
+      now, now, status === 'done' ? now : null, validationRounds
     ]
   );
 
@@ -233,6 +236,10 @@ export async function PATCH(req: Request) {
     ? toIsoOrNull(body?.input_deadline_at ?? body?.inputDeadlineAt)
     : row.input_deadline_at;
 
+  const validationRounds = body?.validation_rounds !== undefined || body?.validationRounds !== undefined
+    ? Math.max(0, toIntOrDefault(body?.validation_rounds ?? body?.validationRounds, row.validation_rounds))
+    : row.validation_rounds;
+
   const now = new Date().toISOString();
 
   if (body?.move === 'up' || body?.move === 'down') {
@@ -261,14 +268,23 @@ export async function PATCH(req: Request) {
     `UPDATE tasks
      SET board_id = ?, title = ?, description = ?, acceptance_criteria = ?, status = ?, position = ?, priority = ?, assignee = ?, due_at = ?, session_id = ?,
          attempt_count = ?, max_attempts = ?, claimed_by = ?, claimed_at = ?, last_error = ?, last_run_at = ?, needs_input_questions = ?, input_deadline_at = ?,
-         updated_at = ?, completed_at = ?
+         updated_at = ?, completed_at = ?, validation_rounds = ?
      WHERE id = ?`,
     [
       targetBoardId, title, description, acceptanceCriteria, status, position, priority, assignee, dueAt, sessionId,
       attemptCount, maxAttempts, claimedBy, claimedAt, lastError, lastRunAt, needsInputQuestions, inputDeadlineAt,
-      now, completedAt, id
+      now, completedAt, validationRounds, id
     ]
   );
+
+  // Release agent lock if task moved to a terminal state (done, failed, needs_input, blocked, validating)
+  if (body?.status != null) {
+    const newStatus = normalizeStatus(body.status);
+    const terminalStatuses = ['done', 'failed', 'needs_input', 'blocked', 'validating'];
+    if (terminalStatuses.includes(newStatus)) {
+      releaseAgentLock();
+    }
+  }
 
   if (body?.comment) {
     const comment = String(body.comment).trim().slice(0, 4000);

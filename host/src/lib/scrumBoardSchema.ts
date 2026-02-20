@@ -2,8 +2,9 @@ import { dbExec, dbQuery } from '@/lib/db';
 
 const APP_ID = 'scrum-board';
 
-export type TaskStatus = 'backlog' | 'todo' | 'in_progress' | 'needs_input' | 'blocked' | 'done' | 'failed';
+export type TaskStatus = 'backlog' | 'todo' | 'in_progress' | 'validating' | 'needs_input' | 'blocked' | 'done' | 'failed';
 export type TaskPriority = 'low' | 'medium' | 'high';
+export type SessionStatus = 'running' | 'completed' | 'failed' | 'blocked' | 'needs_input' | 'validating' | 'archived';
 
 export function ensureScrumBoardSchema() {
   dbExec(
@@ -71,6 +72,7 @@ export function ensureScrumBoardSchema() {
   if (!cols.has('last_run_at')) dbExec(APP_ID, `ALTER TABLE tasks ADD COLUMN last_run_at TEXT`);
   if (!cols.has('needs_input_questions')) dbExec(APP_ID, `ALTER TABLE tasks ADD COLUMN needs_input_questions TEXT`);
   if (!cols.has('input_deadline_at')) dbExec(APP_ID, `ALTER TABLE tasks ADD COLUMN input_deadline_at TEXT`);
+  if (!cols.has('validation_rounds')) dbExec(APP_ID, `ALTER TABLE tasks ADD COLUMN validation_rounds INTEGER NOT NULL DEFAULT 0`);
 
   dbExec(APP_ID, `CREATE INDEX IF NOT EXISTS idx_boards_app_id ON boards(app_id)`);
   dbExec(APP_ID, `CREATE INDEX IF NOT EXISTS idx_tasks_board_status ON tasks(board_id, status)`);
@@ -90,6 +92,56 @@ export function ensureScrumBoardSchema() {
       updated_at TEXT NOT NULL
     )`
   );
+
+  // Sessions table for agent run history
+  dbExec(
+    APP_ID,
+    `CREATE TABLE IF NOT EXISTS sessions (
+      id TEXT PRIMARY KEY,
+      task_id INTEGER NOT NULL,
+      cron_job_id TEXT,
+      started_at TEXT NOT NULL,
+      ended_at TEXT,
+      status TEXT NOT NULL DEFAULT 'running',
+      logs_url TEXT,
+      final_output TEXT,
+      created_at TEXT NOT NULL,
+      archived_at TEXT,
+      FOREIGN KEY(task_id) REFERENCES tasks(id)
+    )`
+  );
+  dbExec(APP_ID, `CREATE INDEX IF NOT EXISTS idx_sessions_task_id ON sessions(task_id)`);
+  dbExec(APP_ID, `CREATE INDEX IF NOT EXISTS idx_sessions_status ON sessions(status)`);
+  dbExec(APP_ID, `CREATE INDEX IF NOT EXISTS idx_sessions_started_at ON sessions(started_at)`);
+  dbExec(APP_ID, `CREATE INDEX IF NOT EXISTS idx_sessions_archived_at ON sessions(archived_at)`);
+
+  // Session logs table for streaming output
+  dbExec(
+    APP_ID,
+    `CREATE TABLE IF NOT EXISTS session_logs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      session_id TEXT NOT NULL,
+      chunk TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      FOREIGN KEY(session_id) REFERENCES sessions(id) ON DELETE CASCADE
+    )`
+  );
+  dbExec(APP_ID, `CREATE INDEX IF NOT EXISTS idx_session_logs_session_id ON session_logs(session_id)`);
+  dbExec(APP_ID, `CREATE INDEX IF NOT EXISTS idx_session_logs_created_at ON session_logs(created_at)`);
+
+  // Agent lock table to ensure only one agent runs at a time
+  dbExec(
+    APP_ID,
+    `CREATE TABLE IF NOT EXISTS agent_locks (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      locked_at TEXT NOT NULL,
+      task_id INTEGER,
+      session_id TEXT,
+      expires_at TEXT NOT NULL,
+      FOREIGN KEY(task_id) REFERENCES tasks(id)
+    )`
+  );
+  dbExec(APP_ID, `CREATE INDEX IF NOT EXISTS idx_agent_locks_expires ON agent_locks(expires_at)`);
 
   // Default autopilot enabled = true
   const autopilotEnabled = dbQuery<{ count: number }>(
@@ -124,6 +176,7 @@ export function normalizeStatus(v: unknown): TaskStatus {
     x === 'backlog' ||
     x === 'todo' ||
     x === 'in_progress' ||
+    x === 'validating' ||
     x === 'needs_input' ||
     x === 'blocked' ||
     x === 'done' ||
@@ -154,5 +207,201 @@ export function setSetting(key: string, value: string): void {
     `INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?)
      ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
     [key, value, now]
+  );
+}
+
+// Agent lock functions
+export interface AgentLock {
+  id: number;
+  locked_at: string;
+  task_id: number | null;
+  session_id: string | null;
+  expires_at: string;
+}
+
+/**
+ * Get the current active lock if any.
+ */
+export function getActiveLock(): AgentLock | null {
+  const now = new Date().toISOString();
+  const row = dbQuery<AgentLock>(
+    APP_ID,
+    `SELECT * FROM agent_locks WHERE id = 1 AND expires_at > ? LIMIT 1`,
+    [now]
+  )[0];
+  return row || null;
+}
+
+/**
+ * Check if the agent is currently locked (busy).
+ */
+export function isAgentLocked(): boolean {
+  return getActiveLock() !== null;
+}
+
+/**
+ * Acquire an agent lock for a task.
+ * @returns true if lock acquired, false if already locked
+ */
+export function acquireAgentLock(taskId: number, sessionId: string): boolean {
+  const now = new Date().toISOString();
+  // Lock expires after 30 minutes
+  const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
+
+  // Check if there's already an active lock
+  if (isAgentLocked()) {
+    return false;
+  }
+
+  // Try to acquire lock
+  try {
+    dbExec(
+      APP_ID,
+      `INSERT INTO agent_locks (id, locked_at, task_id, session_id, expires_at) 
+       VALUES (1, ?, ?, ?, ?)
+       ON CONFLICT(id) DO UPDATE 
+       SET locked_at = excluded.locked_at, 
+           task_id = excluded.task_id, 
+           session_id = excluded.session_id, 
+           expires_at = excluded.expires_at`,
+      [now, taskId, sessionId, expiresAt]
+    );
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Release the agent lock.
+ */
+export function releaseAgentLock(): void {
+  dbExec(APP_ID, `DELETE FROM agent_locks WHERE id = 1`);
+}
+
+/**
+ * Get task info for the currently locked task.
+ */
+export function getLockedTaskInfo(): { taskId: number; sessionId: string } | null {
+  const lock = getActiveLock();
+  if (!lock || !lock.task_id || !lock.session_id) return null;
+  return { taskId: lock.task_id, sessionId: lock.session_id };
+}
+
+// Session functions
+export interface Session {
+  id: string;
+  task_id: number;
+  cron_job_id: string | null;
+  started_at: string;
+  ended_at: string | null;
+  status: SessionStatus;
+  logs_url: string | null;
+  final_output: string | null;
+  created_at: string;
+  archived_at: string | null;
+}
+
+/**
+ * Create a new session for a task.
+ */
+export function createSession(sessionId: string, taskId: number, cronJobId?: string): Session {
+  const now = new Date().toISOString();
+  dbExec(
+    APP_ID,
+    `INSERT INTO sessions (id, task_id, cron_job_id, started_at, status, created_at)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+    [sessionId, taskId, cronJobId || null, now, 'running', now]
+  );
+  return {
+    id: sessionId,
+    task_id: taskId,
+    cron_job_id: cronJobId || null,
+    started_at: now,
+    ended_at: null,
+    status: 'running',
+    logs_url: null,
+    final_output: null,
+    created_at: now,
+    archived_at: null,
+  };
+}
+
+/**
+ * Get a session by ID.
+ */
+export function getSession(sessionId: string): Session | null {
+  const row = dbQuery<Session>(
+    APP_ID,
+    `SELECT * FROM sessions WHERE id = ? LIMIT 1`,
+    [sessionId]
+  )[0];
+  return row || null;
+}
+
+/**
+ * Get all sessions for a task.
+ */
+export function getSessionsForTask(taskId: number): Session[] {
+  return dbQuery<Session>(
+    APP_ID,
+    `SELECT * FROM sessions WHERE task_id = ? ORDER BY started_at DESC`,
+    [taskId]
+  );
+}
+
+/**
+ * Update session status.
+ */
+export function updateSessionStatus(
+  sessionId: string,
+  status: SessionStatus,
+  finalOutput?: string
+): void {
+  const now = new Date().toISOString();
+  const isTerminal = ['completed', 'failed', 'blocked', 'needs_input', 'validating', 'archived'].includes(status);
+  const endedAt = isTerminal ? now : null;
+
+  dbExec(
+    APP_ID,
+    `UPDATE sessions
+     SET status = ?, ended_at = COALESCE(?, ended_at), final_output = COALESCE(?, final_output), archived_at = ?
+     WHERE id = ?`,
+    [status, endedAt, finalOutput || null, status === 'archived' ? now : null, sessionId]
+  );
+}
+
+/**
+ * Archive sessions older than 30 days.
+ */
+export function archiveOldSessions(): number {
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+  const result = dbExec(
+    APP_ID,
+    `UPDATE sessions
+     SET status = 'archived', archived_at = ?
+     WHERE status != 'archived' AND created_at < ?`,
+    [new Date().toISOString(), thirtyDaysAgo]
+  );
+  // SQLite doesn't return affected rows directly, query for count
+  const count = dbQuery<{ n: number }>(
+    APP_ID,
+    `SELECT COUNT(*) as n FROM sessions WHERE status = 'archived' AND archived_at > ?`,
+    [new Date(Date.now() - 60 * 1000).toISOString()]
+  )[0]?.n ?? 0;
+  return count;
+}
+
+/**
+ * Get recent sessions (non-archived).
+ */
+export function getRecentSessions(limit = 50): Session[] {
+  return dbQuery<Session>(
+    APP_ID,
+    `SELECT * FROM sessions
+     WHERE status != 'archived'
+     ORDER BY started_at DESC
+     LIMIT ?`,
+    [limit]
   );
 }

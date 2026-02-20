@@ -10,7 +10,7 @@ type Task = {
   title: string;
   description: string | null;
   acceptance_criteria?: string | null;
-  status: 'backlog' | 'todo' | 'in_progress' | 'needs_input' | 'blocked' | 'done' | 'failed';
+  status: 'backlog' | 'todo' | 'in_progress' | 'validating' | 'needs_input' | 'blocked' | 'done' | 'failed';
   position: number;
   priority: 'low' | 'medium' | 'high';
   assignee: string | null;
@@ -25,17 +25,19 @@ type Task = {
   needs_input_questions?: string | null;
   input_deadline_at?: string | null;
   comment_count: number;
+  validation_rounds?: number;
 };
 
 type Comment = { id: number; task_id: number; body: string; created_at: string };
 
-const STATUSES: Task['status'][] = ['backlog', 'todo', 'in_progress', 'needs_input', 'blocked', 'done', 'failed'];
+const STATUSES: Task['status'][] = ['backlog', 'todo', 'in_progress', 'validating', 'needs_input', 'blocked', 'done', 'failed'];
 const PRIORITIES: Task['priority'][] = ['high', 'medium', 'low'];
 
 const STATUS_COLORS: Record<Task['status'], string> = {
   backlog: 'bg-zinc-100',
   todo: 'bg-blue-50',
   in_progress: 'bg-amber-50',
+  validating: 'bg-indigo-50',
   needs_input: 'bg-purple-50',
   blocked: 'bg-red-50',
   done: 'bg-green-50',
@@ -105,6 +107,7 @@ export default function ScrumBoardClient({ appIds, externalIds = [] }: { appIds:
   const [createOpen, setCreateOpen] = useState(false);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
+  const [acceptanceCriteria, setAcceptanceCriteria] = useState('');
   const [priority, setPriority] = useState<Task['priority']>('medium');
   const [assignee, setAssignee] = useState('');
   const [dueAt, setDueAt] = useState('');
@@ -117,6 +120,7 @@ export default function ScrumBoardClient({ appIds, externalIds = [] }: { appIds:
   const [openTaskId, setOpenTaskId] = useState<number | null>(null);
   const [mTitle, setMTitle] = useState('');
   const [mDescription, setMDescription] = useState('');
+  const [mAcceptanceCriteria, setMAcceptanceCriteria] = useState('');
   const [mStatus, setMStatus] = useState<Task['status']>('backlog');
   const [mPriority, setMPriority] = useState<Task['priority']>('medium');
   const [mAssignee, setMAssignee] = useState('');
@@ -141,8 +145,15 @@ export default function ScrumBoardClient({ appIds, externalIds = [] }: { appIds:
   const [autopilotEnabled, setAutopilotEnabled] = useState<boolean>(true);
   const [settingsLoading, setSettingsLoading] = useState(false);
 
+  // Validation action state
+  const [validating, setValidating] = useState(false);
+  const [validationResult, setValidationResult] = useState<string | null>(null);
+
   // Mobile status filter
   const [mobileFilter, setMobileFilter] = useState<Task['status'] | 'all'>('all');
+
+  // Agent lock state
+  const [agentLock, setAgentLock] = useState<{ locked: boolean; taskId?: number; sessionId?: string } | null>(null);
 
   async function loadTasks() {
     const res = await fetch(`/api/apps/scrum-board/tasks?app=${encodeURIComponent(appId)}`, { cache: 'no-store' });
@@ -165,6 +176,18 @@ export default function ScrumBoardClient({ appIds, externalIds = [] }: { appIds:
     }
   }
 
+  async function loadAgentLock() {
+    const res = await fetch('/api/apps/scrum-board/lock', { cache: 'no-store' });
+    const data = await res.json();
+    if (data?.ok) {
+      setAgentLock({
+        locked: data.locked,
+        taskId: data.lock?.task_id,
+        sessionId: data.lock?.session_id,
+      });
+    }
+  }
+
   async function toggleAutopilot(enabled: boolean) {
     setSettingsLoading(true);
     try {
@@ -182,15 +205,16 @@ export default function ScrumBoardClient({ appIds, externalIds = [] }: { appIds:
     }
   }
 
-  // Auto-poll when there are in_progress tasks
+  // Auto-poll when there are in_progress or validating tasks
   useEffect(() => {
-    const hasInProgress = tasks.some((t) => t.status === 'in_progress');
-    setIsLive(hasInProgress);
+    const hasActiveSession = tasks.some((t) => t.status === 'in_progress' || t.status === 'validating');
+    setIsLive(hasActiveSession);
 
-    if (hasInProgress) {
+    if (hasActiveSession) {
       // Poll every 3 seconds when there are active sessions
       pollingRef.current = setInterval(() => {
         loadTasks();
+        loadAgentLock();
       }, 3000);
     } else {
       if (pollingRef.current) {
@@ -216,6 +240,7 @@ export default function ScrumBoardClient({ appIds, externalIds = [] }: { appIds:
   useEffect(() => {
     loadTasks();
     loadSettings();
+    loadAgentLock();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [appId]);
 
@@ -224,6 +249,7 @@ export default function ScrumBoardClient({ appIds, externalIds = [] }: { appIds:
       backlog: [],
       todo: [],
       in_progress: [],
+      validating: [],
       needs_input: [],
       blocked: [],
       done: [],
@@ -246,6 +272,7 @@ export default function ScrumBoardClient({ appIds, externalIds = [] }: { appIds:
           appId,
           title,
           description,
+          acceptance_criteria: acceptanceCriteria || null,
           priority,
           assignee: assignee || null,
           due_at: dueAt || null,
@@ -292,6 +319,7 @@ export default function ScrumBoardClient({ appIds, externalIds = [] }: { appIds:
   function resetCreateForm() {
     setTitle('');
     setDescription('');
+    setAcceptanceCriteria('');
     setPriority('medium');
     setAssignee('');
     setDueAt('');
@@ -304,6 +332,7 @@ export default function ScrumBoardClient({ appIds, externalIds = [] }: { appIds:
     setOpenTaskId(t.id);
     setMTitle(t.title ?? '');
     setMDescription(t.description ?? '');
+    setMAcceptanceCriteria(t.acceptance_criteria ?? '');
     setMStatus(t.status);
     setMPriority(t.priority);
     setMAssignee(t.assignee ?? '');
@@ -322,6 +351,7 @@ export default function ScrumBoardClient({ appIds, externalIds = [] }: { appIds:
         id: openTaskId,
         title: mTitle,
         description: mDescription,
+        acceptance_criteria: mAcceptanceCriteria || null,
         status: mStatus,
         priority: mPriority,
         assignee: mAssignee || null,
@@ -359,6 +389,43 @@ export default function ScrumBoardClient({ appIds, externalIds = [] }: { appIds:
     setCommentText('');
     await loadComments(openTaskId);
     await loadTasks();
+    
+    // Show wake result if session was resumed
+    if (data.wakeResult?.ok) {
+      setValidationResult(data.wakeResult.message);
+    }
+  }
+
+  async function resumeBlockedTask() {
+    if (!openTaskId || !openTask) return;
+    setValidating(true);
+    setValidationResult(null);
+    try {
+      // Add a system comment to trigger wake
+      const res = await fetch('/api/apps/scrum-board/comments', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ 
+          taskId: openTaskId, 
+          body: '[USER_RESUME] User manually requested to resume this blocked task',
+          isUserAnswer: true
+        })
+      });
+      const data = await res.json();
+      if (!res.ok || !data?.ok) {
+        setValidationResult(`Error: ${data?.error || 'Failed to resume'}`);
+        return;
+      }
+      
+      if (data.wakeResult?.ok) {
+        setValidationResult(data.wakeResult.message);
+        await loadTasks();
+      } else {
+        setValidationResult(`Resume failed: ${data.wakeResult?.message || 'Unknown error'}`);
+      }
+    } finally {
+      setValidating(false);
+    }
   }
 
   async function triggerAgent() {
@@ -380,6 +447,88 @@ export default function ScrumBoardClient({ appIds, externalIds = [] }: { appIds:
       setTriggerResult(`Error: ${e?.message || 'Unknown'}`);
     } finally {
       setTriggering(false);
+    }
+  }
+
+  // Validation actions for tasks in 'validating' status
+  async function approveTask() {
+    if (!openTaskId) return;
+    setValidating(true);
+    setValidationResult(null);
+    try {
+      const res = await fetch('/api/apps/scrum-board/tasks', {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          id: openTaskId,
+          status: 'done',
+          comment: '[AUTOPILOT_VALIDATION] Approved by human review'
+        })
+      });
+      const data = await res.json();
+      if (!res.ok || !data?.ok) {
+        setValidationResult(`Error: ${data?.error || 'Failed to approve'}`);
+        return;
+      }
+      setValidationResult('Task approved and moved to done!');
+      await loadTasks();
+      setOpenTaskId(null);
+    } finally {
+      setValidating(false);
+    }
+  }
+
+  async function rejectTask() {
+    if (!openTaskId) return;
+    setValidating(true);
+    setValidationResult(null);
+    try {
+      const res = await fetch('/api/apps/scrum-board/tasks', {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          id: openTaskId,
+          status: 'in_progress',
+          comment: '[AUTOPILOT_VALIDATION] Rejected - returned to in_progress for more work'
+        })
+      });
+      const data = await res.json();
+      if (!res.ok || !data?.ok) {
+        setValidationResult(`Error: ${data?.error || 'Failed to reject'}`);
+        return;
+      }
+      setValidationResult('Task rejected and returned to in_progress!');
+      await loadTasks();
+      setOpenTaskId(null);
+    } finally {
+      setValidating(false);
+    }
+  }
+
+  async function needsChangesTask() {
+    if (!openTaskId) return;
+    setValidating(true);
+    setValidationResult(null);
+    try {
+      const res = await fetch('/api/apps/scrum-board/tasks', {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          id: openTaskId,
+          status: 'validating',
+          validation_rounds: (openTask?.validation_rounds ?? 0) + 1,
+          comment: '[AUTOPILOT_VALIDATION] Needs changes - staying in validating with feedback'
+        })
+      });
+      const data = await res.json();
+      if (!res.ok || !data?.ok) {
+        setValidationResult(`Error: ${data?.error || 'Failed to request changes'}`);
+        return;
+      }
+      setValidationResult('Task kept in validating - add comment with feedback!');
+      await loadTasks();
+    } finally {
+      setValidating(false);
     }
   }
 
@@ -452,6 +601,12 @@ export default function ScrumBoardClient({ appIds, externalIds = [] }: { appIds:
                 <div className="flex items-center gap-1.5 px-2 py-1.5 rounded bg-amber-50 border border-amber-200">
                   <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
                   <span className="text-xs font-medium text-amber-700">Live</span>
+                </div>
+              )}
+              {agentLock?.locked && (
+                <div className="flex items-center gap-1.5 px-2 py-1.5 rounded bg-red-50 border border-red-200" title={`Agent busy with task #${agentLock.taskId}`}>
+                  <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                  <span className="text-xs font-medium text-red-700">Agent Busy</span>
                 </div>
               )}
               <Button variant="secondary" onClick={triggerAgent} disabled={triggering} className="flex-1 sm:flex-none">
@@ -546,7 +701,7 @@ export default function ScrumBoardClient({ appIds, externalIds = [] }: { appIds:
       </div>
 
       {/* Board columns - horizontal scroll on mobile, grid on desktop */}
-      <div className="flex gap-3 overflow-x-auto pb-4 lg:grid lg:grid-cols-4 lg:overflow-visible snap-x snap-mandatory">
+      <div className="flex gap-3 overflow-x-auto pb-4 lg:grid lg:grid-cols-5 lg:overflow-visible snap-x snap-mandatory">
         {visibleStatuses.map((s) => (
           <div 
             key={s} 
@@ -584,6 +739,22 @@ export default function ScrumBoardClient({ appIds, externalIds = [] }: { appIds:
                     
                     <div className="mt-2 flex items-center gap-2 text-[11px] text-zinc-500">
                       <span>#{t.position}</span>
+                      {t.status === 'validating' && (
+                        <span className="flex items-center gap-0.5 text-indigo-600 font-medium" title="In validation">
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          V{t.validation_rounds ?? 0}/5
+                        </span>
+                      )}
+                      {t.acceptance_criteria && (
+                        <span className="flex items-center gap-0.5 text-blue-600" title="Has acceptance criteria">
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          AC
+                        </span>
+                      )}
                       {t.comment_count > 0 && (
                         <span className="flex items-center gap-0.5">
                           <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -612,6 +783,8 @@ export default function ScrumBoardClient({ appIds, externalIds = [] }: { appIds:
                           className={`inline-flex items-center gap-1.5 rounded border px-2 py-1 text-[11px] font-medium transition ${
                             t.status === 'in_progress'
                               ? 'border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100'
+                              : t.status === 'validating'
+                              ? 'border-indigo-300 bg-indigo-50 text-indigo-700 hover:bg-indigo-100'
                               : 'border-zinc-300 bg-white text-zinc-700 hover:bg-zinc-50'
                           }`}
                           onClick={(e) => {
@@ -619,10 +792,10 @@ export default function ScrumBoardClient({ appIds, externalIds = [] }: { appIds:
                             window.open(sessionLogUrl(t.session_id as string), '_blank', 'noopener,noreferrer');
                           }}
                         >
-                          {t.status === 'in_progress' ? (
+                          {t.status === 'in_progress' || t.status === 'validating' ? (
                             <>
-                              <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
-                              View session
+                              <span className={`w-1.5 h-1.5 rounded-full animate-pulse ${t.status === 'validating' ? 'bg-indigo-500' : 'bg-amber-500'}`} />
+                              {t.status === 'validating' ? 'Awaiting review' : 'View session'}
                               <svg className="w-3 h-3 ml-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                               </svg>
@@ -677,6 +850,10 @@ export default function ScrumBoardClient({ appIds, externalIds = [] }: { appIds:
               <div className="md:col-span-2">
                 <Label>Description</Label>
                 <Textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} placeholder="Task description" />
+              </div>
+              <div className="md:col-span-2">
+                <Label>Acceptance Criteria</Label>
+                <Textarea value={acceptanceCriteria} onChange={(e) => setAcceptanceCriteria(e.target.value)} rows={3} placeholder="What needs to be true for this task to be complete?" />
               </div>
               <div>
                 <Label>Priority</Label>
@@ -767,6 +944,10 @@ export default function ScrumBoardClient({ appIds, externalIds = [] }: { appIds:
                 <Label>Description</Label>
                 <Textarea rows={4} value={mDescription} onChange={(e) => setMDescription(e.target.value)} />
               </div>
+              <div className="md:col-span-2">
+                <Label>Acceptance Criteria</Label>
+                <Textarea rows={4} value={mAcceptanceCriteria} onChange={(e) => setMAcceptanceCriteria(e.target.value)} placeholder="What needs to be true for this task to be complete?" />
+              </div>
               <div>
                 <Label>Status</Label>
                 <select value={mStatus} onChange={(e) => setMStatus(e.target.value as Task['status'])} className="mt-1 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm">
@@ -812,13 +993,123 @@ export default function ScrumBoardClient({ appIds, externalIds = [] }: { appIds:
               <button className="rounded-lg border border-zinc-200 px-3 py-2 text-sm hover:bg-zinc-50 active:bg-zinc-100" onClick={() => moveTask(openTask, 'down')}>Move down</button>
             </div>
 
+            {/* Blocked task panel - show Resume button with session history */}
+            {(openTask.status === 'blocked' || openTask.status === 'needs_input') && openTask.session_id && (
+              <div className="mt-4 p-4 rounded-lg border border-red-200 bg-red-50/50">
+                <div className="flex items-center justify-between mb-3">
+                  <div>
+                    <div className="text-sm font-semibold text-red-900">
+                      {openTask.status === 'needs_input' ? 'Awaiting Input' : 'Task Blocked'}
+                    </div>
+                    <div className="text-xs text-red-600">
+                      Session: <span className="font-mono">{openTask.session_id.slice(0, 20)}...</span>
+                    </div>
+                  </div>
+                  <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                </div>
+                
+                <div className="text-xs text-red-700 mb-3">
+                  {openTask.status === 'needs_input' 
+                    ? 'This task is waiting for your input. Add a comment with your answer and click Resume.'
+                    : 'This task is blocked. Add a comment with information to unblock and click Resume.'}
+                </div>
+                
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={resumeBlockedTask}
+                    disabled={validating || !commentText.trim()}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-red-600 text-white px-3 py-2 text-sm font-medium hover:bg-red-700 disabled:opacity-50 transition"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    Resume Session
+                  </button>
+                </div>
+
+                {validationResult && (
+                  <div className={`mt-3 text-sm ${validationResult.includes('Error') || validationResult.includes('failed') ? 'text-red-600' : 'text-green-700'}`}>
+                    {validationResult}
+                  </div>
+                )}
+
+                <div className="mt-3 text-xs text-red-600 bg-red-100/50 rounded px-2 py-1.5">
+                  💡 <strong>Tip:</strong> Type your answer in the comment box below, then click Resume to continue the session.
+                </div>
+              </div>
+            )}
+            {openTask.status === 'validating' && (
+              <div className="mt-4 p-4 rounded-lg border border-indigo-200 bg-indigo-50/50">
+                <div className="flex items-center justify-between mb-3">
+                  <div>
+                    <div className="text-sm font-semibold text-indigo-900">Validation Review</div>
+                    <div className="text-xs text-indigo-600">
+                      Round {openTask.validation_rounds ?? 0} of 5
+                      {(openTask.validation_rounds ?? 0) >= 5 && (
+                        <span className="ml-2 text-red-600 font-medium">⚠️ Max rounds reached - decision required</span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse" />
+                </div>
+                
+                <div className="text-xs text-indigo-700 mb-3">
+                  This task is waiting for human validation. Review the work and choose an action:
+                </div>
+                
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={approveTask}
+                    disabled={validating}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-green-600 text-white px-3 py-2 text-sm font-medium hover:bg-green-700 disabled:opacity-50 transition"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    Approve (→ Done)
+                  </button>
+                  <button
+                    onClick={needsChangesTask}
+                    disabled={validating || (openTask.validation_rounds ?? 0) >= 5}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-amber-500 text-white px-3 py-2 text-sm font-medium hover:bg-amber-600 disabled:opacity-50 transition"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                    </svg>
+                    Needs Changes (Stay)
+                  </button>
+                  <button
+                    onClick={rejectTask}
+                    disabled={validating}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-red-600 text-white px-3 py-2 text-sm font-medium hover:bg-red-700 disabled:opacity-50 transition"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                    Reject (→ In Progress)
+                  </button>
+                </div>
+
+                {validationResult && (
+                  <div className={`mt-3 text-sm ${validationResult.includes('Error') ? 'text-red-600' : 'text-green-700'}`}>
+                    {validationResult}
+                  </div>
+                )}
+
+                <div className="mt-3 text-xs text-indigo-600 bg-indigo-100/50 rounded px-2 py-1.5">
+                  💡 <strong>Tip:</strong> Add a comment below with specific feedback. The agent will continue from this session.
+                </div>
+              </div>
+            )}
+
             {/* Session info */}
             {openTask.session_id && (
               <div className="mt-4 p-3 rounded-lg border border-zinc-200 bg-zinc-50">
                 <div className="flex items-center justify-between">
                   <div>
                     <div className="text-xs text-zinc-500 mb-1">Session</div>
-                    <div className="text-sm font-mono text-zinc-700 truncate max-w-[300px]">{openTask.session_id}</div>
+                    <div className="text-sm font-mono text-zinc-700 truncate max-w-[200px] sm:max-w-[300px]">{openTask.session_id}</div>
                     {openTask.claimed_by && (
                       <div className="text-xs text-zinc-500 mt-1">
                         Claimed by <span className="font-medium text-amber-600">{openTask.claimed_by}</span>
@@ -833,29 +1124,48 @@ export default function ScrumBoardClient({ appIds, externalIds = [] }: { appIds:
                       </div>
                     )}
                   </div>
-                  <button
-                    type="button"
-                    className={`inline-flex items-center gap-1.5 rounded border px-3 py-1.5 text-xs font-medium transition ${
-                      openTask.status === 'in_progress'
-                        ? 'border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100'
-                        : 'border-zinc-300 bg-white text-zinc-700 hover:bg-zinc-50'
-                    }`}
-                    onClick={() => window.open(sessionLogUrl(openTask.session_id as string), '_blank', 'noopener,noreferrer')}
-                  >
-                    {openTask.status === 'in_progress' ? (
-                      <>
-                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
-                        View Live
-                      </>
-                    ) : (
-                      <>
+                  <div className="flex gap-2">
+                    {/* Resume button for blocked/needs_input tasks */}
+                    {(openTask.status === 'blocked' || openTask.status === 'needs_input') && (
+                      <button
+                        type="button"
+                        className="inline-flex items-center gap-1.5 rounded border border-red-300 bg-red-50 px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-100 transition"
+                        onClick={resumeBlockedTask}
+                        disabled={validating}
+                      >
                         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
-                        View Log
-                      </>
+                        Resume
+                      </button>
                     )}
-                  </button>
+                    <button
+                      type="button"
+                      className={`inline-flex items-center gap-1.5 rounded border px-3 py-1.5 text-xs font-medium transition ${
+                        openTask.status === 'in_progress'
+                          ? 'border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100'
+                          : openTask.status === 'validating'
+                          ? 'border-indigo-300 bg-indigo-50 text-indigo-700 hover:bg-indigo-100'
+                          : 'border-zinc-300 bg-white text-zinc-700 hover:bg-zinc-50'
+                      }`}
+                      onClick={() => window.open(sessionLogUrl(openTask.session_id as string), '_blank', 'noopener,noreferrer')}
+                    >
+                      {openTask.status === 'in_progress' || openTask.status === 'validating' ? (
+                        <>
+                          <span className={`w-1.5 h-1.5 rounded-full animate-pulse ${openTask.status === 'validating' ? 'bg-indigo-500' : 'bg-amber-500'}`} />
+                          {openTask.status === 'validating' ? 'Awaiting Review' : 'View Live'}
+                        </>
+                      ) : (
+                        <>
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                          </svg>
+                          View Log
+                        </>
+                      )}
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
