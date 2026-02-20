@@ -83,6 +83,23 @@ export function ensureScrumBoardSchema() {
   dbExec(APP_ID, `CREATE INDEX IF NOT EXISTS idx_tasks_attempts ON tasks(attempt_count, max_attempts)`);
   dbExec(APP_ID, `CREATE INDEX IF NOT EXISTS idx_comments_task_id ON comments(task_id)`);
 
+  // Plans table for task plan documents
+  dbExec(
+    APP_ID,
+    `CREATE TABLE IF NOT EXISTS plans (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      task_id INTEGER NOT NULL,
+      title TEXT NOT NULL,
+      content TEXT NOT NULL,
+      version INTEGER NOT NULL DEFAULT 1,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY(task_id) REFERENCES tasks(id) ON DELETE CASCADE
+    )`
+  );
+  dbExec(APP_ID, `CREATE INDEX IF NOT EXISTS idx_plans_task_id ON plans(task_id)`);
+  dbExec(APP_ID, `CREATE INDEX IF NOT EXISTS idx_plans_version ON plans(task_id, version)`);
+
   // Settings table for autopilot toggle and other config
   dbExec(
     APP_ID,
