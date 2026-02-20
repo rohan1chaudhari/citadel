@@ -30,6 +30,41 @@ type Task = {
 
 type Comment = { id: number; task_id: number; body: string; created_at: string };
 
+type Plan = { 
+  id: number; 
+  task_id: number; 
+  title: string; 
+  content: string; 
+  version: number; 
+  created_at: string; 
+  updated_at: string;
+};
+
+type InputQuestion = {
+  id: string;
+  question: string;
+  options?: string[];
+  asked_at: string;
+  answered: boolean;
+  answer?: string;
+};
+
+type InboxTask = {
+  id: number;
+  title: string;
+  description: string | null;
+  status: string;
+  priority: 'low' | 'medium' | 'high';
+  needs_input_questions: string | null;
+  input_deadline_at: string | null;
+  session_id: string | null;
+  created_at: string;
+  updated_at: string | null;
+  board_app_id: string;
+  questions: InputQuestion[];
+  questionCount: number;
+};
+
 const STATUSES: Task['status'][] = ['backlog', 'todo', 'in_progress', 'validating', 'needs_input', 'blocked', 'done', 'failed'];
 const PRIORITIES: Task['priority'][] = ['high', 'medium', 'low'];
 
@@ -132,6 +167,14 @@ export default function ScrumBoardClient({ appIds, externalIds = [] }: { appIds:
   const [comments, setComments] = useState<Comment[]>([]);
   const [commentText, setCommentText] = useState('');
 
+  // Plans in modal
+  const [plans, setPlans] = useState<Plan[]>([]);
+  const [plansLoading, setPlansLoading] = useState(false);
+  const [planTitle, setPlanTitle] = useState('');
+  const [planContent, setPlanContent] = useState('');
+  const [planExportToKb, setPlanExportToKb] = useState(true);
+  const [planCreating, setPlanCreating] = useState(false);
+
   // Trigger agent state
   const [triggering, setTriggering] = useState(false);
   const [triggerResult, setTriggerResult] = useState<string | null>(null);
@@ -154,6 +197,12 @@ export default function ScrumBoardClient({ appIds, externalIds = [] }: { appIds:
 
   // Agent lock state
   const [agentLock, setAgentLock] = useState<{ locked: boolean; taskId?: number; sessionId?: string } | null>(null);
+
+  // Inbox state
+  const [inboxOpen, setInboxOpen] = useState(false);
+  const [inboxTasks, setInboxTasks] = useState<InboxTask[]>([]);
+  const [inboxLoading, setInboxLoading] = useState(false);
+  const [inboxError, setInboxError] = useState<string | null>(null);
 
   async function loadTasks() {
     const res = await fetch(`/api/apps/scrum-board/tasks?app=${encodeURIComponent(appId)}`, { cache: 'no-store' });
@@ -185,6 +234,65 @@ export default function ScrumBoardClient({ appIds, externalIds = [] }: { appIds:
         taskId: data.lock?.task_id,
         sessionId: data.lock?.session_id,
       });
+    }
+  }
+
+  async function loadInbox() {
+    setInboxLoading(true);
+    setInboxError(null);
+    try {
+      const res = await fetch('/api/apps/scrum-board/request-input', { cache: 'no-store' });
+      const data = await res.json();
+      if (data?.ok) {
+        setInboxTasks(data.tasks || []);
+      } else {
+        setInboxError(data?.error || 'Failed to load inbox');
+      }
+    } catch (err: any) {
+      setInboxError(err?.message || 'Failed to load inbox');
+    } finally {
+      setInboxLoading(false);
+    }
+  }
+
+  function openInbox() {
+    setInboxOpen(true);
+    loadInbox();
+  }
+
+  function openTaskFromInbox(taskId: number) {
+    setInboxOpen(false);
+    const task = inboxTasks.find(t => t.id === taskId);
+    if (task) {
+      // Switch to the task's board first
+      if (allBoardIds.includes(task.board_app_id)) {
+        setAppId(task.board_app_id);
+      }
+      // Then open the task modal
+      setTimeout(() => {
+        const fullTask: Task = {
+          id: task.id,
+          title: task.title,
+          description: task.description,
+          status: task.status as Task['status'],
+          position: 0,
+          priority: task.priority,
+          assignee: null,
+          due_at: null,
+          session_id: task.session_id,
+          attempt_count: 0,
+          max_attempts: 3,
+          claimed_by: null,
+          claimed_at: null,
+          last_error: null,
+          last_run_at: null,
+          needs_input_questions: task.needs_input_questions,
+          input_deadline_at: task.input_deadline_at,
+          comment_count: 0,
+          validation_rounds: 0,
+        };
+        openModal(fullTask);
+      }, 100);
     }
   }
 
@@ -235,6 +343,44 @@ export default function ScrumBoardClient({ appIds, externalIds = [] }: { appIds:
     const res = await fetch(`/api/apps/scrum-board/comments?taskId=${taskId}`, { cache: 'no-store' });
     const data = await res.json();
     setComments((data?.comments ?? []) as Comment[]);
+  }
+
+  async function loadPlans(taskId: number) {
+    setPlansLoading(true);
+    try {
+      const res = await fetch(`/api/apps/scrum-board/plans?taskId=${taskId}`, { cache: 'no-store' });
+      const data = await res.json();
+      setPlans((data?.plans ?? []) as Plan[]);
+    } finally {
+      setPlansLoading(false);
+    }
+  }
+
+  async function createPlan() {
+    if (!openTaskId || !planTitle.trim()) return;
+    setPlanCreating(true);
+    try {
+      const res = await fetch('/api/apps/scrum-board/plans', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          taskId: openTaskId,
+          title: planTitle,
+          content: planContent,
+          exportToKb: planExportToKb,
+          appId,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data?.ok) return;
+      
+      // Clear form and reload plans
+      setPlanTitle('');
+      setPlanContent('');
+      await loadPlans(openTaskId);
+    } finally {
+      setPlanCreating(false);
+    }
   }
 
   useEffect(() => {
@@ -340,6 +486,7 @@ export default function ScrumBoardClient({ appIds, externalIds = [] }: { appIds:
     setMSessionId(t.session_id ?? '');
     setMTargetBoard(appId);
     loadComments(t.id);
+    loadPlans(t.id);
   }
 
   async function saveModal() {
@@ -578,6 +725,23 @@ export default function ScrumBoardClient({ appIds, externalIds = [] }: { appIds:
               )}
             </div>
             <div className="flex gap-2 order-1 sm:order-2">
+              {/* Inbox Button - shows count of needs_input tasks */}
+              <button
+                onClick={openInbox}
+                className="relative inline-flex items-center gap-1.5 px-3 py-1.5 rounded border border-purple-200 bg-purple-50 text-purple-700 hover:bg-purple-100 transition"
+                title="View all tasks awaiting input"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+                </svg>
+                <span className="text-xs font-medium">Inbox</span>
+                {grouped.needs_input.length > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center">
+                    {grouped.needs_input.length}
+                  </span>
+                )}
+              </button>
+
               {/* Autopilot Toggle */}
               <div className={`flex items-center gap-2 px-3 py-1.5 rounded border transition ${autopilotEnabled ? 'bg-green-50 border-green-200' : 'bg-zinc-100 border-zinc-200'}`}>
                 <span className="text-xs font-medium text-zinc-700">Autopilot</span>
@@ -1171,6 +1335,70 @@ export default function ScrumBoardClient({ appIds, externalIds = [] }: { appIds:
             )}
 
             <div className="mt-6 space-y-3">
+              <div className="text-sm font-semibold flex items-center gap-2">
+                <svg className="w-4 h-4 text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                Plans
+                {plans.length > 0 && (
+                  <span className="text-xs text-zinc-500 font-normal">({plans.length})</span>
+                )}
+              </div>
+              
+              {plansLoading ? (
+                <div className="text-sm text-zinc-500">Loading plans...</div>
+              ) : (
+                <>
+                  {plans.map((p) => (
+                    <div key={p.id} className="rounded-lg border border-zinc-200 p-3 text-sm">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="font-medium text-zinc-900">{p.title}</div>
+                        <div className="text-xs text-zinc-500">v{p.version}</div>
+                      </div>
+                      <div className="whitespace-pre-wrap text-zinc-700 text-sm max-h-32 overflow-y-auto">{p.content}</div>
+                      <div className="mt-2 text-xs text-zinc-400">{new Date(p.created_at).toLocaleString()}</div>
+                    </div>
+                  ))}
+                  {plans.length === 0 && <p className="text-sm text-zinc-500">No plans yet.</p>}
+                  
+                  {/* Create new plan */}
+                  <div className="mt-3 pt-3 border-t border-zinc-100">
+                    <div className="text-xs font-medium text-zinc-600 mb-2">Add new plan</div>
+                    <Input 
+                      value={planTitle} 
+                      onChange={(e) => setPlanTitle(e.target.value)} 
+                      placeholder="Plan title" 
+                      className="mb-2"
+                    />
+                    <Textarea 
+                      value={planContent} 
+                      onChange={(e) => setPlanContent(e.target.value)} 
+                      rows={4} 
+                      placeholder="Plan content (markdown supported)" 
+                      className="mb-2"
+                    />
+                    <label className="flex items-center gap-2 mb-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={planExportToKb}
+                        onChange={(e) => setPlanExportToKb(e.target.checked)}
+                        className="w-4 h-4 rounded border-zinc-300 text-zinc-900 focus:ring-zinc-900"
+                      />
+                      <span className="text-xs text-zinc-600">Export to /kb/plans/{appId}/</span>
+                    </label>
+                    <Button 
+                      onClick={createPlan} 
+                      disabled={!planTitle.trim() || planCreating}
+                      variant="secondary"
+                    >
+                      {planCreating ? 'Creating...' : 'Add Plan'}
+                    </Button>
+                  </div>
+                </>
+              )}
+            </div>
+
+            <div className="mt-6 space-y-3">
               <div className="text-sm font-semibold">Comments</div>
               {comments.map((c) => (
                 <div key={c.id} className="rounded-lg border border-zinc-200 p-3 text-sm">
@@ -1184,6 +1412,126 @@ export default function ScrumBoardClient({ appIds, externalIds = [] }: { appIds:
                 <Button onClick={addComment} disabled={!commentText.trim()}>Add comment</Button>
               </div>
             </div>
+          </div>
+        </div>
+      ) : null}
+
+      {/* Inbox Modal */}
+      {inboxOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 sm:p-6" onClick={() => setInboxOpen(false)}>
+          <div
+            className="max-h-[90vh] w-full max-w-3xl overflow-auto rounded-xl bg-white p-4 sm:p-6 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-4 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <svg className="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+                </svg>
+                <h3 className="text-lg font-semibold">Input Inbox</h3>
+                <span className="text-sm text-zinc-500">({inboxTasks.length} awaiting input)</span>
+              </div>
+              <button 
+                className="rounded-lg border border-zinc-200 px-3 py-1.5 text-sm hover:bg-zinc-50 active:bg-zinc-100" 
+                onClick={() => setInboxOpen(false)}
+              >
+                Close
+              </button>
+            </div>
+
+            {inboxLoading ? (
+              <div className="py-12 text-center text-zinc-500">
+                <div className="inline-flex items-center gap-2">
+                  <svg className="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                  </svg>
+                  Loading...
+                </div>
+              </div>
+            ) : inboxError ? (
+              <div className="py-8 text-center text-red-600 bg-red-50 rounded-lg border border-red-200">
+                {inboxError}
+              </div>
+            ) : inboxTasks.length === 0 ? (
+              <div className="py-12 text-center text-zinc-500">
+                <svg className="w-12 h-12 mx-auto text-zinc-300 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
+                </svg>
+                <p className="text-lg font-medium">No tasks awaiting input</p>
+                <p className="text-sm text-zinc-400 mt-1">All caught up! Check back later.</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {inboxTasks.map((task) => (
+                  <div key={task.id} className="rounded-lg border border-purple-200 bg-purple-50/50 p-4">
+                    <div className="flex items-start justify-between gap-3 mb-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className={`inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium uppercase ${
+                            task.priority === 'high' ? 'bg-red-100 text-red-700' :
+                            task.priority === 'medium' ? 'bg-amber-100 text-amber-700' :
+                            'bg-zinc-100 text-zinc-600'
+                          }`}>
+                            {task.priority}
+                          </span>
+                          <span className="text-xs text-zinc-500">{task.board_app_id}</span>
+                          {task.input_deadline_at && (
+                            <span className={`text-xs ${
+                              new Date(task.input_deadline_at) < new Date() 
+                                ? 'text-red-600 font-medium' 
+                                : 'text-zinc-500'
+                            }`}>
+                              Due {new Date(task.input_deadline_at).toLocaleDateString()}
+                            </span>
+                          )}
+                        </div>
+                        <h4 className="font-medium text-zinc-900 truncate">{task.title}</h4>
+                      </div>
+                      <button
+                        onClick={() => openTaskFromInbox(task.id)}
+                        className="inline-flex items-center gap-1 px-3 py-1.5 rounded bg-purple-600 text-white text-sm font-medium hover:bg-purple-700 transition"
+                      >
+                        Answer
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                        </svg>
+                      </button>
+                    </div>
+
+                    <div className="space-y-2">
+                      {task.questions.map((q, idx) => (
+                        <div key={q.id} className="rounded bg-white border border-purple-100 p-3">
+                          <div className="flex items-start gap-2">
+                            <span className="w-5 h-5 rounded-full bg-purple-100 text-purple-700 text-xs font-medium flex items-center justify-center flex-shrink-0 mt-0.5">
+                              {idx + 1}
+                            </span>
+                            <div className="flex-1">
+                              <p className="text-sm text-zinc-800">{q.question}</p>
+                              {q.options && q.options.length > 0 && (
+                                <div className="mt-2 flex flex-wrap gap-1.5">
+                                  {q.options.map((opt, optIdx) => (
+                                    <span 
+                                      key={optIdx}
+                                      className="inline-flex items-center px-2 py-1 rounded text-xs bg-zinc-100 text-zinc-700 border border-zinc-200"
+                                    >
+                                      {optIdx + 1}. {opt}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                              <div className="mt-1.5 text-[10px] text-zinc-400">
+                                Asked {formatRelativeTime(q.asked_at)}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       ) : null}
