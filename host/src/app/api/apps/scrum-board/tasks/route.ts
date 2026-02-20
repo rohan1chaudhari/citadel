@@ -136,9 +136,12 @@ export async function POST(req: Request) {
   if (!appId) return NextResponse.json({ ok: false, error: 'appId required' }, { status: 400 });
   if (!title) return NextResponse.json({ ok: false, error: 'title required' }, { status: 400 });
 
+  // When triggering immediately, force status to 'todo' so autopilot can find it
+  const effectiveStatus = triggerImmediately ? 'todo' : status;
+
   const boardId = getOrCreateBoardId(appId);
   const now = new Date().toISOString();
-  const position = nextPosition(boardId, status);
+  const position = nextPosition(boardId, effectiveStatus);
   dbExec(
     APP_ID,
     `INSERT INTO tasks (
@@ -147,14 +150,14 @@ export async function POST(req: Request) {
       created_at, updated_at, completed_at, validation_rounds
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
-      boardId, title, description || null, acceptanceCriteria, status, position, priority, assignee, dueAt, sessionId,
+      boardId, title, description || null, acceptanceCriteria, effectiveStatus, position, priority, assignee, dueAt, sessionId,
       attemptCount, maxAttempts, claimedBy, claimedAt, lastError, lastRunAt, needsInputQuestions, inputDeadlineAt,
-      now, now, status === 'done' ? now : null, validationRounds
+      now, now, effectiveStatus === 'done' ? now : null, validationRounds
     ]
   );
 
   const id = dbQuery<{ id: number }>(APP_ID, `SELECT last_insert_rowid() as id`)[0]?.id;
-  audit(APP_ID, 'scrum.tasks.create', { appId, boardId, id, status, priority, triggerImmediately });
+  audit(APP_ID, 'scrum.tasks.create', { appId, boardId, id, status: effectiveStatus, priority, triggerImmediately });
 
   // Trigger autopilot immediately if requested
   if (triggerImmediately && id) {
