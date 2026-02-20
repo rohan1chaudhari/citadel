@@ -683,108 +683,113 @@ export default function ScrumBoardClient({ appIds, externalIds = [] }: { appIds:
 
   return (
     <div className="space-y-4">
-      {/* Top controls - stacked on mobile */}
+      {/* Top controls */}
       <Card>
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-          <div className="w-full sm:w-auto">
-            <Label>Board</Label>
-            <select
-              value={appId}
-              onChange={(e) => {
-                const newAppId = e.target.value;
-                setAppId(newAppId);
-                // Sync to URL
-                const params = new URLSearchParams(searchParams?.toString() ?? '');
-                params.set('app', newAppId);
-                router.replace(`/apps/scrum-board?${params.toString()}`, { scroll: false });
-              }}
-              className="mt-1 w-full sm:w-64 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm"
-            >
-              <optgroup label="Citadel Apps">
-                {appIds.map((id) => (
-                  <option key={id} value={id}>{id}</option>
-                ))}
-              </optgroup>
-              {externalIds.length > 0 && (
-                <optgroup label="External Projects">
-                  {externalIds.map((id) => (
-                    <option key={id} value={id}>🌐 {id}</option>
+        <div className="flex flex-col gap-4">
+          {/* Row 1: Board selector and stats */}
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div className="w-full sm:w-auto">
+              <Label>Board</Label>
+              <select
+                value={appId}
+                onChange={(e) => {
+                  const newAppId = e.target.value;
+                  setAppId(newAppId);
+                  // Sync to URL
+                  const params = new URLSearchParams(searchParams?.toString() ?? '');
+                  params.set('app', newAppId);
+                  router.replace(`/apps/scrum-board?${params.toString()}`, { scroll: false });
+                }}
+                className="mt-1 w-full sm:w-64 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm"
+              >
+                <optgroup label="Citadel Apps">
+                  {appIds.map((id) => (
+                    <option key={id} value={id}>{id}</option>
                   ))}
                 </optgroup>
-              )}
-            </select>
-          </div>
-          
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            <div className="text-xs text-zinc-500 order-2 sm:order-1">
-              {tasks.length} tasks · todo {grouped.todo.length} · in-progress {grouped.in_progress.length}
-              {lastRefreshAt && (
-                <span className="ml-2 text-zinc-400">
-                  · refreshed {lastRefreshAt.toLocaleTimeString()}
-                </span>
-              )}
+                {externalIds.length > 0 && (
+                  <optgroup label="External Projects">
+                    {externalIds.map((id) => (
+                      <option key={id} value={id}>🌐 {id}</option>
+                    ))}
+                  </optgroup>
+                )}
+              </select>
             </div>
-            <div className="flex gap-2 order-1 sm:order-2">
-              {/* Inbox Button - shows count of needs_input tasks */}
-              <button
-                onClick={openInbox}
-                className="relative inline-flex items-center gap-1.5 px-3 py-1.5 rounded border border-purple-200 bg-purple-50 text-purple-700 hover:bg-purple-100 transition"
-                title="View all tasks awaiting input"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
-                </svg>
-                <span className="text-xs font-medium">Inbox</span>
-                {grouped.needs_input.length > 0 && (
-                  <span className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center">
-                    {grouped.needs_input.length}
+            
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="text-xs text-zinc-500">
+                {tasks.length} tasks · todo {grouped.todo.length} · in-progress {grouped.in_progress.length}
+                {lastRefreshAt && (
+                  <span className="ml-2 text-zinc-400">
+                    · refreshed {lastRefreshAt.toLocaleTimeString()}
                   </span>
                 )}
-              </button>
-
-              {/* Autopilot Toggle */}
-              <div className={`flex items-center gap-2 px-3 py-1.5 rounded border transition ${autopilotEnabled ? 'bg-green-50 border-green-200' : 'bg-zinc-100 border-zinc-200'}`}>
-                <span className="text-xs font-medium text-zinc-700">Autopilot</span>
-                <button
-                  onClick={() => toggleAutopilot(!autopilotEnabled)}
-                  disabled={settingsLoading}
-                  className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-zinc-500 focus:ring-offset-2 ${autopilotEnabled ? 'bg-green-500' : 'bg-zinc-400'}`}
-                  aria-pressed={autopilotEnabled}
-                  title={autopilotEnabled ? 'Autopilot is enabled - cron runs every 15 min' : 'Autopilot is disabled - manual trigger still works'}
-                >
-                  <span
-                    className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${autopilotEnabled ? 'translate-x-5' : 'translate-x-1'}`}
-                  />
-                </button>
-                <span className={`text-[10px] uppercase tracking-wide ${autopilotEnabled ? 'text-green-700' : 'text-zinc-500'}`}>
-                  {autopilotEnabled ? 'On' : 'Off'}
-                </span>
               </div>
-
-              {isLive && (
-                <div className="flex items-center gap-1.5 px-2 py-1.5 rounded bg-amber-50 border border-amber-200">
-                  <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
-                  <span className="text-xs font-medium text-amber-700">Live</span>
-                </div>
-              )}
-              {agentLock?.locked && (
-                <div className="flex items-center gap-1.5 px-2 py-1.5 rounded bg-red-50 border border-red-200" title={`Agent busy with task #${agentLock.taskId}`}>
-                  <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-                  <span className="text-xs font-medium text-red-700">Agent Busy</span>
-                </div>
-              )}
-              <Button variant="secondary" onClick={triggerAgent} disabled={triggering} className="flex-1 sm:flex-none">
-                {triggering ? '…' : 'Trigger'}
-              </Button>
-              <Button onClick={() => setCreateOpen(true)} className="flex-1 sm:flex-none">
-                + New
-              </Button>
             </div>
+          </div>
+
+          {/* Row 2: Action buttons */}
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Inbox Button */}
+            <button
+              onClick={openInbox}
+              className="relative inline-flex items-center gap-1.5 px-3 py-1.5 rounded border border-purple-200 bg-purple-50 text-purple-700 hover:bg-purple-100 transition"
+              title="View all tasks awaiting input"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+              </svg>
+              <span className="text-xs font-medium">Inbox</span>
+              {grouped.needs_input.length > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center">
+                  {grouped.needs_input.length}
+                </span>
+              )}
+            </button>
+
+            {/* Autopilot Toggle */}
+            <div className={`flex items-center gap-2 px-3 py-1.5 rounded border transition ${autopilotEnabled ? 'bg-green-50 border-green-200' : 'bg-zinc-100 border-zinc-200'}`}>
+              <span className="text-xs font-medium text-zinc-700">Autopilot</span>
+              <button
+                onClick={() => toggleAutopilot(!autopilotEnabled)}
+                disabled={settingsLoading}
+                className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-zinc-500 focus:ring-offset-2 ${autopilotEnabled ? 'bg-green-500' : 'bg-zinc-400'}`}
+                aria-pressed={autopilotEnabled}
+                title={autopilotEnabled ? 'Autopilot is enabled - cron runs every 15 min' : 'Autopilot is disabled - manual trigger still works'}
+              >
+                <span
+                  className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${autopilotEnabled ? 'translate-x-5' : 'translate-x-1'}`}
+                />
+              </button>
+              <span className={`text-[10px] uppercase tracking-wide ${autopilotEnabled ? 'text-green-700' : 'text-zinc-500'}`}>
+                {autopilotEnabled ? 'On' : 'Off'}
+              </span>
+            </div>
+
+            {isLive && (
+              <div className="flex items-center gap-1.5 px-2 py-1.5 rounded bg-amber-50 border border-amber-200">
+                <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+                <span className="text-xs font-medium text-amber-700">Live</span>
+              </div>
+            )}
+            {agentLock?.locked && (
+              <div className="flex items-center gap-1.5 px-2 py-1.5 rounded bg-red-50 border border-red-200" title={`Agent busy with task #${agentLock.taskId}`}>
+                <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                <span className="text-xs font-medium text-red-700">Agent Busy</span>
+              </div>
+            )}
+            <Button variant="secondary" onClick={triggerAgent} disabled={triggering}>
+              {triggering ? '…' : 'Trigger'}
+            </Button>
+            <Button onClick={() => setCreateOpen(true)}>
+              + New
+            </Button>
           </div>
         </div>
         
         {triggerResult && (
-          <div className="mt-2 text-xs text-zinc-600">{triggerResult}</div>
+          <div className="mt-3 text-xs text-zinc-600">{triggerResult}</div>
         )}
 
         {/* External Project Info Panel */}
@@ -793,19 +798,19 @@ export default function ScrumBoardClient({ appIds, externalIds = [] }: { appIds:
           if (!project) return null;
           return (
             <div className="mt-3 p-3 rounded-lg border border-indigo-200 bg-indigo-50/50">
-              <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
+              <div className="flex flex-col gap-3">
                 <div className="flex items-center gap-2">
                   <span className="text-lg">🌐</span>
                   <span className="font-medium text-indigo-900">{project.name}</span>
-                  {project.description && (
-                    <span className="text-xs text-indigo-600 hidden sm:inline">— {project.description}</span>
-                  )}
                 </div>
-                <div className="flex gap-2 sm:ml-auto">
+                {project.description && (
+                  <p className="text-xs text-indigo-600">{project.description}</p>
+                )}
+                <div className="flex flex-wrap gap-2">
                   {project.liveUrl && (
-                    <a 
-                      href={project.liveUrl} 
-                      target="_blank" 
+                    <a
+                      href={project.liveUrl}
+                      target="_blank"
                       rel="noopener noreferrer"
                       className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-white bg-indigo-600 rounded hover:bg-indigo-700 transition"
                     >
@@ -816,9 +821,9 @@ export default function ScrumBoardClient({ appIds, externalIds = [] }: { appIds:
                     </a>
                   )}
                   {project.repoUrl && (
-                    <a 
-                      href={project.repoUrl} 
-                      target="_blank" 
+                    <a
+                      href={project.repoUrl}
+                      target="_blank"
                       rel="noopener noreferrer"
                       className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-indigo-700 bg-white border border-indigo-200 rounded hover:bg-indigo-50 transition"
                     >
@@ -830,18 +835,15 @@ export default function ScrumBoardClient({ appIds, externalIds = [] }: { appIds:
                   )}
                 </div>
               </div>
-              {project.description && (
-                <p className="mt-2 text-xs text-indigo-600 sm:hidden">{project.description}</p>
-              )}
             </div>
           );
         })()}
       </Card>
 
       {/* Mobile filter - only show on small screens */}
-      <div className="lg:hidden">
+      <div className="xl:hidden">
         <Label>Filter status</Label>
-        <div className="mt-1 flex gap-2 overflow-x-auto pb-2">
+        <div className="mt-1 flex gap-2 overflow-x-auto pb-2 -mx-4 px-4 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
           <button
             onClick={() => setMobileFilter('all')}
             className={`whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-medium transition ${
@@ -864,14 +866,14 @@ export default function ScrumBoardClient({ appIds, externalIds = [] }: { appIds:
         </div>
       </div>
 
-      {/* Board columns - horizontal scroll on mobile, grid on desktop */}
-      <div className="flex gap-3 overflow-x-auto pb-4 lg:grid lg:grid-cols-5 lg:overflow-visible snap-x snap-mandatory">
+      {/* Board columns - horizontal scroll on mobile/tablet, grid on desktop */}
+      <div className="flex gap-3 overflow-x-auto pb-4 xl:grid xl:grid-cols-5 xl:overflow-visible snap-x snap-mandatory -mx-4 px-4 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8 xl:mx-0 xl:px-0">
         {visibleStatuses.map((s) => (
-          <div 
-            key={s} 
-            className="flex-shrink-0 w-[85vw] sm:w-[300px] lg:w-auto snap-start"
+          <div
+            key={s}
+            className="flex-shrink-0 w-[calc(100vw-2rem)] sm:w-[320px] xl:w-auto snap-start"
           >
-            <Card className={`h-full max-h-[70vh] lg:max-h-[calc(100vh-280px)] flex flex-col ${STATUS_COLORS[s]}`}>
+            <Card className={`h-full max-h-[calc(100vh-240px)] xl:max-h-[calc(100vh-260px)] flex flex-col ${STATUS_COLORS[s]}`}>
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm font-semibold">{prettyStatus(s)}</span>
                 <span className="text-xs text-zinc-500 bg-white/60 rounded-full px-2 py-0.5">
