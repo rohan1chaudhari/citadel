@@ -24,6 +24,7 @@ type Task = {
   last_run_at?: string | null;
   needs_input_questions?: string | null;
   input_deadline_at?: string | null;
+  completed_at?: string | null;
   comment_count: number;
   validation_rounds?: number;
 };
@@ -313,23 +314,17 @@ export default function ScrumBoardClient({ appIds, externalIds = [] }: { appIds:
     }
   }
 
-  // Auto-poll when there are in_progress or validating tasks
+  // Auto-poll to keep board updated in real-time
   useEffect(() => {
     const hasActiveSession = tasks.some((t) => t.status === 'in_progress' || t.status === 'validating');
-    setIsLive(hasActiveSession);
+    setIsLive(true); // Always live when board is open
 
-    if (hasActiveSession) {
-      // Poll every 3 seconds when there are active sessions
-      pollingRef.current = setInterval(() => {
-        loadTasks();
-        loadAgentLock();
-      }, 3000);
-    } else {
-      if (pollingRef.current) {
-        clearInterval(pollingRef.current);
-        pollingRef.current = null;
-      }
-    }
+    // Poll every 3 seconds when there are active sessions, otherwise every 5 seconds
+    const intervalMs = hasActiveSession ? 3000 : 5000;
+    pollingRef.current = setInterval(() => {
+      loadTasks();
+      loadAgentLock();
+    }, intervalMs);
 
     return () => {
       if (pollingRef.current) {
@@ -402,6 +397,12 @@ export default function ScrumBoardClient({ appIds, externalIds = [] }: { appIds:
       failed: []
     };
     for (const t of tasks) g[t.status].push(t);
+    // Sort done tasks by completed_at descending (most recent first)
+    g.done.sort((a, b) => {
+      const aTime = a.completed_at ? new Date(a.completed_at).getTime() : 0;
+      const bTime = b.completed_at ? new Date(b.completed_at).getTime() : 0;
+      return bTime - aTime;
+    });
     return g;
   }, [tasks]);
 
@@ -767,12 +768,11 @@ export default function ScrumBoardClient({ appIds, externalIds = [] }: { appIds:
               </span>
             </div>
 
-            {isLive && (
-              <div className="flex items-center gap-1.5 px-2 py-1.5 rounded bg-amber-50 border border-amber-200">
-                <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
-                <span className="text-xs font-medium text-amber-700">Live</span>
-              </div>
-            )}
+            {/* Always show Live indicator when board is polling */}
+            <div className="flex items-center gap-1.5 px-2 py-1.5 rounded bg-amber-50 border border-amber-200">
+              <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+              <span className="text-xs font-medium text-amber-700">Live</span>
+            </div>
             {agentLock?.locked && (
               <div className="flex items-center gap-1.5 px-2 py-1.5 rounded bg-red-50 border border-red-200" title={`Agent busy with task #${agentLock.taskId}`}>
                 <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
@@ -938,6 +938,14 @@ export default function ScrumBoardClient({ appIds, externalIds = [] }: { appIds:
                           {t.last_run_at && (
                             <span className="text-zinc-400 ml-0.5">· {formatRelativeTime(t.last_run_at)}</span>
                           )}
+                        </span>
+                      )}
+                      {t.status === 'done' && t.completed_at && (
+                        <span className="flex items-center gap-0.5 text-green-600" title={`Completed ${formatRelativeTime(t.completed_at)}`}>
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          </svg>
+                          {formatRelativeTime(t.completed_at)}
                         </span>
                       )}
                     </div>

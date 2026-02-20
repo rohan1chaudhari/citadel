@@ -1,9 +1,124 @@
 import { spawn } from 'child_process';
 import { audit } from '@/lib/audit';
-import { dbQuery } from '@/lib/db';
-import { getSetting, acquireAgentLock, isAgentLocked, getActiveLock, createSession } from '@/lib/scrumBoardSchema';
+import { dbQuery, dbExec } from '@/lib/db';
+import { getSetting, acquireAgentLock, isAgentLocked, getActiveLock, createSession, updateSessionStatus } from '@/lib/scrumBoardSchema';
 
 const APP_ID = 'scrum-board';
+
+/**
+ * Poll an OpenClaw session and stream its messages to session_logs
+ */
+async function streamSessionToLogs(
+  sessionId: string,
+  cronJobId: string,
+  openclawSessionKey: string
+): Promise<void> {
+  const pollIntervalMs = 2000;
+  const maxWaitMs = 600000; // 10 minutes max
+  const startTime = Date.now();
+  let lastMessageCount = 0;
+  let settledCount = 0;
+
+  // eslint-disable-next-line no-console
+  console.log(`[SessionStream] Starting stream for ${sessionId} -> ${openclawSessionKey}`);
+
+  while (Date.now() - startTime < maxWaitMs) {
+    try {
+      // Query session history from OpenClaw
+      const result = await new Promise<{ ok: boolean; messages?: Array<{ role: string; content?: string; timestamp?: string }>; error?: string }>((resolve) => {
+        const child = spawn('openclaw', ['sessions', 'history', openclawSessionKey, '--json'], {
+          stdio: ['ignore', 'pipe', 'pipe'],
+        });
+        let stdout = '';
+        let stderr = '';
+        child.stdout?.on('data', (d) => (stdout += d));
+        child.stderr?.on('data', (d) => (stderr += d));
+        child.on('close', (code) => {
+          if (code !== 0) {
+            resolve({ ok: false, error: stderr || `exit ${code}` });
+            return;
+          }
+          try {
+            const data = JSON.parse(stdout);
+            resolve({ ok: true, messages: data.messages || [] });
+          } catch {
+            resolve({ ok: false, error: 'parse error' });
+          }
+        });
+      });
+
+      if (!result.ok || !result.messages) {
+        await new Promise((r) => setTimeout(r, pollIntervalMs));
+        continue;
+      }
+
+      const messages = result.messages;
+
+      // If we have new messages, write them to session_logs
+      if (messages.length > lastMessageCount) {
+        const newMessages = messages.slice(lastMessageCount);
+        for (const msg of newMessages) {
+          const content = msg.content || '';
+          if (content) {
+            dbExec(
+              APP_ID,
+              `INSERT INTO session_logs (session_id, chunk, created_at) VALUES (?, ?, ?)`,
+              [sessionId, `[${msg.role}] ${content}\n`, msg.timestamp || new Date().toISOString()]
+            );
+          }
+        }
+        lastMessageCount = messages.length;
+        settledCount = 0;
+      } else {
+        settledCount++;
+      }
+
+      // Check if session is complete (no new messages for 3 polls and has messages)
+      if (settledCount > 3 && messages.length > 0) {
+        // Check if there's a final assistant message indicating completion
+        const lastMsg = messages[messages.length - 1];
+        if (lastMsg.role === 'assistant') {
+          // Session likely complete
+          updateSessionStatus(sessionId, 'completed');
+          // eslint-disable-next-line no-console
+          console.log(`[SessionStream] Session ${sessionId} completed`);
+          break;
+        }
+      }
+
+      // Also check if the cron job still exists (indicates completion)
+      const cronStatus = await new Promise<{ exists: boolean }>((resolve) => {
+        const child = spawn('openclaw', ['cron', 'list', '--json'], {
+          stdio: ['ignore', 'pipe', 'pipe'],
+        });
+        let stdout = '';
+        child.stdout?.on('data', (d) => (stdout += d));
+        child.on('close', () => {
+          try {
+            const jobs = JSON.parse(stdout);
+            const exists = Array.isArray(jobs) && jobs.some((j: { id?: string }) => j.id === cronJobId);
+            resolve({ exists });
+          } catch {
+            resolve({ exists: true }); // Assume exists on error
+          }
+        });
+      });
+
+      if (!cronStatus.exists && messages.length > 0) {
+        // Job completed, finalize
+        updateSessionStatus(sessionId, 'completed');
+        // eslint-disable-next-line no-console
+        console.log(`[SessionStream] Session ${sessionId} finalized (job removed)`);
+        break;
+      }
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('[SessionStream] Error polling:', err);
+    }
+
+    await new Promise((r) => setTimeout(r, pollIntervalMs));
+  }
+}
 
 /**
  * Check if autopilot is enabled via settings toggle.
@@ -215,12 +330,22 @@ Execution contract:
     }
 
     const result = JSON.parse(stdout || '{}');
+    const openclawSessionKey = result.sessionKey || result.session || result.id;
 
     audit(APP_ID, 'scrum.trigger_agent', {
       appId: targetAppId,
       appName: targetAppName,
       cronJobId: result.id || cronJobId,
+      openclawSessionKey,
     });
+
+    // Start streaming session logs in the background (don't await, let it run)
+    if (openclawSessionKey) {
+      streamSessionToLogs(sessionId, result.id || cronJobId, openclawSessionKey).catch((err) => {
+        // eslint-disable-next-line no-console
+        console.error('[SessionStream] Background stream failed:', err);
+      });
+    }
 
     return {
       ok: true,

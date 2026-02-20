@@ -193,7 +193,7 @@ The task was previously blocked/awaiting input. Please continue from where you l
 async function sendToExistingSession(sessionId: string, message: string): Promise<void> {
   return new Promise((resolve, reject) => {
     const args = [
-      'sessions_send',
+      'sessions', 'send',
       '--session', sessionId,
       '--message', message,
     ];
@@ -207,7 +207,7 @@ async function sendToExistingSession(sessionId: string, message: string): Promis
 
     child.on('close', (code) => {
       if (code !== 0) {
-        reject(new Error(stderr || `sessions_send exited ${code}`));
+        reject(new Error(stderr || `sessions send exited ${code}`));
       } else {
         resolve();
       }
@@ -218,7 +218,7 @@ async function sendToExistingSession(sessionId: string, message: string): Promis
 async function sendToNewSession(sessionId: string, message: string): Promise<void> {
   return new Promise((resolve, reject) => {
     const args = [
-      'sessions_spawn',
+      'sessions', 'spawn',
       '--label', sessionId,
       '--message', message,
       '--model', 'default',
@@ -234,7 +234,7 @@ async function sendToNewSession(sessionId: string, message: string): Promise<voi
 
     child.on('close', (code) => {
       if (code !== 0) {
-        reject(new Error(stderr || `sessions_spawn exited ${code}`));
+        reject(new Error(stderr || `sessions spawn exited ${code}`));
       } else {
         resolve();
       }
