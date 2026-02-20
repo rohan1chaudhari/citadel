@@ -116,7 +116,16 @@ export function EditorClient({ note }: { note: Note }) {
     saveState === 'error' ? 'Error' :
     saveState === 'dirty' ? 'Unsaved' : '';
 
-  // Add keyboard shortcut for save
+  // Cleanup: delete empty notes on unmount
+  useEffect(() => {
+    return () => {
+      // If note is empty (no title, no body), delete it
+      if (!title.trim() && !body.trim()) {
+        fetch(`/api/apps/smart-notes/notes/${note.id}`, { method: 'DELETE' })
+          .catch(() => {}); // Silent fail on cleanup
+      }
+    };
+  }, []); // Empty deps - only on unmount
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 's') {

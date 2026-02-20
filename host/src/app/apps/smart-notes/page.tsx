@@ -2,6 +2,7 @@ import { Shell } from '@/components/Shell';
 import { dbQuery } from '@/lib/db';
 import { ensureSmartNotesSchema } from '@/lib/smartNotesSchema';
 import Link from 'next/link';
+import PhotoCaptureButton from './PhotoCaptureButton';
 
 export const runtime = 'nodejs';
 const APP_ID = 'smart-notes';
@@ -41,19 +42,22 @@ export default async function SmartNotesListPage() {
   return (
     <Shell title="Smart Notes" subtitle="All your notes">
       <div className="space-y-4">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between flex-wrap gap-2">
           <Link 
             href="/apps/smart-notes/trash"
             className="rounded-lg border border-zinc-200 px-3 py-2 text-sm text-zinc-700 hover:bg-zinc-50"
           >
             🗑 Trash
           </Link>
-          <Link
-            href="/apps/smart-notes/new"
-            className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-800"
-          >
-            + New Note
-          </Link>
+          <div className="flex items-center gap-2">
+            <PhotoCaptureButton />
+            <Link
+              href="/apps/smart-notes/new"
+              className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-800"
+            >
+              + New Note
+            </Link>
+          </div>
         </div>
 
         <div className="grid gap-3">
