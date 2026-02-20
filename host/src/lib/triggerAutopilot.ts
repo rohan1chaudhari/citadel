@@ -1,7 +1,7 @@
 import { spawn } from 'child_process';
 import { audit } from '@/lib/audit';
 import { dbQuery } from '@/lib/db';
-import { getSetting } from '@/lib/scrumBoardSchema';
+import { getSetting, acquireAgentLock, isAgentLocked, getActiveLock, createSession } from '@/lib/scrumBoardSchema';
 
 const APP_ID = 'scrum-board';
 
@@ -37,6 +37,7 @@ export interface TriggerResult {
   ok: boolean;
   message: string;
   cronJobId?: string;
+  sessionId?: string;
   runAt?: string;
   eligibleCount?: number;
   skipped?: boolean;
@@ -72,10 +73,6 @@ export async function triggerAutopilot(appId: string, appName?: string, skipTogg
     };
   }
 
-  const cronJobId = `sb-${Date.now()}`;
-  const cronRunTs = new Date().toISOString();
-  const repoPath = '/home/rohanchaudhari/personal/citadel';
-
   // Check for eligible tasks before starting session to save tokens
   const eligibleCount = countEligibleTasks(targetAppId);
   if (eligibleCount === 0) {
@@ -91,6 +88,66 @@ export async function triggerAutopilot(appId: string, appName?: string, skipTogg
     };
   }
 
+  // Check agent lock - only one agent at a time
+  if (isAgentLocked()) {
+    const lock = getActiveLock();
+    audit(APP_ID, 'scrum.trigger_agent_skipped', {
+      appId: targetAppId,
+      appName: targetAppName,
+      reason: 'agent_locked',
+      lockedTaskId: lock?.task_id,
+    });
+    return {
+      ok: false,
+      skipped: true,
+      message: `Agent is busy with task #${lock?.task_id}. Try again later.`,
+    };
+  }
+
+  const cronJobId = `sb-${Date.now()}`;
+  const sessionId = `sess-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const cronRunTs = new Date().toISOString();
+  const repoPath = '/home/rohanchaudhari/personal/citadel';
+
+  // Find the highest priority eligible task and acquire lock
+  const highestTask = dbQuery<{ id: number }>(
+    APP_ID,
+    `
+    SELECT t.id
+    FROM tasks t
+    JOIN boards b ON t.board_id = b.id
+    WHERE b.app_id = ?
+      AND t.status = 'todo'
+      AND t.attempt_count < t.max_attempts
+    ORDER BY 
+      CASE t.priority WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END,
+      t.created_at ASC,
+      t.id ASC
+    LIMIT 1
+    `,
+    [targetAppId]
+  )[0];
+
+  if (!highestTask) {
+    return {
+      ok: false,
+      skipped: true,
+      message: 'No eligible tasks found.',
+    };
+  }
+
+  // Acquire lock for this task before scheduling
+  if (!acquireAgentLock(highestTask.id, sessionId)) {
+    return {
+      ok: false,
+      skipped: true,
+      message: 'Could not acquire agent lock. Another agent may have started.',
+    };
+  }
+
+  // Create session record before triggering
+  createSession(sessionId, highestTask.id, cronJobId);
+
   // Build the agent turn message following AUTOPILOT.md
   const message = `Autopilot cycle for Citadel app: ${targetAppName} (${targetAppId})
 
@@ -99,6 +156,7 @@ Context:
 - Runbook: ${repoPath}/kb/AUTOPILOT.md
 - Target app_id: ${targetAppId}
 - Triggered by: scrum-board UI
+- session_id: ${sessionId}
 - cron_job_id: ${cronJobId}
 - cron_run_ts: ${cronRunTs}
 
@@ -114,13 +172,14 @@ Execution contract:
    - needs_input if human decision required
    - blocked if external dependency
    - failed if retries exhausted; else increment attempt_count and return to todo
-8) Add structured comment with debug metadata and stop.`;
+8) Update session status and add structured comment with debug metadata.
+9) Stop.`;
 
   try {
     // Schedule to run immediately
     const runAt = new Date(Date.now() + 1000).toISOString();
 
-    // Call openclaw cron add with proper flags
+    // Call openclaw cron add with proper flags (session persists for history)
     const args = [
       'cron', 'add',
       '--name', `autopilot-${targetAppId}-${cronJobId}`,
@@ -129,7 +188,6 @@ Execution contract:
       '--message', message,
       '--thinking', 'low',
       '--timeout-seconds', '600',
-      '--delete-after-run',
       '--json',
     ];
 
@@ -168,6 +226,7 @@ Execution contract:
       ok: true,
       message: `Agent scheduled (${eligibleCount} eligible task${eligibleCount === 1 ? '' : 's'})`,
       cronJobId: result.id || cronJobId,
+      sessionId,
       runAt,
       eligibleCount,
     };

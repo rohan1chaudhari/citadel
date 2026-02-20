@@ -25,6 +25,7 @@ export async function POST(req: Request) {
     ok: true,
     message: result.message,
     cronJobId: result.cronJobId,
+    sessionId: result.sessionId,
     runAt: result.runAt,
     eligibleCount: result.eligibleCount,
   });
