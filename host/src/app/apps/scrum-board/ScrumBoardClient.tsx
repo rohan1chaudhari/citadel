@@ -151,6 +151,7 @@ export default function ScrumBoardClient({ appIds, externalIds = [] }: { appIds:
   const [triggerImmediately, setTriggerImmediately] = useState(false);
   const [createLoading, setCreateLoading] = useState(false);
   const [createResult, setCreateResult] = useState<{ triggered?: boolean; message?: string } | null>(null);
+  const [aiGenerating, setAiGenerating] = useState(false);
 
   // Modal state
   const [openTaskId, setOpenTaskId] = useState<number | null>(null);
@@ -473,6 +474,29 @@ export default function ScrumBoardClient({ appIds, externalIds = [] }: { appIds:
     setSessionId('');
     setTriggerImmediately(false);
     setCreateResult(null);
+  }
+
+  async function generateWithAI() {
+    if (!title.trim() || aiGenerating) return;
+    setAiGenerating(true);
+    try {
+      const res = await fetch('/api/apps/scrum-board/ai-generate', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ title: title.trim(), appId }),
+      });
+      const data = await res.json();
+      if (data?.ok) {
+        setDescription(data.description || '');
+        setAcceptanceCriteria(data.acceptanceCriteria || '');
+      } else {
+        setCreateResult({ message: data?.error || 'AI generation failed' });
+      }
+    } catch (e: any) {
+      setCreateResult({ message: e?.message || 'AI generation failed' });
+    } finally {
+      setAiGenerating(false);
+    }
   }
 
   function openModal(t: Task) {
@@ -1018,7 +1042,39 @@ export default function ScrumBoardClient({ appIds, externalIds = [] }: { appIds:
 
             <div className="grid gap-4 md:grid-cols-2">
               <div className="md:col-span-2">
-                <Label>Title</Label>
+                <div className="flex items-center justify-between">
+                  <Label>Title</Label>
+                  <button
+                    type="button"
+                    onClick={generateWithAI}
+                    disabled={!title.trim() || aiGenerating}
+                    className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition ${
+                      aiGenerating
+                        ? 'bg-purple-100 text-purple-700 cursor-wait'
+                        : title.trim()
+                        ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white hover:from-purple-700 hover:to-blue-700 shadow-sm'
+                        : 'bg-zinc-100 text-zinc-400 cursor-not-allowed'
+                    }`}
+                    title={title.trim() ? 'Generate description and acceptance criteria with AI' : 'Enter a title first'}
+                  >
+                    {aiGenerating ? (
+                      <>
+                        <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                        </svg>
+                        Generating...
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                        </svg>
+                        AI Fill
+                      </>
+                    )}
+                  </button>
+                </div>
                 <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Task title" />
               </div>
               <div className="md:col-span-2">

@@ -54,6 +54,10 @@ export default function SessionStreamPage({ params }: { params: Promise<{ sessio
         if (data.ok) {
           setSession(data.session);
           setTask(data.session.task);
+          // Load existing logs immediately so terminal isn't empty
+          if (data.logs && data.logs.length > 0) {
+            setLogs(data.logs);
+          }
           // Check if session already ended
           if (data.session.ended_at || ['completed', 'failed', 'blocked', 'archived'].includes(data.session.status)) {
             setIsEnded(true);
@@ -79,7 +83,13 @@ export default function SessionStreamPage({ params }: { params: Promise<{ sessio
 
     es.addEventListener('log', (e) => {
       const data = JSON.parse((e as MessageEvent).data);
-      setLogs(prev => [...prev, { id: data.id, chunk: data.chunk, created_at: data.created_at }]);
+      setLogs(prev => {
+        // Deduplicate: only add if we don't already have this log id
+        if (prev.some(log => log.id === data.id)) {
+          return prev;
+        }
+        return [...prev, { id: data.id, chunk: data.chunk, created_at: data.created_at }];
+      });
     });
 
     es.addEventListener('ended', (e) => {
@@ -254,6 +264,8 @@ export default function SessionStreamPage({ params }: { params: Promise<{ sessio
         >
           {terminalContent ? (
             terminalContent
+          ) : isEnded ? (
+            <span className="text-zinc-600">No output captured for this session.</span>
           ) : (
             <span className="text-zinc-600">Waiting for output...</span>
           )}

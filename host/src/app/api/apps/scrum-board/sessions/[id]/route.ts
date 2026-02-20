@@ -41,6 +41,15 @@ export async function GET(_req: Request, { params }: RouteParams) {
     appId = board?.app_id || null;
   }
 
+  // Get existing logs for this session (ordered by id for proper sequence)
+  const logs = dbQuery<{ id: number; chunk: string; created_at: string }>(
+    APP_ID,
+    `SELECT id, chunk, created_at FROM session_logs 
+     WHERE session_id = ? 
+     ORDER BY id ASC`,
+    [sessionId]
+  );
+
   return NextResponse.json({
     ok: true,
     session: {
@@ -48,6 +57,7 @@ export async function GET(_req: Request, { params }: RouteParams) {
       task: task || null,
       app_id: appId,
     },
+    logs: logs || [],
   });
 }
 
