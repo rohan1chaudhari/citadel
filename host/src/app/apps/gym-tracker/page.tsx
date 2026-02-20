@@ -104,10 +104,14 @@ async function fetchData() {
      LIMIT 200`
   );
   
-  // Serialize to ensure no BigInt values
-  const entries = JSON.parse(JSON.stringify(entriesRaw, (key, value) => 
-    typeof value === 'bigint' ? Number(value) : value
-  ));
+  // Serialize to plain objects to avoid prototype issues with node:sqlite
+  const entries = entriesRaw.map(e => ({ 
+    id: Number(e.id), date: e.date, category: e.category, exercise: String(e.exercise),
+    exercise_id: e.exercise_id == null ? null : Number(e.exercise_id),
+    sets: e.sets, reps: e.reps, weight: e.weight, rpe: e.rpe,
+    rest_seconds: e.rest_seconds, notes: e.notes, session_id: e.session_id,
+    created_at: String(e.created_at), updated_at: e.updated_at
+  }));
 
   const recentExercises = dbQuery<{ exercise: string }>(
     APP_ID,
@@ -119,9 +123,8 @@ async function fetchData() {
     `SELECT id, name, category, usage_count FROM exercises ORDER BY usage_count DESC, name ASC`
   );
   
-  const exercises = JSON.parse(JSON.stringify(exercisesRaw, (key, value) => 
-    typeof value === 'bigint' ? Number(value) : value
-  ));
+  // Serialize to plain objects for client component
+  const exercises = exercisesRaw.map(e => ({ id: Number(e.id), name: String(e.name), category: e.category }));
 
   return { entries, recentExercises, exercises };
 }
