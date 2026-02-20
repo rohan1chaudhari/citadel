@@ -137,6 +137,10 @@ export default function ScrumBoardClient({ appIds, externalIds = [] }: { appIds:
   const [isLive, setIsLive] = useState(false);
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Autopilot toggle state
+  const [autopilotEnabled, setAutopilotEnabled] = useState<boolean>(true);
+  const [settingsLoading, setSettingsLoading] = useState(false);
+
   // Mobile status filter
   const [mobileFilter, setMobileFilter] = useState<Task['status'] | 'all'>('all');
 
@@ -150,6 +154,31 @@ export default function ScrumBoardClient({ appIds, externalIds = [] }: { appIds:
     if (openTaskId && !nextTasks.some((t) => t.id === openTaskId)) {
       setOpenTaskId(null);
       setComments([]);
+    }
+  }
+
+  async function loadSettings() {
+    const res = await fetch('/api/apps/scrum-board/settings', { cache: 'no-store' });
+    const data = await res.json();
+    if (data?.ok && data?.settings) {
+      setAutopilotEnabled(data.settings.autopilot_enabled ?? true);
+    }
+  }
+
+  async function toggleAutopilot(enabled: boolean) {
+    setSettingsLoading(true);
+    try {
+      const res = await fetch('/api/apps/scrum-board/settings', {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ autopilot_enabled: enabled }),
+      });
+      const data = await res.json();
+      if (data?.ok && data?.settings) {
+        setAutopilotEnabled(data.settings.autopilot_enabled ?? true);
+      }
+    } finally {
+      setSettingsLoading(false);
     }
   }
 
@@ -186,6 +215,7 @@ export default function ScrumBoardClient({ appIds, externalIds = [] }: { appIds:
 
   useEffect(() => {
     loadTasks();
+    loadSettings();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [appId]);
 
@@ -399,6 +429,25 @@ export default function ScrumBoardClient({ appIds, externalIds = [] }: { appIds:
               )}
             </div>
             <div className="flex gap-2 order-1 sm:order-2">
+              {/* Autopilot Toggle */}
+              <div className={`flex items-center gap-2 px-3 py-1.5 rounded border transition ${autopilotEnabled ? 'bg-green-50 border-green-200' : 'bg-zinc-100 border-zinc-200'}`}>
+                <span className="text-xs font-medium text-zinc-700">Autopilot</span>
+                <button
+                  onClick={() => toggleAutopilot(!autopilotEnabled)}
+                  disabled={settingsLoading}
+                  className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-zinc-500 focus:ring-offset-2 ${autopilotEnabled ? 'bg-green-500' : 'bg-zinc-400'}`}
+                  aria-pressed={autopilotEnabled}
+                  title={autopilotEnabled ? 'Autopilot is enabled - cron runs every 15 min' : 'Autopilot is disabled - manual trigger still works'}
+                >
+                  <span
+                    className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${autopilotEnabled ? 'translate-x-5' : 'translate-x-1'}`}
+                  />
+                </button>
+                <span className={`text-[10px] uppercase tracking-wide ${autopilotEnabled ? 'text-green-700' : 'text-zinc-500'}`}>
+                  {autopilotEnabled ? 'On' : 'Off'}
+                </span>
+              </div>
+
               {isLive && (
                 <div className="flex items-center gap-1.5 px-2 py-1.5 rounded bg-amber-50 border border-amber-200">
                   <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />

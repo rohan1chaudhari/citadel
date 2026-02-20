@@ -12,7 +12,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: 'appId required' }, { status: 400 });
   }
 
-  const result = await triggerAutopilot(appId, appName || appId);
+  const result = await triggerAutopilot(appId, appName || appId, true); // true = skip toggle check (manual trigger always works)
 
   if (!result.ok) {
     if (result.skipped) {

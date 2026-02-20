@@ -1,8 +1,17 @@
 import { spawn } from 'child_process';
 import { audit } from '@/lib/audit';
 import { dbQuery } from '@/lib/db';
+import { getSetting } from '@/lib/scrumBoardSchema';
 
 const APP_ID = 'scrum-board';
+
+/**
+ * Check if autopilot is enabled via settings toggle.
+ */
+export function isAutopilotEnabled(): boolean {
+  const value = getSetting('autopilot_enabled');
+  return value !== 'false';
+}
 
 /**
  * Check if there are any eligible tasks (todo status with attempts remaining)
@@ -38,13 +47,29 @@ export interface TriggerResult {
  * Trigger an autopilot agent run for a selected app.
  * Adds a one-time cron job via OpenClaw CLI.
  * Only schedules if there are eligible tasks to avoid wasting tokens.
+ * 
+ * @param skipToggleCheck - If true, bypasses the autopilot_enabled toggle (for manual triggers)
  */
-export async function triggerAutopilot(appId: string, appName?: string): Promise<TriggerResult> {
+export async function triggerAutopilot(appId: string, appName?: string, skipToggleCheck = false): Promise<TriggerResult> {
   const targetAppId = appId.trim();
   const targetAppName = (appName || appId).trim();
 
   if (!targetAppId) {
     return { ok: false, message: 'appId required', error: 'appId required' };
+  }
+
+  // Check autopilot toggle (unless manually triggered)
+  if (!skipToggleCheck && !isAutopilotEnabled()) {
+    audit(APP_ID, 'scrum.trigger_agent_skipped', {
+      appId: targetAppId,
+      appName: targetAppName,
+      reason: 'autopilot_disabled',
+    });
+    return {
+      ok: false,
+      skipped: true,
+      message: 'Autopilot is disabled via toggle. Enable it in settings to run.',
+    };
   }
 
   const cronJobId = `sb-${Date.now()}`;
