@@ -80,6 +80,29 @@ export function ensureScrumBoardSchema() {
   dbExec(APP_ID, `CREATE INDEX IF NOT EXISTS idx_tasks_due_at ON tasks(due_at)`);
   dbExec(APP_ID, `CREATE INDEX IF NOT EXISTS idx_tasks_attempts ON tasks(attempt_count, max_attempts)`);
   dbExec(APP_ID, `CREATE INDEX IF NOT EXISTS idx_comments_task_id ON comments(task_id)`);
+
+  // Settings table for autopilot toggle and other config
+  dbExec(
+    APP_ID,
+    `CREATE TABLE IF NOT EXISTS settings (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    )`
+  );
+
+  // Default autopilot enabled = true
+  const autopilotEnabled = dbQuery<{ count: number }>(
+    APP_ID,
+    `SELECT COUNT(*) as count FROM settings WHERE key = 'autopilot_enabled'`
+  )[0]?.count ?? 0;
+  if (autopilotEnabled === 0) {
+    dbExec(
+      APP_ID,
+      `INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?)`,
+      ['autopilot_enabled', 'true', new Date().toISOString()]
+    );
+  }
 }
 
 export function getOrCreateBoardId(targetAppId: string): number {
@@ -113,4 +136,23 @@ export function normalizePriority(v: unknown): TaskPriority {
   const x = String(v ?? '').trim().toLowerCase();
   if (x === 'low' || x === 'medium' || x === 'high') return x;
   return 'medium';
+}
+
+export function getSetting(key: string): string | null {
+  const row = dbQuery<{ value: string }>(
+    APP_ID,
+    `SELECT value FROM settings WHERE key = ? LIMIT 1`,
+    [key]
+  )[0];
+  return row?.value ?? null;
+}
+
+export function setSetting(key: string, value: string): void {
+  const now = new Date().toISOString();
+  dbExec(
+    APP_ID,
+    `INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?)
+     ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
+    [key, value, now]
+  );
 }

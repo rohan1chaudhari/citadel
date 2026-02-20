@@ -30,6 +30,9 @@ kb/            # Knowledge base
 |------|------|----|-----|-------|
 | smart-notes | App | `/apps/smart-notes` | `/api/apps/smart-notes/notes` | MVP |
 | gym-tracker | App | `/apps/gym-tracker` | `/api/apps/gym-tracker/entries` | MVP 2 |
+| scrum-board | App | `/apps/scrum-board` | — | Ready |
+| soumil-mood-tracker | App | `/apps/soumil-mood-tracker` | — | Ready |
+| promo-kit | App | `/apps/promo-kit` | — | Draft |
 | citadel | Host | — | `/api/*` | Control plane (routing, auth, permissions, audit, registry) |
 
 ## Run Locally
