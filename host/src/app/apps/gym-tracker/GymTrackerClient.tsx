@@ -6,11 +6,12 @@ import { Button, Card, Input, Label } from '@/components/Shell';
 const DAY_CATEGORIES = ['push', 'cardio', 'pull', 'leg'] as const;
 type DayCategory = (typeof DAY_CATEGORIES)[number];
 
-type Entry = {
+interface Entry {
   id: number;
   date: string | null;
   category: string | null;
   exercise: string;
+  exercise_id: number | null;
   sets: number | null;
   reps: number | null;
   weight: number | null;
@@ -20,7 +21,14 @@ type Entry = {
   session_id: string | null;
   created_at: string;
   updated_at: string | null;
-};
+}
+
+interface Exercise {
+  id: number;
+  name: string;
+  category: string | null;
+  usage_count?: number;
+}
 
 type ActiveSession = {
   id: string;
@@ -88,31 +96,13 @@ function entryDay(e: Entry) {
 
 function weekStartKey(day: string) {
   const d = new Date(`${day}T00:00:00`);
-  const dow = (d.getDay() + 6) % 7; // Mon=0
+  const dow = (d.getDay() + 6) % 7;
   d.setDate(d.getDate() - dow);
   return d.toISOString().slice(0, 10);
 }
 
 function sameExercise(a: string, b: string) {
   return a.trim().toLowerCase() === b.trim().toLowerCase();
-}
-
-function suggestionForExerciseAndSet(entries: Entry[], exercise: string, targetSet: number, excludeSessionId?: string | null) {
-  const matches = entries
-    .filter((e) => sameExercise(e.exercise, exercise) && (excludeSessionId ? e.session_id !== excludeSessionId : true));
-
-  if (matches.length === 0) return null;
-
-  const exactSet = matches
-    .filter((e) => (e.sets ?? 0) === targetSet)
-    .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))[0];
-
-  if (exactSet) {
-    return { entry: exactSet, bySet: true as const };
-  }
-
-  const latestAny = matches.sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))[0];
-  return { entry: latestAny, bySet: false as const };
 }
 
 async function createEntry(payload: {
@@ -131,7 +121,7 @@ async function createEntry(payload: {
   });
   const data = await res.json().catch(() => null);
   if (!res.ok) throw new Error(data?.error ?? `HTTP ${res.status}`);
-  return data as { ok: true; id: number };
+  return data as { ok: true; id: number; isNewExercise?: boolean; exercise?: string };
 }
 
 async function patchEntry(id: number, payload: Partial<Entry>) {
@@ -150,10 +140,20 @@ async function deleteEntry(id: number) {
   if (!res.ok) throw new Error(data?.error ?? `HTTP ${res.status}`);
 }
 
-export function GymTrackerClient({ initialEntries, recentExercises }: { initialEntries: Entry[]; recentExercises: string[] }) {
+export function GymTrackerClient({ 
+  initialEntries, 
+  recentExercises,
+  initialExercises = []
+}: { 
+  initialEntries: Entry[]; 
+  recentExercises: string[];
+  initialExercises?: Exercise[];
+}) {
   const [entries, setEntries] = useState<Entry[]>(initialEntries);
+  const [exercises, setExercises] = useState<Exercise[]>(initialExercises);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'info' } | null>(null);
   const [historyPage, setHistoryPage] = useState(1);
   const [tab, setTab] = useState<'log' | 'history' | 'analytics'>('log');
   const SESSIONS_PER_PAGE = 10;
@@ -176,10 +176,28 @@ export function GymTrackerClient({ initialEntries, recentExercises }: { initialE
   const streamRef = useRef<MediaStream | null>(null);
   const chunksRef = useRef<BlobPart[]>([]);
 
+  // Autocomplete refs/state
+  const inputRef = useRef<HTMLInputElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [highlightedIndex, setHighlightedIndex] = useState(-1);
+
   const [range, setRange] = useState<'3d' | '7d' | '30d' | '90d'>('30d');
   const [analyticsMode, setAnalyticsMode] = useState<'overview' | 'consistency' | 'exercise-load'>('overview');
   const [analyticsCategory, setAnalyticsCategory] = useState<'all' | DayCategory>('all');
   const [analyticsExercise, setAnalyticsExercise] = useState<string>('all');
+
+  // Fetch exercises on mount
+  useEffect(() => {
+    fetch('/api/apps/gym-tracker/exercises')
+      .then(r => r.json())
+      .then(data => {
+        if (data.ok && data.exercises) {
+          setExercises(data.exercises);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     try {
@@ -203,12 +221,32 @@ export function GymTrackerClient({ initialEntries, recentExercises }: { initialE
     return entries.filter((e) => e.session_id === session.id);
   }, [entries, session]);
 
+  // Autocomplete filtered exercises
+  const filteredExercises = useMemo(() => {
+    if (!exerciseName.trim()) {
+      // Show popular exercises when empty
+      return exercises.slice(0, 8);
+    }
+    const query = exerciseName.toLowerCase();
+    return exercises
+      .filter(ex => ex.name.toLowerCase().includes(query))
+      .sort((a, b) => {
+        const aStarts = a.name.toLowerCase().startsWith(query);
+        const bStarts = b.name.toLowerCase().startsWith(query);
+        if (aStarts && !bStarts) return -1;
+        if (!aStarts && bStarts) return 1;
+        return a.name.localeCompare(b.name);
+      })
+      .slice(0, 8);
+  }, [exerciseName, exercises]);
+
   const exerciseOptions = useMemo(() => {
     const m = new Map<string, true>();
     for (const e of recentExercises) m.set(e, true);
     for (const e of entries) if (e.exercise?.trim()) m.set(e.exercise.trim(), true);
-    return Array.from(m.keys()).slice(0, 60);
-  }, [recentExercises, entries]);
+    for (const e of exercises) m.set(e.name, true);
+    return Array.from(m.keys()).slice(0, 100);
+  }, [recentExercises, entries, exercises]);
 
   const suggestedFromHistory = useMemo(() => {
     if (!exerciseName.trim()) return null;
@@ -269,58 +307,6 @@ export function GymTrackerClient({ initialEntries, recentExercises }: { initialE
   const avgReps = analyticsEntries.length ? analyticsEntries.reduce((s, e) => s + (e.reps ?? 0), 0) / analyticsEntries.length : 0;
   const heaviest = analyticsEntries.reduce((m, e) => Math.max(m, e.weight ?? 0), 0);
 
-  const byDay = (() => {
-    const m = new Map<string, { date: string; sets: number; volume: number; avgWeight: number; reps: number; weightSum: number }>();
-    for (const e of analyticsEntries) {
-      const k = entryDay(e);
-      if (!m.has(k)) m.set(k, { date: k, sets: 0, volume: 0, avgWeight: 0, reps: 0, weightSum: 0 });
-      const row = m.get(k)!;
-      row.sets += 1;
-      row.reps += e.reps ?? 0;
-      row.weightSum += e.weight ?? 0;
-      row.volume += (e.weight ?? 0) * (e.reps ?? 0);
-    }
-    const arr = Array.from(m.values()).sort((a, b) => a.date.localeCompare(b.date));
-    return arr.map((r) => ({ ...r, avgWeight: r.sets ? r.weightSum / r.sets : 0 }));
-  })();
-
-  const maxVolumeDay = byDay.reduce((m, d) => Math.max(m, d.volume), 0);
-
-  const categoryCounts = DAY_CATEGORIES.map((c) => ({
-    category: c,
-    count: analyticsEntries.filter((e) => e.category === c).length
-  }));
-
-  const activeDays = Array.from(new Set(analyticsEntries.map((e) => entryDay(e)))).sort();
-
-  const daysInRange = rangeDays(range);
-  const sessionsPerWeek = analyticsSessions.length / Math.max(1, daysInRange / 7);
-  const activeDaysPerWeek = activeDays.length / Math.max(1, daysInRange / 7);
-
-  const exerciseLoadProgression = (() => {
-    const byExercise = new Map<string, Map<string, number>>();
-    for (const e of analyticsEntries) {
-      const ex = e.exercise;
-      const d = entryDay(e);
-      if (!byExercise.has(ex)) byExercise.set(ex, new Map<string, number>());
-      const exMap = byExercise.get(ex)!;
-      exMap.set(d, (exMap.get(d) ?? 0) + (e.weight ?? 0) * (e.reps ?? 0));
-    }
-
-    const rows = Array.from(byExercise.entries()).map(([exercise, dayMap]) => {
-      const points = Array.from(dayMap.entries())
-        .map(([date, load]) => ({ date, load }))
-        .sort((a, b) => a.date.localeCompare(b.date));
-      const first = points[0]?.load ?? 0;
-      const last = points[points.length - 1]?.load ?? 0;
-      const delta = last - first;
-      return { exercise, points, first, last, delta };
-    });
-
-    rows.sort((a, b) => b.last - a.last);
-    return rows;
-  })();
-
   const weeklyCategory = (() => {
     const m = new Map<string, Record<DayCategory, number>>();
     for (const e of analyticsEntries) {
@@ -349,7 +335,36 @@ export function GymTrackerClient({ initialEntries, recentExercises }: { initialE
     return out;
   })();
 
+  const exerciseLoadProgression = (() => {
+    const byExercise = new Map<string, Map<string, number>>();
+    for (const e of analyticsEntries) {
+      const ex = e.exercise;
+      const d = entryDay(e);
+      if (!byExercise.has(ex)) byExercise.set(ex, new Map<string, number>());
+      const exMap = byExercise.get(ex)!;
+      exMap.set(d, (exMap.get(d) ?? 0) + (e.weight ?? 0) * (e.reps ?? 0));
+    }
+
+    const rows = Array.from(byExercise.entries()).map(([exercise, dayMap]) => {
+      const points = Array.from(dayMap.entries())
+        .map(([date, load]) => ({ date, load }))
+        .sort((a, b) => a.date.localeCompare(b.date));
+      const first = points[0]?.load ?? 0;
+      const last = points[points.length - 1]?.load ?? 0;
+      const delta = last - first;
+      return { exercise, points, first, last, delta };
+    });
+
+    rows.sort((a, b) => b.last - a.last);
+    return rows;
+  })();
+
   const lineRows = analyticsExercise === 'all' ? exerciseLoadProgression.slice(0, 4) : exerciseLoadProgression;
+
+  const daysInRange = rangeDays(range);
+  const sessionsPerWeek = analyticsSessions.length / Math.max(1, daysInRange / 7);
+  const activeDaysPerWeek = Array.from(new Set(analyticsEntries.map((e) => entryDay(e)))).length / Math.max(1, daysInRange / 7);
+  const activeDays = Array.from(new Set(analyticsEntries.map((e) => entryDay(e)))).sort();
 
   const startSession = () => {
     setError(null);
@@ -368,6 +383,47 @@ export function GymTrackerClient({ initialEntries, recentExercises }: { initialE
     setWeight('');
     setReps('');
   };
+
+  const handleExerciseSelect = (selected: Exercise) => {
+    setExerciseName(selected.name);
+    setShowDropdown(false);
+    setHighlightedIndex(-1);
+  };
+
+  const handleInputKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setHighlightedIndex(i => i < filteredExercises.length - 1 ? i + 1 : i);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setHighlightedIndex(i => (i > 0 ? i - 1 : -1));
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (highlightedIndex >= 0 && filteredExercises[highlightedIndex]) {
+        handleExerciseSelect(filteredExercises[highlightedIndex]);
+      } else {
+        setShowDropdown(false);
+      }
+    } else if (e.key === 'Escape') {
+      setShowDropdown(false);
+    }
+  };
+
+  // Handle clicks outside dropdown
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(e.target as Node) &&
+        inputRef.current &&
+        !inputRef.current.contains(e.target as Node)
+      ) {
+        setShowDropdown(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const startExercise = () => {
     if (!session) return;
@@ -405,12 +461,19 @@ export function GymTrackerClient({ initialEntries, recentExercises }: { initialE
         session_id: session.id
       });
 
+      // Show toast for new exercise
+      if (created.isNewExercise) {
+        setToast({ message: `New exercise added: ${created.exercise}`, type: 'success' });
+        setTimeout(() => setToast(null), 3000);
+      }
+
       const now = new Date().toISOString();
       const newEntry: Entry = {
         id: created.id,
         date: today(),
         category: session.category,
         exercise: session.exercise,
+        exercise_id: null,
         sets: session.nextSet,
         reps: Number.isFinite(nReps as number) ? nReps : null,
         weight: Number.isFinite(nWeight as number) ? nWeight : null,
@@ -595,6 +658,14 @@ export function GymTrackerClient({ initialEntries, recentExercises }: { initialE
 
   return (
     <div className="grid gap-6">
+      {/* Toast */}
+      {toast && (
+        <div className="fixed top-4 right-4 z-50 rounded-lg px-4 py-3 text-white shadow-lg animate-in fade-in slide-in-from-top-2"
+          style={{ background: toast.type === 'success' ? '#22c55e' : '#3b82f6' }}>
+          {toast.message}
+        </div>
+      )}
+
       <div className="sticky top-0 z-30 -mx-3 border-b border-zinc-200 bg-zinc-50/95 px-3 py-2 backdrop-blur md:mx-0 md:rounded-xl md:border md:bg-white/95">
         <div className="grid grid-cols-3 gap-2">
           <Button type="button" variant={tab === 'log' ? 'primary' : 'secondary'} onClick={() => setTab('log')} className="w-full">Log</Button>
@@ -638,19 +709,53 @@ export function GymTrackerClient({ initialEntries, recentExercises }: { initialE
 
           {!session.exercise ? (
             <div className="mt-4 grid gap-3 md:max-w-md">
-              <div>
+              <div className="relative">
                 <Label>Exercise name</Label>
-                <Input
-                  list="exercise-suggestions"
+                <input
+                  ref={inputRef}
+                  type="text"
                   value={exerciseName}
-                  onChange={(e) => setExerciseName(e.target.value)}
-                  placeholder="Bench press"
+                  onChange={(e) => {
+                    setExerciseName(e.target.value);
+                    setShowDropdown(true);
+                  }}
+                  onFocus={() => setShowDropdown(true)}
+                  onKeyDown={handleInputKeyDown}
+                  placeholder="Type to search exercises..."
+                  className="mt-1 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-zinc-900/15"
                 />
-                <datalist id="exercise-suggestions">
-                  {exerciseOptions.map((name) => (
-                    <option key={name} value={name} />
-                  ))}
-                </datalist>
+                
+                {/* Autocomplete Dropdown */}
+                {showDropdown && (
+                  <div
+                    ref={dropdownRef}
+                    className="absolute top-full left-0 right-0 z-10 mt-1 max-h-48 overflow-auto rounded-lg border border-zinc-200 bg-white shadow-lg"
+                  >
+                    {filteredExercises.length === 0 ? (
+                      <div className="px-3 py-2 text-sm text-zinc-500">
+                        {exerciseName.trim() 
+                          ? `Press Enter to add "${exerciseName}" as new exercise` 
+                          : 'Start typing to search exercises'}
+                      </div>
+                    ) : (
+                      filteredExercises.map((ex, idx) => (
+                        <div
+                          key={ex.id}
+                          onClick={() => handleExerciseSelect(ex)}
+                          className={`cursor-pointer border-b border-zinc-100 px-3 py-2 last:border-0 hover:bg-zinc-50 ${
+                            idx === highlightedIndex ? 'bg-zinc-100' : ''
+                          }`}
+                          onMouseEnter={() => setHighlightedIndex(idx)}
+                        >
+                          <div className="font-medium text-zinc-900">{ex.name}</div>
+                          {ex.category && (
+                            <div className="text-xs capitalize text-zinc-500">{ex.category}</div>
+                          )}
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
               </div>
               {suggestedFromHistory ? (
                 <p className="text-xs text-zinc-500">
@@ -667,7 +772,7 @@ export function GymTrackerClient({ initialEntries, recentExercises }: { initialE
                   </Button>
                 )}
               </div>
-              {voiceTranscript ? <div className="text-xs text-zinc-500">Heard: “{voiceTranscript}”</div> : null}
+              {voiceTranscript ? <div className="text-xs text-zinc-500">Heard: "{voiceTranscript}"</div> : null}
             </div>
           ) : (
             <div className="mt-4 grid gap-3">
@@ -693,7 +798,7 @@ export function GymTrackerClient({ initialEntries, recentExercises }: { initialE
                   </Button>
                 )}
               </div>
-              {voiceTranscript ? <div className="text-xs text-zinc-500">Heard: “{voiceTranscript}”</div> : null}
+              {voiceTranscript ? <div className="text-xs text-zinc-500">Heard: "{voiceTranscript}"</div> : null}
 
               {sessionEntries.length > 0 ? (
                 <div className="mt-2 grid gap-2">
