@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { dbExec, dbQuery } from '@/lib/db';
 import { audit } from '@/lib/audit';
-import { ensureScrumBoardSchema, getOrCreateBoardId, normalizePriority, normalizeStatus, releaseAgentLock } from '@/lib/scrumBoardSchema';
+import { ensureScrumBoardSchema, getOrCreateBoardId, normalizePriority, normalizeStatus, releaseAgentLock, updateSessionStatus, type SessionStatus } from '@/lib/scrumBoardSchema';
 
 export const runtime = 'nodejs';
 const APP_ID = 'scrum-board';
@@ -280,12 +280,28 @@ export async function PATCH(req: Request) {
     ]
   );
 
-  // Release agent lock if task moved to a terminal state (done, failed, needs_input, blocked, validating)
+  // Release agent lock and update session status if task moved to a terminal state
   if (body?.status != null) {
     const newStatus = normalizeStatus(body.status);
     const terminalStatuses = ['done', 'failed', 'needs_input', 'blocked', 'validating'];
     if (terminalStatuses.includes(newStatus)) {
       releaseAgentLock();
+      
+      // Also update session status to match task status (if task has a session)
+      const taskSessionId = row.session_id;
+      if (taskSessionId) {
+        const sessionStatusMap: Record<string, SessionStatus> = {
+          'done': 'completed',
+          'failed': 'failed',
+          'needs_input': 'needs_input',
+          'blocked': 'blocked',
+          'validating': 'validating'
+        };
+        const sessionStatus = sessionStatusMap[newStatus];
+        if (sessionStatus) {
+          updateSessionStatus(taskSessionId, sessionStatus);
+        }
+      }
     }
   }
 
