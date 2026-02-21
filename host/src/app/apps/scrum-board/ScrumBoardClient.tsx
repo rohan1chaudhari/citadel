@@ -10,7 +10,7 @@ type Task = {
   title: string;
   description: string | null;
   acceptance_criteria?: string | null;
-  status: 'backlog' | 'todo' | 'in_progress' | 'validating' | 'needs_input' | 'blocked' | 'done' | 'failed';
+  status: 'backlog' | 'todo' | 'in_progress' | 'validating' | 'waiting' | 'done' | 'failed';
   position: number;
   priority: 'low' | 'medium' | 'high';
   assignee: string | null;
@@ -66,7 +66,7 @@ type InboxTask = {
   questionCount: number;
 };
 
-const STATUSES: Task['status'][] = ['backlog', 'todo', 'in_progress', 'validating', 'needs_input', 'blocked', 'done', 'failed'];
+const STATUSES: Task['status'][] = ['backlog', 'todo', 'in_progress', 'validating', 'waiting', 'done', 'failed'];
 const PRIORITIES: Task['priority'][] = ['high', 'medium', 'low'];
 
 const STATUS_COLORS: Record<Task['status'], string> = {
@@ -74,15 +74,14 @@ const STATUS_COLORS: Record<Task['status'], string> = {
   todo: 'bg-blue-50',
   in_progress: 'bg-amber-50',
   validating: 'bg-indigo-50',
-  needs_input: 'bg-purple-50',
-  blocked: 'bg-red-50',
+  waiting: 'bg-purple-50',
   done: 'bg-green-50',
   failed: 'bg-rose-50',
 };
 
 function prettyStatus(s: Task['status']) {
   if (s === 'in_progress') return 'In Progress';
-  if (s === 'needs_input') return 'Needs Input';
+  if (s === 'waiting') return 'Waiting for You';
   return s[0].toUpperCase() + s.slice(1);
 }
 
@@ -392,8 +391,7 @@ export default function ScrumBoardClient({ appIds, externalIds = [] }: { appIds:
       todo: [],
       in_progress: [],
       validating: [],
-      needs_input: [],
-      blocked: [],
+      waiting: [],
       done: [],
       failed: []
     };
@@ -766,9 +764,9 @@ export default function ScrumBoardClient({ appIds, externalIds = [] }: { appIds:
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
               </svg>
               <span className="text-xs font-medium">Inbox</span>
-              {grouped.needs_input.length > 0 && (
+              {grouped.waiting.length > 0 && (
                 <span className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center">
-                  {grouped.needs_input.length}
+                  {grouped.waiting.length}
                 </span>
               )}
             </button>
@@ -1223,25 +1221,23 @@ export default function ScrumBoardClient({ appIds, externalIds = [] }: { appIds:
               <button className="rounded-lg border border-zinc-200 px-3 py-2 text-sm hover:bg-zinc-50 active:bg-zinc-100" onClick={() => moveTask(openTask, 'down')}>Move down</button>
             </div>
 
-            {/* Blocked task panel - show Resume button with session history */}
-            {(openTask.status === 'blocked' || openTask.status === 'needs_input') && openTask.session_id && (
-              <div className="mt-4 p-4 rounded-lg border border-red-200 bg-red-50/50">
+            {/* Waiting task panel - show context and auto-resume on comment */}
+            {openTask.status === 'waiting' && openTask.session_id && (
+              <div className="mt-4 p-4 rounded-lg border border-purple-200 bg-purple-50/50">
                 <div className="flex items-center justify-between mb-3">
                   <div>
-                    <div className="text-sm font-semibold text-red-900">
-                      {openTask.status === 'needs_input' ? 'Awaiting Input' : 'Task Blocked'}
+                    <div className="text-sm font-semibold text-purple-900">
+                      Waiting for You
                     </div>
-                    <div className="text-xs text-red-600">
+                    <div className="text-xs text-purple-600">
                       Session: <span className="font-mono">{openTask.session_id.slice(0, 20)}...</span>
                     </div>
                   </div>
-                  <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                  <div className="w-2 h-2 rounded-full bg-purple-500 animate-pulse" />
                 </div>
                 
-                <div className="text-xs text-red-700 mb-3">
-                  {openTask.status === 'needs_input' 
-                    ? 'This task is waiting for your input. Add a comment with your answer and click Resume.'
-                    : 'This task is blocked. Add a comment with information to unblock and click Resume.'}
+                <div className="text-xs text-purple-700 mb-3">
+                  This task is waiting for you. Add a comment with your response — it will auto-resume.
                 </div>
                 
                 <div className="flex flex-wrap gap-2">
@@ -1355,11 +1351,11 @@ export default function ScrumBoardClient({ appIds, externalIds = [] }: { appIds:
                     )}
                   </div>
                   <div className="flex gap-2">
-                    {/* Resume button for blocked/needs_input tasks */}
-                    {(openTask.status === 'blocked' || openTask.status === 'needs_input') && (
+                    {/* Manual resume button for waiting tasks (auto-resume also works via comments) */}
+                    {openTask.status === 'waiting' && (
                       <button
                         type="button"
-                        className="inline-flex items-center gap-1.5 rounded border border-red-300 bg-red-50 px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-100 transition"
+                        className="inline-flex items-center gap-1.5 rounded border border-purple-300 bg-purple-50 px-3 py-1.5 text-xs font-medium text-purple-700 hover:bg-purple-100 transition"
                         onClick={resumeBlockedTask}
                         disabled={validating}
                       >

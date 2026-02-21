@@ -2,9 +2,9 @@ import { dbExec, dbQuery } from '@/lib/db';
 
 const APP_ID = 'scrum-board';
 
-export type TaskStatus = 'backlog' | 'todo' | 'in_progress' | 'validating' | 'needs_input' | 'blocked' | 'done' | 'failed';
+export type TaskStatus = 'backlog' | 'todo' | 'in_progress' | 'validating' | 'waiting' | 'done' | 'failed';
 export type TaskPriority = 'low' | 'medium' | 'high';
-export type SessionStatus = 'running' | 'completed' | 'failed' | 'blocked' | 'needs_input' | 'validating' | 'archived';
+export type SessionStatus = 'running' | 'completed' | 'failed' | 'waiting' | 'validating' | 'archived';
 
 export function ensureScrumBoardSchema() {
   dbExec(
@@ -194,8 +194,7 @@ export function normalizeStatus(v: unknown): TaskStatus {
     x === 'todo' ||
     x === 'in_progress' ||
     x === 'validating' ||
-    x === 'needs_input' ||
-    x === 'blocked' ||
+    x === 'waiting' ||
     x === 'done' ||
     x === 'failed'
   ) return x;
@@ -376,7 +375,7 @@ export function updateSessionStatus(
   finalOutput?: string
 ): void {
   const now = new Date().toISOString();
-  const isTerminal = ['completed', 'failed', 'blocked', 'needs_input', 'validating', 'archived'].includes(status);
+  const isTerminal = ['completed', 'failed', 'waiting', 'validating', 'archived'].includes(status);
   const endedAt = isTerminal ? now : null;
 
   dbExec(

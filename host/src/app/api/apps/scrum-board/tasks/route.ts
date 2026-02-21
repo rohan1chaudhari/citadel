@@ -91,10 +91,9 @@ export async function GET(req: Request) {
         todo: 1,
         in_progress: 2,
         validating: 3,
-        needs_input: 4,
-        blocked: 5,
-        done: 6,
-        failed: 7
+        waiting: 4,
+        done: 5,
+        failed: 6
       };
       const sa = sOrder[a.status] ?? 99;
       const sb = sOrder[b.status] ?? 99;
@@ -283,7 +282,7 @@ export async function PATCH(req: Request) {
   // Release agent lock and update session status if task moved to a terminal state
   if (body?.status != null) {
     const newStatus = normalizeStatus(body.status);
-    const terminalStatuses = ['done', 'failed', 'needs_input', 'blocked', 'validating'];
+    const terminalStatuses = ['done', 'failed', 'waiting', 'validating'];
     if (terminalStatuses.includes(newStatus)) {
       releaseAgentLock();
       
@@ -293,8 +292,7 @@ export async function PATCH(req: Request) {
         const sessionStatusMap: Record<string, SessionStatus> = {
           'done': 'completed',
           'failed': 'failed',
-          'needs_input': 'needs_input',
-          'blocked': 'blocked',
+          'waiting': 'waiting',
           'validating': 'validating'
         };
         const sessionStatus = sessionStatusMap[newStatus];

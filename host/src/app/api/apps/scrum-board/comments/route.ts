@@ -37,7 +37,7 @@ export async function POST(req: Request) {
   // Insert the comment
   dbExec(APP_ID, `INSERT INTO comments (task_id, body, created_at) VALUES (?, ?, ?)`, [taskId, text, now]);
 
-  // Check if task is blocked/needs_input and has a session_id - trigger wake
+  // Auto-resume: Check if task is waiting and has a session_id - trigger wake
   const task = dbQuery<{
     id: number;
     status: string;
@@ -54,7 +54,8 @@ export async function POST(req: Request) {
 
   let wakeResult: { ok: boolean; message: string; sessionId?: string; resumed?: boolean; newSession?: boolean } | null = null;
 
-  if (task?.session_id && (task.status === 'blocked' || task.status === 'needs_input')) {
+  // Auto-resume: if task is waiting and has a session_id, wake it up
+  if (task?.session_id && task.status === 'waiting') {
     // Try to wake/resume the session
     wakeResult = await wakeSession(task.session_id, taskId, text, task.title);
     
@@ -141,8 +142,8 @@ async function wakeSession(
     try {
       await sendToExistingSession(targetSessionId, userAnswer);
       
-      // Update session status back to running if it was blocked
-      if (session?.status === 'blocked' || session?.status === 'needs_input') {
+      // Update session status back to running if it was waiting
+      if (session?.status === 'waiting') {
         updateSessionStatus(targetSessionId, 'running');
       }
       
