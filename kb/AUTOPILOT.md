@@ -179,3 +179,64 @@ The API automatically handles agent lock release when tasks move to terminal sta
 
 **Do NOT** manually release locks or query the `agent_locks` table directly.
 Use `await isAgentLocked()` to check lock status if needed.
+
+## New App Creation Checklist
+
+When a task requires creating a **new app** (not modifying existing):
+
+### 1. Create App Manifest
+Create `apps/<app-id>/app.yaml`:
+```yaml
+id: <app-id>
+name: <App Name>
+version: 0.1.0
+permissions:
+  db:
+    read: true
+    write: true
+  storage:
+    read: true
+    write: true
+connectors: []
+```
+
+### 2. Generate App Icon (REQUIRED)
+**Use nano-banana-pro to create the icon:**
+
+```bash
+cd /home/rohanchaudhari/personal/citadel
+uv run /home/linuxbrew/.linuxbrew/lib/node_modules/openclaw/skills/nano-banana-pro/scripts/generate_image.py \
+  --prompt "App icon logo design, modern flat style, <describe app purpose>, gradient background, minimal clean design, rounded corners, no text" \
+  --filename "<app-id>-logo.png" \
+  --resolution 1K
+```
+
+**Move to public folder:**
+```bash
+mv <app-id>-logo.png host/public/app-logos/
+```
+
+**Icon requirements:**
+- Resolution: 1K (1024x1024) minimum
+- Style: Modern flat design with gradient
+- Format: PNG
+- Location: `host/public/app-logos/<app-id>-logo.png`
+
+### 3. Implement App
+- Create `host/src/app/apps/<app-id>/page.tsx`
+- Create `host/src/app/api/apps/<app-id>/` routes as needed
+- Build and test: `npm run build` in `host/`
+
+### 4. Verification
+After build passes, the app will automatically appear on the home page at `/`.
+
+**Home page shows:**
+- App icon from `/app-logos/<app-id>-logo.png`
+- App name from `app.yaml`
+- Link to `/apps/<app-id>`
+
+### Common Mistakes to Avoid
+- ❌ Forgetting to create `app.yaml` → app won't register
+- ❌ Forgetting to generate icon → blank/missing icon on home
+- ❌ Wrong icon path → 404 error on home page
+- ❌ Not running build → app not visible until restart

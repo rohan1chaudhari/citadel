@@ -1,0 +1,11 @@
+id: french-translator
+name: French Translator
+version: 0.1.0
+permissions:
+  db:
+    read: true
+    write: true
+  storage:
+    read: true
+    write: true
+connectors: []
