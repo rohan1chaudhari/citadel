@@ -79,7 +79,7 @@ export async function PATCH(req: Request, { params }: RouteParams) {
   const status = String(body?.status || '').trim() as SessionStatus;
   const finalOutput = String(body?.final_output || '').trim() || undefined;
 
-  const validStatuses: SessionStatus[] = ['running', 'completed', 'failed', 'blocked', 'needs_input', 'validating', 'archived'];
+  const validStatuses: SessionStatus[] = ['running', 'completed', 'failed', 'waiting', 'validating', 'archived'];
   if (!validStatuses.includes(status)) {
     return NextResponse.json({ ok: false, error: 'Invalid status' }, { status: 400 });
   }
