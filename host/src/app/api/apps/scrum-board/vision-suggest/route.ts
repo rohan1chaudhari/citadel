@@ -79,7 +79,7 @@ ${kbContext ? `Existing App Context:\n${kbContext}\n\n` : ''}Generate a vision s
       'content-type': 'application/json',
     },
     body: JSON.stringify({
-      model: 'gpt-4.1-mini',
+      model: 'gpt-5.2',
       temperature: 0.4,
       text: {
         format: {
