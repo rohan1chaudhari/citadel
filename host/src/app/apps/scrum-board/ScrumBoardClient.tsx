@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Button, Card, Input, Label, Textarea } from '@/components/Shell';
 import { getExternalProject } from '@/lib/externalProjects';
+import VisionSuggester from './VisionSuggester';
 
 type Task = {
   id: number;
@@ -770,6 +771,9 @@ export default function ScrumBoardClient({ appIds, externalIds = [] }: { appIds:
                 </span>
               )}
             </button>
+
+            {/* Vision Suggester Button */}
+            <VisionSuggester appId={appId} onTasksAdded={loadTasks} />
 
             {/* Autopilot Toggle */}
             <div className={`flex items-center gap-2 px-3 py-1.5 rounded border transition ${autopilotEnabled ? 'bg-green-50 border-green-200' : 'bg-zinc-100 border-zinc-200'}`}>
