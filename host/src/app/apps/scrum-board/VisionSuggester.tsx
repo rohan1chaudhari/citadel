@@ -15,6 +15,11 @@ interface ProposedTask {
 interface VisionSuggestion {
   vision: string;
   tasks: ProposedTask[];
+  stateContent?: string | null;
+  hasState?: boolean;
+  isFresh?: boolean;
+  stateCommit?: string | null;
+  currentCommit?: string | null;
 }
 
 interface VisionSuggesterProps {
@@ -27,15 +32,16 @@ export default function VisionSuggester({ appId, onTasksAdded }: VisionSuggester
   const [loading, setLoading] = useState(false);
   const [suggestion, setSuggestion] = useState<VisionSuggestion | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [showState, setShowState] = useState(false);
 
-  async function generateVision() {
+  async function generateVision(forceRefresh = false) {
     setLoading(true);
     setError(null);
     try {
       const res = await fetch('/api/apps/scrum-board/vision-suggest', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ appId }),
+        body: JSON.stringify({ appId, forceRefresh }),
       });
       const data = await res.json();
       if (!data.ok) {
@@ -45,6 +51,11 @@ export default function VisionSuggester({ appId, onTasksAdded }: VisionSuggester
       setSuggestion({
         vision: data.vision,
         tasks: data.tasks.map((t: ProposedTask) => ({ ...t, status: 'pending' as const })),
+        stateContent: data.stateContent,
+        hasState: data.hasState,
+        isFresh: data.isFresh,
+        stateCommit: data.stateCommit,
+        currentCommit: data.currentCommit,
       });
     } catch (e: any) {
       setError(e?.message || 'Failed to generate vision');
@@ -158,7 +169,7 @@ export default function VisionSuggester({ appId, onTasksAdded }: VisionSuggester
                 <p className="text-sm text-zinc-600 mb-6 max-w-md mx-auto">
                   AI will analyze the app and suggest a compelling vision statement along with concrete tasks to achieve it.
                 </p>
-                <Button onClick={generateVision} disabled={loading}>
+                <Button onClick={() => generateVision()} disabled={loading}>
                   Generate Vision & Tasks
                 </Button>
               </div>
@@ -205,6 +216,78 @@ export default function VisionSuggester({ appId, onTasksAdded }: VisionSuggester
                     <span className="text-sm font-medium text-indigo-900">Vision</span>
                   </div>
                   <p className="text-zinc-800 leading-relaxed">{suggestion.vision}</p>
+                  
+                  {/* Context sources */}
+                  <div className="mt-3 flex flex-wrap gap-2 text-xs">
+                    {suggestion.hasState ? (
+                      <>
+                        <span 
+                          className={`inline-flex items-center gap-1 px-2 py-1 rounded ${
+                            suggestion.isFresh 
+                              ? 'bg-emerald-100 text-emerald-700' 
+                              : 'bg-amber-100 text-amber-700'
+                          }`}
+                          title={`State commit: ${suggestion.stateCommit?.slice(0, 8)}... Current: ${suggestion.currentCommit?.slice(0, 8)}...`}
+                        >
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                          </svg>
+                          {suggestion.isFresh ? 'State up-to-date' : 'State outdated'}
+                        </span>
+                        <button
+                          onClick={() => {
+                            setSuggestion(null);
+                            generateVision(true); // force refresh
+                          }}
+                          className="inline-flex items-center gap-1 px-2 py-1 rounded bg-zinc-100 text-zinc-600 hover:bg-zinc-200 transition"
+                        >
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                          </svg>
+                          Refresh
+                        </button>
+                      </>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-amber-100 text-amber-700">
+                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
+                        No state file — analysis created
+                      </span>
+                    )}
+                  </div>
+                  
+                  {!suggestion.isFresh && (
+                    <div className="mt-2 text-xs text-amber-600">
+                      ⚠️ Code has changed since last analysis. Suggestions may include features you've already built.
+                    </div>
+                  )}
+                  
+                  {/* State Content Toggle */}
+                  {suggestion.stateContent && (
+                    <div className="mt-3">
+                      <button
+                        onClick={() => setShowState(!showState)}
+                        className="text-xs text-indigo-600 hover:text-indigo-700 font-medium flex items-center gap-1"
+                      >
+                        <svg 
+                          className={`w-3 h-3 transition-transform ${showState ? 'rotate-90' : ''}`} 
+                          fill="none" 
+                          stroke="currentColor" 
+                          viewBox="0 0 24 24"
+                        >
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                        </svg>
+                        {showState ? 'Hide analyzed state' : 'Show analyzed state'}
+                      </button>
+                      
+                      {showState && (
+                        <div className="mt-2 p-3 rounded bg-zinc-50 border border-zinc-200 text-xs font-mono whitespace-pre-wrap max-h-64 overflow-y-auto">
+                          {suggestion.stateContent}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 {/* Progress */}

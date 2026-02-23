@@ -13,7 +13,11 @@ interface SuggestedTask {
 interface VisionSuggestion {
   vision: string;
   tasks: SuggestedTask[];
-  hasKbContext: boolean;
+  stateContent?: string | null;
+  hasState: boolean;
+  isFresh?: boolean;
+  stateCommit?: string | null;
+  currentCommit?: string | null;
 }
 
 interface VisionSuggestPanelProps {
@@ -27,8 +31,9 @@ export function VisionSuggestPanel({ appId, onTasksCreated }: VisionSuggestPanel
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [createdCount, setCreatedCount] = useState(0);
+  const [showState, setShowState] = useState(false);
 
-  const generateVision = async () => {
+  const generateVision = async (forceRefresh = false) => {
     setLoading(true);
     setError(null);
     setSuggestion(null);
@@ -38,7 +43,7 @@ export function VisionSuggestPanel({ appId, onTasksCreated }: VisionSuggestPanel
       const res = await fetch('/api/apps/scrum-board/vision-suggest', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ appId }),
+        body: JSON.stringify({ appId, forceRefresh }),
       });
 
       const data = await res.json();
@@ -116,7 +121,7 @@ export function VisionSuggestPanel({ appId, onTasksCreated }: VisionSuggestPanel
             Generate a vision and proposed tasks for {appId}
           </p>
         </div>
-        <Button onClick={generateVision} disabled={loading}>
+        <Button onClick={() => generateVision()} disabled={loading}>
           {loading ? 'Generating...' : '✨ Generate Vision'}
         </Button>
       </div>
@@ -141,9 +146,64 @@ export function VisionSuggestPanel({ appId, onTasksCreated }: VisionSuggestPanel
               Proposed Vision
             </div>
             <p className="text-zinc-800">{suggestion.vision}</p>
-            {!suggestion.hasKbContext && (
+            
+            {/* Context sources */}
+            <div className="mt-3 flex flex-wrap gap-2 text-xs">
+              {suggestion.hasState ? (
+                <>
+                  <span 
+                    className={`inline-flex items-center gap-1 px-2 py-1 rounded ${
+                      suggestion.isFresh 
+                        ? 'bg-emerald-100 text-emerald-700' 
+                        : 'bg-amber-100 text-amber-700'
+                    }`}
+                    title={`State: ${suggestion.stateCommit?.slice(0, 8)}... Current: ${suggestion.currentCommit?.slice(0, 8)}...`}
+                  >
+                    {suggestion.isFresh ? '📄 State up-to-date' : '⚠️ State outdated'}
+                  </span>
+                  <button
+                    onClick={() => generateVision(true)}
+                    className="inline-flex items-center gap-1 px-2 py-1 rounded bg-zinc-100 text-zinc-600 hover:bg-zinc-200 transition"
+                  >
+                    🔄 Refresh
+                  </button>
+                </>
+              ) : (
+                <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-amber-100 text-amber-700">
+                  ⚠️ No state file — analysis created
+                </span>
+              )}
+            </div>
+            
+            {!suggestion.isFresh && (
               <div className="mt-2 text-xs text-amber-600">
-                ⚠️ No KB context found. Consider adding a ROADMAP-{appId}.md file.
+                ⚠️ Code changed since last analysis. Suggestions may include already-built features.
+              </div>
+            )}
+            
+            {/* State Content Toggle */}
+            {suggestion.stateContent && (
+              <div className="mt-3">
+                <button
+                  onClick={() => setShowState(!showState)}
+                  className="text-xs text-indigo-600 hover:text-indigo-700 font-medium flex items-center gap-1"
+                >
+                  <svg 
+                    className={`w-3 h-3 transition-transform ${showState ? 'rotate-90' : ''}`} 
+                    fill="none" 
+                    stroke="currentColor" 
+                    viewBox="0 0 24 24"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                  {showState ? 'Hide analyzed state' : 'Show analyzed state'}
+                </button>
+                
+                {showState && (
+                  <div className="mt-2 p-3 rounded bg-white border border-zinc-200 text-xs font-mono whitespace-pre-wrap max-h-64 overflow-y-auto">
+                    {suggestion.stateContent}
+                  </div>
+                )}
               </div>
             )}
           </div>
