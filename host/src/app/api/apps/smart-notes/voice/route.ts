@@ -56,8 +56,74 @@ function formatMarkdownFromTranscript(raw: string) {
     .trim();
 
   return {
-    markdown: `## Clean transcript\n\n${cleaned || '_No transcript._'}\n\n## Raw transcript\n\n> ${raw.trim().split(/\r?\n/).join('\n> ')}\n`
+    title: `Voice note — ${new Date().toISOString().slice(0, 16).replace('T', ' ')}`,
+    markdown: cleaned || '_No transcript._'
   };
+}
+
+async function structureVoiceNoteWithLlm(transcript: string) {
+  const key = process.env.OPENAI_API_KEY;
+  if (!key) return formatMarkdownFromTranscript(transcript);
+
+  const prompt = [
+    'Turn this voice transcript into a clean, readable markdown note.',
+    'Return strict JSON only with keys: title, markdown.',
+    'Rules:',
+    '- Do NOT include headings like "Clean transcript" or "Raw transcript".',
+    '- Keep meaning faithful; do not invent facts.',
+    '- Use concise markdown structure (short paragraphs, bullets/checklist) when helpful.',
+    '- If content is short, a plain paragraph is fine.',
+    `Transcript: ${transcript}`
+  ].join('\n');
+
+  const res = await fetch('https://api.openai.com/v1/responses', {
+    method: 'POST',
+    headers: {
+      authorization: `Bearer ${key}`,
+      'content-type': 'application/json'
+    },
+    body: JSON.stringify({
+      model: 'gpt-4o-mini',
+      temperature: 0.2,
+      text: {
+        format: {
+          type: 'json_schema',
+          name: 'smart_note_voice_format',
+          strict: true,
+          schema: {
+            type: 'object',
+            additionalProperties: false,
+            properties: {
+              title: { type: 'string' },
+              markdown: { type: 'string' }
+            },
+            required: ['title', 'markdown']
+          }
+        }
+      },
+      input: prompt
+    })
+  });
+
+  const data = await res.json().catch(() => null);
+  if (!res.ok) return formatMarkdownFromTranscript(transcript);
+
+  const candidate = data?.output?.[0]?.content?.[0]?.text ?? data?.output_text ?? '';
+  const text = String(candidate).trim();
+  if (!text) return formatMarkdownFromTranscript(transcript);
+
+  try {
+    const parsed = JSON.parse(text);
+    const title = typeof parsed?.title === 'string' && parsed.title.trim()
+      ? parsed.title.trim()
+      : `Voice note — ${new Date().toISOString().slice(0, 16).replace('T', ' ')}`;
+    const markdown = typeof parsed?.markdown === 'string' && parsed.markdown.trim()
+      ? parsed.markdown.trim()
+      : formatMarkdownFromTranscript(transcript).markdown;
+    return { title, markdown };
+  } catch {
+    return formatMarkdownFromTranscript(transcript);
+  }
 }
 
 export async function POST(req: Request) {
@@ -81,8 +147,7 @@ export async function POST(req: Request) {
 
     const transcript = await transcribeElevenLabs(audio, { languageCode: 'en' });
 
-    const { markdown } = formatMarkdownFromTranscript(transcript);
-    const title = `Voice note — ${new Date().toISOString().slice(0, 16).replace('T', ' ')}`;
+    const { title, markdown } = await structureVoiceNoteWithLlm(transcript);
 
     dbExec(APP_ID, `INSERT INTO notes (title, body, created_at, updated_at) VALUES (?, ?, ?, ?)`, [
       title,
