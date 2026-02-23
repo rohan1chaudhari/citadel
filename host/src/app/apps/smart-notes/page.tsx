@@ -3,6 +3,7 @@ import { dbQuery } from '@/lib/db';
 import { ensureSmartNotesSchema } from '@/lib/smartNotesSchema';
 import Link from 'next/link';
 import PhotoCaptureButton from './PhotoCaptureButton';
+import VoiceCaptureButton from './VoiceCaptureButton';
 
 export const runtime = 'nodejs';
 const APP_ID = 'smart-notes';
@@ -51,6 +52,7 @@ export default async function SmartNotesListPage() {
           </Link>
           <div className="flex items-center gap-2">
             <PhotoCaptureButton />
+            <VoiceCaptureButton />
             <Link
               href="/apps/smart-notes/new"
               className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-800"
