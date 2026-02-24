@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { readFile, writeFile } from 'fs/promises';
 import { existsSync } from 'fs';
 import { join } from 'path';
-import { exec } from 'child_process';
+import { exec, spawn } from 'child_process';
 import { promisify } from 'util';
 
 export const runtime = 'nodejs';
@@ -22,6 +22,13 @@ type SuggestedTask = {
   title: string;
   description: string;
   acceptanceCriteria: string;
+};
+
+type AgentResult = {
+  vision: string;
+  tasks: SuggestedTask[];
+  stateSummary: string;
+  lastAnalyzedCommit: string;
 };
 
 function requireEnv(name: string) {
@@ -263,6 +270,123 @@ async function writeStateFile(appId: string, commit: string | null, summary: str
   await writeFile(statePath, content, 'utf-8');
 }
 
+async function runOpenClawAnalysisAgent(appId: string, currentCommit: string | null): Promise<AgentResult> {
+  const statePath = getStatePath(appId);
+  const commitToUse = currentCommit || 'initial';
+  const sessionId = `vision-${appId}-${Date.now()}`;
+
+  const prompt = `You are analyzing the Citadel app \"${appId}\".
+
+Goal:
+1) Read the app code SELECTIVELY (do not read every file end-to-end).
+2) Build a high-confidence state summary.
+3) Write/update: ${statePath}
+4) Return JSON with vision+tasks.
+
+Rules for selective reading:
+- First map files under:
+  - /home/rohanchaudhari/personal/citadel/host/src/app/apps/${appId}
+  - /home/rohanchaudhari/personal/citadel/host/src/app/api/apps/${appId}
+- Prioritize high-signal files: page.tsx, top-level components, route.ts, schema/db/util files.
+- Read partial snippets where possible.
+- Follow imports only when needed to resolve uncertainty.
+- Stop when confidence is sufficient.
+
+State file format (must write exactly this frontmatter keys):
+---
+lastAnalyzedCommit: ${commitToUse}
+lastAnalyzedAt: <ISO datetime>
+---
+
+Then markdown sections exactly:
+## Summary
+## Features (IMPLEMENTED)
+## Data Model
+## UI Components
+## API Routes
+## Technical Notes
+## Enhancement Opportunities
+## New Feature Opportunities
+
+Final output must be STRICT JSON only (no prose):
+{
+  "vision": "1-2 sentence vision",
+  "tasks": [
+    {"title":"...","description":"...","acceptanceCriteria":"..."}
+  ],
+  "stateSummary": "the markdown written to state file",
+  "lastAnalyzedCommit": "${commitToUse}"
+}
+
+Constraints:
+- tasks length: 3-7
+- no markdown fences in JSON
+- keep tasks concrete and buildable`;
+
+  const args = [
+    'agent',
+    '--local',
+    '--json',
+    '--session-id',
+    sessionId,
+    '--timeout',
+    '240',
+    '--message',
+    prompt,
+  ];
+
+  const stdout = await new Promise<string>((resolve, reject) => {
+    const child = spawn('openclaw', args, {
+      cwd: REPO_DIR,
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: process.env,
+    });
+
+    let out = '';
+    let err = '';
+    child.stdout?.on('data', (d) => (out += String(d)));
+    child.stderr?.on('data', (d) => (err += String(d)));
+
+    child.on('close', (code) => {
+      if (code !== 0) {
+        reject(new Error(err || out || `openclaw agent exited ${code}`));
+      } else {
+        resolve(out);
+      }
+    });
+  });
+
+  // Try direct parse first
+  let envelope: any;
+  try {
+    envelope = JSON.parse(stdout);
+  } catch {
+    const match = stdout.match(/\{[\s\S]*\}$/);
+    if (!match) throw new Error(`Unable to parse openclaw output: ${stdout.slice(0, 800)}`);
+    envelope = JSON.parse(match[0]);
+  }
+
+  const text = envelope?.result?.outputText ?? envelope?.outputText ?? envelope?.text ?? '';
+  if (!text) {
+    throw new Error('OpenClaw agent returned empty outputText');
+  }
+
+  let parsed: AgentResult;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    const m = String(text).match(/```(?:json)?\s*([\s\S]*?)```/);
+    if (!m) throw new Error('Failed to parse agent JSON payload');
+    parsed = JSON.parse(m[1].trim());
+  }
+
+  if (!parsed?.vision || !Array.isArray(parsed?.tasks) || !parsed?.stateSummary) {
+    throw new Error('Agent payload missing required fields');
+  }
+
+  return parsed;
+}
+
 export async function POST(req: Request) {
   try {
     const body = await req.json().catch(() => ({} as any));
@@ -282,14 +406,20 @@ export async function POST(req: Request) {
     const isFresh = existingState?.lastAnalyzedCommit === currentCommit;
 
     let stateSummary = existingState?.summary || '';
+    let visionResult: { vision: string; tasks: SuggestedTask[] };
+    const shouldRefresh = !existingState || forceRefresh || !isFresh;
 
-    if (!existingState || forceRefresh || !isFresh) {
-      const codeContext = await gatherCodeContext(appId);
-      stateSummary = await generateStateSummary(appId, codeContext);
-      await writeStateFile(appId, currentCommit, stateSummary);
+    if (shouldRefresh) {
+      // Stale/missing state: use OpenClaw agent for selective code reading + state write + vision/task generation
+      const agent = await runOpenClawAnalysisAgent(appId, currentCommit);
+      stateSummary = agent.stateSummary;
+      // Ensure state file exists even if agent skipped write due tool/runtime issue
+      await writeStateFile(appId, agent.lastAnalyzedCommit || currentCommit, stateSummary);
+      visionResult = { vision: agent.vision, tasks: agent.tasks };
+    } else {
+      // Fresh state: no heavy analysis, only derive a new vision/tasks set from saved state
+      visionResult = await generateVisionAndTasks(appId, stateSummary);
     }
-
-    const visionResult = await generateVisionAndTasks(appId, stateSummary);
 
     return NextResponse.json({
       ok: true,
@@ -297,10 +427,11 @@ export async function POST(req: Request) {
       tasks: visionResult.tasks,
       stateContent: stateSummary,
       hasState: true,
-      isFresh: existingState ? isFresh : true,
+      isFresh: shouldRefresh ? true : isFresh,
       stateCommit: currentCommit,
       currentCommit,
-      refreshed: !existingState || forceRefresh || !isFresh,
+      refreshed: shouldRefresh,
+      source: shouldRefresh ? 'openclaw-agent' : 'cached-state',
     });
   } catch (e: any) {
     console.error('Vision suggest error:', e);
