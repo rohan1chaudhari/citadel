@@ -443,6 +443,38 @@ export function GymTrackerClient({
     setReps('');
   };
 
+  const resumeLastSession = () => {
+    const lastGroup = groupedSessions[0];
+    if (!lastGroup || !lastGroup.entries.length) {
+      setError('No previous session found to resume');
+      return;
+    }
+
+    const sorted = [...lastGroup.entries].sort((a, b) => Date.parse(a.created_at) - Date.parse(b.created_at));
+    const lastEntry = sorted[sorted.length - 1];
+    const category = normalizeCategory(lastGroup.category) ?? startCategory;
+    const exercise = lastEntry.exercise;
+    const maxSetForExercise = sorted
+      .filter((e) => sameExercise(e.exercise, exercise))
+      .reduce((m, e) => Math.max(m, e.sets ?? 0), 0);
+
+    const sessionId = lastGroup.id.startsWith('single-') ? `sess_${Date.now()}` : lastGroup.id;
+
+    setSession({
+      id: sessionId,
+      category,
+      startedAt: sorted[0]?.created_at || new Date().toISOString(),
+      exercise,
+      nextSet: maxSetForExercise + 1
+    });
+    setExerciseName(exercise);
+    setWeight(lastEntry.weight == null ? '' : String(lastEntry.weight));
+    setReps(lastEntry.reps == null ? '' : String(lastEntry.reps));
+    setError(null);
+    setToast({ message: `Resumed ${titleCase(category)} session`, type: 'success' });
+    setTimeout(() => setToast(null), 2500);
+  };
+
   const resumeDraft = (draft: SessionDraft) => {
     setSession(draft.session);
     setExerciseName(draft.exerciseName || draft.session.exercise || '');
@@ -796,7 +828,10 @@ export function GymTrackerClient({
                 ))}
               </select>
             </div>
-            <Button type="button" onClick={startSession}>Start session</Button>
+            <div className="flex flex-wrap gap-2">
+              <Button type="button" onClick={resumeLastSession} disabled={groupedSessions.length === 0}>Resume last session</Button>
+              <Button type="button" variant="secondary" onClick={startSession}>Start session</Button>
+            </div>
           </div>
 
           {sessionDrafts.length > 0 ? (
