@@ -46,7 +46,27 @@ type SessionGroup = {
   entries: Entry[];
 };
 
-const SESSION_KEY = 'gym-tracker-active-session-v1';
+type SessionDraft = {
+  id: string;
+  endedAt: string;
+  reason: 'ended' | 'interrupted';
+  session: ActiveSession;
+  exerciseName: string;
+  weight: string;
+  reps: string;
+};
+
+type PersistedSessionState = {
+  session: ActiveSession;
+  exerciseName: string;
+  weight: string;
+  reps: string;
+};
+
+const SESSION_KEY = 'gym-tracker-active-session-v2';
+const LEGACY_SESSION_KEY = 'gym-tracker-active-session-v1';
+const SESSION_DRAFTS_KEY = 'gym-tracker-session-drafts-v1';
+const MAX_DRAFTS = 5;
 
 function today() {
   return new Date().toISOString().slice(0, 10);
@@ -161,6 +181,7 @@ export function GymTrackerClient({
   const suggestedCategory = useMemo(() => nextCategory(initialEntries[0]?.category), [initialEntries]);
   const [startCategory, setStartCategory] = useState<DayCategory>(suggestedCategory);
   const [session, setSession] = useState<ActiveSession | null>(null);
+  const [sessionDrafts, setSessionDrafts] = useState<SessionDraft[]>([]);
 
   const [exerciseName, setExerciseName] = useState('');
   const [weight, setWeight] = useState('');
@@ -202,9 +223,29 @@ export function GymTrackerClient({
   useEffect(() => {
     try {
       const raw = localStorage.getItem(SESSION_KEY);
-      if (!raw) return;
-      const parsed = JSON.parse(raw) as ActiveSession;
-      if (parsed?.id && parsed?.category && parsed?.startedAt) setSession(parsed);
+      if (raw) {
+        const parsed = JSON.parse(raw) as PersistedSessionState;
+        if (parsed?.session?.id && parsed?.session?.category && parsed?.session?.startedAt) {
+          setSession(parsed.session);
+          setExerciseName(parsed.exerciseName || '');
+          setWeight(parsed.weight || '');
+          setReps(parsed.reps || '');
+        }
+      } else {
+        const legacyRaw = localStorage.getItem(LEGACY_SESSION_KEY);
+        if (legacyRaw) {
+          const parsedLegacy = JSON.parse(legacyRaw) as ActiveSession;
+          if (parsedLegacy?.id && parsedLegacy?.category && parsedLegacy?.startedAt) setSession(parsedLegacy);
+          localStorage.removeItem(LEGACY_SESSION_KEY);
+        }
+      }
+    } catch {}
+
+    try {
+      const rawDrafts = localStorage.getItem(SESSION_DRAFTS_KEY);
+      if (!rawDrafts) return;
+      const parsedDrafts = JSON.parse(rawDrafts) as SessionDraft[];
+      if (Array.isArray(parsedDrafts)) setSessionDrafts(parsedDrafts.slice(0, MAX_DRAFTS));
     } catch {}
   }, []);
 
@@ -213,8 +254,19 @@ export function GymTrackerClient({
       localStorage.removeItem(SESSION_KEY);
       return;
     }
-    localStorage.setItem(SESSION_KEY, JSON.stringify(session));
-  }, [session]);
+    const payload: PersistedSessionState = { session, exerciseName, weight, reps };
+    localStorage.setItem(SESSION_KEY, JSON.stringify(payload));
+  }, [session, exerciseName, weight, reps]);
+
+  useEffect(() => {
+    try {
+      if (!sessionDrafts.length) {
+        localStorage.removeItem(SESSION_DRAFTS_KEY);
+        return;
+      }
+      localStorage.setItem(SESSION_DRAFTS_KEY, JSON.stringify(sessionDrafts.slice(0, MAX_DRAFTS)));
+    } catch {}
+  }, [sessionDrafts]);
 
   const sessionEntries = useMemo(() => {
     if (!session?.id) return [] as Entry[];
@@ -366,6 +418,21 @@ export function GymTrackerClient({
   const activeDaysPerWeek = Array.from(new Set(analyticsEntries.map((e) => entryDay(e)))).length / Math.max(1, daysInRange / 7);
   const activeDays = Array.from(new Set(analyticsEntries.map((e) => entryDay(e)))).sort();
 
+  const archiveSessionDraft = (reason: 'ended' | 'interrupted') => {
+    if (!session) return;
+    const draft: SessionDraft = {
+      id: `draft_${Date.now()}_${session.id}`,
+      endedAt: new Date().toISOString(),
+      reason,
+      session,
+      exerciseName,
+      weight,
+      reps
+    };
+
+    setSessionDrafts((prev) => [draft, ...prev.filter((d) => d.session.id !== session.id)].slice(0, MAX_DRAFTS));
+  };
+
   const startSession = () => {
     setError(null);
     const id = `sess_${Date.now()}`;
@@ -376,7 +443,23 @@ export function GymTrackerClient({
     setReps('');
   };
 
+  const resumeDraft = (draft: SessionDraft) => {
+    setSession(draft.session);
+    setExerciseName(draft.exerciseName || draft.session.exercise || '');
+    setWeight(draft.weight || '');
+    setReps(draft.reps || '');
+    setSessionDrafts((prev) => prev.filter((d) => d.id !== draft.id));
+    setError(null);
+    setToast({ message: 'Session resumed', type: 'success' });
+    setTimeout(() => setToast(null), 2500);
+  };
+
+  const discardDraft = (draftId: string) => {
+    setSessionDrafts((prev) => prev.filter((d) => d.id !== draftId));
+  };
+
   const endSession = () => {
+    archiveSessionDraft('ended');
     setSession(null);
     setStartCategory(nextCategory(entries[0]?.category));
     setExerciseName('');
@@ -648,13 +731,35 @@ export function GymTrackerClient({
   }, [historyPage, totalHistoryPages]);
 
   useEffect(() => {
+    const handleBeforeUnload = () => {
+      if (!session) return;
+      const draft: SessionDraft = {
+        id: `draft_${Date.now()}_${session.id}`,
+        endedAt: new Date().toISOString(),
+        reason: 'interrupted',
+        session,
+        exerciseName,
+        weight,
+        reps
+      };
+      try {
+        const raw = localStorage.getItem(SESSION_DRAFTS_KEY);
+        const prev = raw ? (JSON.parse(raw) as SessionDraft[]) : [];
+        const next = [draft, ...prev.filter((d) => d.session.id !== session.id)].slice(0, MAX_DRAFTS);
+        localStorage.setItem(SESSION_DRAFTS_KEY, JSON.stringify(next));
+      } catch {}
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
     return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
       try {
         if (mediaRef.current?.state === 'recording') mediaRef.current.stop();
       } catch {}
       streamRef.current?.getTracks().forEach((t) => t.stop());
     };
-  }, []);
+  }, [session, exerciseName, weight, reps]);
 
   return (
     <div className="grid gap-6">
@@ -693,6 +798,24 @@ export function GymTrackerClient({
             </div>
             <Button type="button" onClick={startSession}>Start session</Button>
           </div>
+
+          {sessionDrafts.length > 0 ? (
+            <div className="mt-4 grid gap-2">
+              <div className="text-xs font-medium text-zinc-500">Recover a recent session</div>
+              {sessionDrafts.map((draft) => (
+                <div key={draft.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm">
+                  <div className="text-zinc-700">
+                    {titleCase(draft.session.category)} · started {formatDateTime(draft.session.startedAt)}
+                    {draft.exerciseName ? ` · ${draft.exerciseName}` : ''}
+                  </div>
+                  <div className="flex gap-2">
+                    <Button type="button" variant="secondary" onClick={() => resumeDraft(draft)}>Resume</Button>
+                    <Button type="button" variant="danger" onClick={() => discardDraft(draft.id)}>Discard</Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : null}
         </Card>
       ) : (
         <Card>
