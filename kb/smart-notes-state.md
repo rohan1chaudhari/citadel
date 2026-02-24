@@ -1,44 +1,46 @@
 ---
 lastAnalyzedCommit: b1e0423295843b1f1d2902e21c9ba6b661635882
-lastAnalyzedAt: 2026-02-24T08:52:56+01:00
+lastAnalyzedAt: 2026-02-24T09:09:58+01:00
 ---
 
 ## Summary
-Smart Notes is a server-rendered Next.js app with a rich-text editor and SQLite-backed note storage scoped under app id `smart-notes`. It supports standard note CRUD with autosave, pinning, soft-delete trash flows, plus AI-assisted photo-to-note and voice-to-note creation.
+Smart Notes is a Next.js App Router notes app backed by app-scoped SQLite (`smart-notes`) with rich-text editing, soft-delete trash, and AI-assisted note creation from photo and voice capture flows.
 
 ## Features (IMPLEMENTED)
-- Notes list page with latest 50 active notes, ordered by pinned then last updated/created.
-- Rich note editor page (`/apps/smart-notes/[id]`) with:
-  - Debounced autosave (500ms) via `PATCH /api/apps/smart-notes/notes/[id]`
-  - Manual save shortcut (`Cmd/Ctrl+S`)
-  - Pin/unpin toggle
-  - Soft delete with confirmation modal
-  - Error/status indicators (Saving/Saved/Error/Unsaved)
-- New note flow (`/apps/smart-notes/new`) that reuses a recent blank note (<5 min) before creating another.
-- Empty-note cleanup on editor unmount (auto-soft-delete when title/body both empty).
-- Trash UI (`/apps/smart-notes/trash`) with restore and permanent delete actions.
-- Photo note capture button:
-  - Upload image
-  - Persist raw image to app storage
-  - OCR/structuring via OpenAI chat completions (`gpt-5.2`)
-  - Auto-create note from extracted markdown and redirect to editor
-- Voice note capture button:
-  - In-browser recording via MediaRecorder
-  - Persist raw audio to app storage
-  - Transcription via ElevenLabs STT (`scribe_v1`)
-  - Optional markdown/title structuring via OpenAI Responses (`gpt-4o-mini`) with fallback formatting
-  - Auto-create note and redirect to editor
-- JSON APIs for listing/searching notes and trash retrieval.
-- Audit events emitted for create/update/delete/restore/purge/photo/voice actions.
+- Main notes page lists up to 50 active notes (`deleted_at IS NULL`), ordered by pinned first, then most recently updated/created.
+- Note cards show title, plain-text preview (HTML stripped), optional tags, and pinned badge.
+- New note route (`/apps/smart-notes/new`) reuses a recently-created blank note (last 5 minutes) before creating a new blank row.
+- Note editor (`/apps/smart-notes/[id]`) includes:
+  - TipTap rich-text body editing
+  - debounced autosave (~500ms)
+  - `Cmd/Ctrl+S` save shortcut
+  - pin/unpin toggle
+  - soft-delete flow with confirmation modal
+  - transient save-state indicator + error banner
+- Unmount cleanup soft-deletes notes that remain empty (no title and no body).
+- Trash UI lists deleted notes and supports restore + permanent delete actions.
+- Photo note flow:
+  - client image capture/upload
+  - raw image persisted to app storage (`photos/...`)
+  - OpenAI vision extraction/cleanup (`chat/completions`, model `gpt-5.2`)
+  - note auto-created and opened
+- Voice note flow:
+  - browser microphone recording (MediaRecorder)
+  - raw audio persisted to app storage (`voice/...`)
+  - ElevenLabs STT (`scribe_v1`, `language_code=en`)
+  - optional OpenAI restructuring to strict JSON (`responses`, `gpt-4o-mini`)
+  - note auto-created and opened
+- JSON API supports list/search/create/update/fetch/soft-delete/restore/trash retrieval plus photo/voice ingestion.
+- Audit logging is emitted for DB/storage/API events.
 
 ## Data Model
-`notes` table (auto-migrated in `ensureSmartNotesSchema`):
+Primary table: `notes` (created/migrated by `ensureSmartNotesSchema`)
 - `id INTEGER PRIMARY KEY AUTOINCREMENT`
 - `title TEXT`
-- `body TEXT` (stores rich-text HTML from TipTap for manual editing; AI pipelines may insert markdown/plain text)
-- `created_at TEXT NOT NULL` (ISO strings)
-- `updated_at TEXT` (added via migration)
-- `deleted_at TEXT` (soft-delete marker)
+- `body TEXT`
+- `created_at TEXT NOT NULL`
+- `updated_at TEXT`
+- `deleted_at TEXT`
 - `pinned INTEGER NOT NULL DEFAULT 0`
 - `tags TEXT`
 
@@ -48,51 +50,51 @@ Indexes:
 - `idx_notes_pinned(pinned)`
 
 ## UI Components
-- `apps/smart-notes/page.tsx`: main list, quick actions (Trash, Photo Note, Voice Note, New Note), HTML-stripped preview rendering.
-- `apps/smart-notes/[id]/page.tsx`: note loader + full-width editor layout.
-- `apps/smart-notes/[id]/EditorClient.tsx`: client editing logic, autosave lifecycle, pin/delete UX.
-- `components/TiptapEditor.tsx`: rich text toolbar (bold/italic/code/headings/lists/quote/code block/undo/redo), outputs HTML.
-- `apps/smart-notes/new/page.tsx`: blank note creation/reuse redirector.
-- `apps/smart-notes/trash/page.tsx`: deleted-note listing with restore/purge forms.
-- `PhotoCaptureButton.tsx` and `VoiceCaptureButton.tsx`: capture/upload UX and status toasts.
+- `apps/smart-notes/page.tsx`: notes list shell + quick actions.
+- `apps/smart-notes/new/page.tsx`: blank-note reuse/create redirect logic.
+- `apps/smart-notes/[id]/page.tsx`: note loader + editor page scaffold.
+- `apps/smart-notes/[id]/EditorClient.tsx`: autosave/pin/delete UX and note editing state.
+- `components/TiptapEditor.tsx`: toolbar-driven rich text editor (stores HTML output).
+- `apps/smart-notes/trash/page.tsx`: deleted notes management.
+- `apps/smart-notes/PhotoCaptureButton.tsx`: photo upload trigger + result toast.
+- `apps/smart-notes/VoiceCaptureButton.tsx`: record/stop/upload + result/error toast.
 
 ## API Routes
 - `GET/POST /api/apps/smart-notes/notes`
-  - GET supports optional `q` search over title/body/tags.
-  - POST creates note (JSON or form mode).
+  - GET: active notes list (+ `q` search across title/body/tags)
+  - POST: create note (JSON or form)
 - `GET/PATCH/DELETE /api/apps/smart-notes/notes/[id]`
-  - GET active note
-  - PATCH update fields or restore (`{ restore: true }`)
-  - DELETE soft-delete
-- `POST /api/apps/smart-notes/notes/[id]/restore` (form-based restore + redirect)
-- `POST /api/apps/smart-notes/notes/[id]/purge` (hard delete + redirect)
-- `POST /api/apps/smart-notes/notes/[id]/delete` (form-based soft delete + redirect)
-- `POST /api/apps/smart-notes/notes/[id]/update` (legacy form update route)
-- `GET /api/apps/smart-notes/trash` (JSON list of deleted notes)
-- `POST /api/apps/smart-notes/photo` (image upload, AI extraction, note creation)
-- `POST /api/apps/smart-notes/voice` (audio upload, STT + optional LLM structuring, note creation)
+  - GET: fetch one active note
+  - PATCH: update title/body/tags/pinned; supports `restore: true`
+  - DELETE: soft-delete (`deleted_at` set)
+- `POST /api/apps/smart-notes/notes/[id]/delete`: form soft-delete + redirect
+- `POST /api/apps/smart-notes/notes/[id]/restore`: form restore + redirect
+- `POST /api/apps/smart-notes/notes/[id]/purge`: hard delete + redirect
+- `POST /api/apps/smart-notes/notes/[id]/update`: legacy form update route
+- `GET /api/apps/smart-notes/trash`: list trashed notes JSON
+- `POST /api/apps/smart-notes/photo`: image -> structured markdown note
+- `POST /api/apps/smart-notes/voice`: audio -> transcript/structured note
 
 ## Technical Notes
-- Schema creation/migration is done lazily at runtime by pages/routes calling `ensureSmartNotesSchema()`.
-- Soft-delete is consistently used for normal deletion; purge is explicit and separate.
-- Title/tags lengths are bounded in APIs; body is unbounded text/HTML.
-- Mixed content format risk: editor saves HTML, while AI pipelines insert markdown/plain text into same `body` field.
-- `new/page.tsx` performs an unnecessary second `dbExec` call for `SELECT last_insert_rowid()` (works, but atypical).
-- `notes/[id]/update` route does not call schema ensure helper unlike most other routes.
-- Voice transcription is forced to English (`language_code: en`) in current implementation.
+- Runtime schema migration is widely used (`ensureSmartNotesSchema`), but `/notes/[id]/update` does not call it.
+- Storage is app-scoped and path-confined via `storageWriteBuffer` safeguards.
+- Soft delete is default; permanent deletion is explicit (`/purge`).
+- Content format is mixed today: editor writes HTML, AI ingest routes write markdown/plain text into the same `body` column.
+- API truncates `title` (200) and `tags` (400), but not `body`.
+- Voice route hardcodes English transcription unless server logic is changed.
 
 ## Enhancement Opportunities
-- Normalize note body representation (HTML vs markdown) with explicit `content_format` field or conversion layer.
-- Add optimistic concurrency/versioning to reduce overwrite risk during rapid edits/multi-tab usage.
-- Add note search/filter UI controls (currently search exists in API but not exposed in page UI).
-- Improve autosave robustness (flush save on unmount/page hide; cancel delete-on-unmount when navigation race occurs).
-- Add validation + size limits for audio uploads similar to image type checks.
-- Consolidate legacy form routes (`/update`, `/delete`) or clearly mark compatibility layer.
+- Unify content representation (HTML vs markdown) or add explicit `content_format` field.
+- Improve autosave reliability on tab close/background via flush-on-unload/visibility handling.
+- Add first-class search UI on notes page (backend support already exists).
+- Add file validation/limits (size, duration, mime edge-cases) for voice/photo uploads.
+- Decommission duplicate legacy form routes once no longer used.
+- Add optimistic concurrency/version checks to prevent multi-tab overwrites.
 
 ## New Feature Opportunities
-- Smart extraction metadata for AI-created notes (source type, original media path, confidence markers).
-- Tag chips + structured tags model with quick filtering and autocomplete.
-- Note linking/backlinks and lightweight graph view for connected thoughts.
-- Full-text index (SQLite FTS5) for faster, relevance-ranked search across large note sets.
-- Bulk trash actions and retention policy (auto-purge after N days with undo window).
-- Voice language auto-detection and configurable transcription language/profile.
+- Tag chips, tag normalization, and click-to-filter tag views.
+- Full-text search (FTS5) with ranked results and snippet highlighting.
+- Source metadata panel for AI-created notes (media path, processing model, captured timestamp).
+- Bulk trash actions and optional retention-based auto purge.
+- Multi-language voice note transcription selection/auto-detect.
+- Note linking/backlinks for connected knowledge navigation.
