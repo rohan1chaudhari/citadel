@@ -28,6 +28,17 @@ services:
     container_name: citadel-scrum-board-external
     environment:
       - PORT=4015
+      - CITADEL_HOST=http://host.docker.internal:3000
+    ports:
+      - "4015:4015"
+    restart: unless-stopped
+
+  scrum-board-external:
+    build:
+      context: ./external-apps/scrum-board-next
+    container_name: citadel-scrum-board-external
+    environment:
+      - PORT=4015
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - ELEVENLABS_API_KEY=${ELEVENLABS_API_KEY}
     ports:
