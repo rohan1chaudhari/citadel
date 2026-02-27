@@ -4,5 +4,8 @@
   "workspaces": [
     "host",
     "apps/*"
-  ]
+  ],
+  "scripts": {
+    "citadel-app": "node scripts/citadel-app.mjs"
+  }
 }
