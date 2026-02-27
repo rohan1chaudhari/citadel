@@ -196,6 +196,11 @@ export function listRegisteredApps(): AppManifest[] {
   });
 }
 
+export function getRegisteredApp(appId: string): AppManifest | null {
+  const hit = listRegisteredApps().find((a) => a.id === appId);
+  return hit ?? null;
+}
+
 export function registerApp(input: RegisterAppInput) {
   ensureInstalledAppsTable();
 
