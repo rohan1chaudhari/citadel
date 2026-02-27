@@ -40,6 +40,36 @@ Open: `http://localhost:3000/apps/my-app`
 - `scripts/` — utilities + `citadel-app` CLI
 - `data/` — runtime local data (gitignored)
 
+## 90-second demo flow
+```bash
+# terminal 1: run host
+cd host && npm run dev
+
+# terminal 2: scaffold + run an external app
+cd ..
+npm run citadel-app -- create "Demo Notes" --port 4022
+cd external-apps/demo-notes && npm install && npm start
+
+# terminal 3: register into Citadel
+cd /home/rohanchaudhari/personal/citadel
+npm run citadel-app -- install external-apps/demo-notes --url http://localhost:4022
+```
+Then open:
+- `http://localhost:3000/apps/demo-notes`
+
+## Architecture snapshot
+```text
+Browser
+  -> Citadel Host (3000)
+      - shell UI
+      - app registry (/api/apps)
+      - gateway proxy (/api/gateway/apps/:id/proxy/*)
+      - permission broker
+  -> External App (e.g. 4022)
+      - standalone UI/API
+      - app-owned DB/storage
+```
+
 ## Key docs
 - `ARCHITECTURE.md` — system design overview
 - `EXTRACTION_PLAYBOOK.md` — how to extract apps safely (DB included)
