@@ -83,7 +83,8 @@ app.get('/', (_req, res) => {
 <script>
 async function go(){
   const text=document.getElementById('in').value.trim();
-  const res=await fetch('translate',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({text})});
+  const base=window.location.pathname.replace(/\/+$/,'');
+  const res=await fetch(base + '/translate',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({text})});
   const data=await res.json();
   document.getElementById('out').textContent=data.translation||data.error||'Failed';
 }

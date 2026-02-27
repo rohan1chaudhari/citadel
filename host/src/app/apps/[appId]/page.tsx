@@ -12,7 +12,7 @@ export default async function AppPage({ params }: { params: Promise<{ appId: str
   const isExternal = app.source === 'registry' && Boolean(app.upstream_base_url);
 
   if (isExternal) {
-    redirect(`/api/gateway/apps/${app.id}/proxy/`);
+    redirect(`/api/gateway/apps/${app.id}/proxy`);
   }
 
   return (
