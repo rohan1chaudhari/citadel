@@ -1,0 +1,11 @@
+{
+  "id": "scrum-board",
+  "name": "Scrum Board",
+  "version": "0.1.0",
+  "entry": "/",
+  "health": "/api/apps/scrum-board/health",
+  "permissions": ["agent:run", "notifications"],
+  "events": "/api/apps/scrum-board/events",
+  "meta": "/api/apps/scrum-board/meta",
+  "agentCallback": "/api/apps/scrum-board/agent/callback"
+}

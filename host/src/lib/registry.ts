@@ -2,11 +2,16 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { repoRoot } from '@/lib/paths';
 import { dbExec, dbQuery } from '@/lib/db';
+import { validateCitadelAppContract, type AppPermission } from '@/lib/citadelAppContract';
 
 export type AppManifest = {
   id: string;
   name: string;
   version?: string;
+  entry?: string;
+  health?: string;
+  permissions?: AppPermission[];
+  source: 'citadel.app.json' | 'app.yaml';
 };
 
 function parseYamlScalar(line: string): string | null {
@@ -15,7 +20,7 @@ function parseYamlScalar(line: string): string | null {
   return line.slice(idx + 1).trim().replace(/^"|"$/g, '');
 }
 
-async function readManifest(manifestPath: string): Promise<AppManifest | null> {
+async function readYamlManifest(manifestPath: string): Promise<AppManifest | null> {
   const raw = await fs.readFile(manifestPath, 'utf8');
   const lines = raw.split(/\r?\n/);
   let id = '';
@@ -28,7 +33,41 @@ async function readManifest(manifestPath: string): Promise<AppManifest | null> {
     if (t.startsWith('version:')) version = parseYamlScalar(t) ?? version;
   }
   if (!id || !name) return null;
-  return { id, name, version: version || undefined };
+  return { id, name, version: version || undefined, source: 'app.yaml' };
+}
+
+async function readJsonManifest(manifestPath: string): Promise<AppManifest | null> {
+  const raw = await fs.readFile(manifestPath, 'utf8');
+  const parsed = JSON.parse(raw);
+  const validated = validateCitadelAppContract(parsed);
+  if (!validated.ok) return null;
+  const m = validated.value;
+  return {
+    id: m.id,
+    name: m.name,
+    version: m.version,
+    entry: m.entry,
+    health: m.health,
+    permissions: m.permissions,
+    source: 'citadel.app.json'
+  };
+}
+
+async function readManifest(appDir: string): Promise<AppManifest | null> {
+  const jsonPath = path.join(appDir, 'citadel.app.json');
+  try {
+    const m = await readJsonManifest(jsonPath);
+    if (m) return m;
+  } catch {
+    // fall back to legacy yaml format
+  }
+
+  const yamlPath = path.join(appDir, 'app.yaml');
+  try {
+    return await readYamlManifest(yamlPath);
+  } catch {
+    return null;
+  }
 }
 
 export async function listApps(includeHidden = false): Promise<AppManifest[]> {
@@ -38,13 +77,8 @@ export async function listApps(includeHidden = false): Promise<AppManifest[]> {
 
   for (const e of entries) {
     if (!e.isDirectory()) continue;
-    const manifestPath = path.join(appsDir, e.name, 'app.yaml');
-    try {
-      const m = await readManifest(manifestPath);
-      if (m) manifests.push(m);
-    } catch {
-      // ignore
-    }
+    const m = await readManifest(path.join(appsDir, e.name));
+    if (m) manifests.push(m);
   }
 
   manifests.sort((a, b) => a.id.localeCompare(b.id));
@@ -90,13 +124,8 @@ export async function listHiddenApps(): Promise<AppManifest[]> {
   const manifests: AppManifest[] = [];
 
   for (const id of hiddenIds) {
-    const manifestPath = path.join(appsDir, id, 'app.yaml');
-    try {
-      const m = await readManifest(manifestPath);
-      if (m) manifests.push(m);
-    } catch {
-      // ignore
-    }
+    const m = await readManifest(path.join(appsDir, id));
+    if (m) manifests.push(m);
   }
 
   return manifests;
