@@ -9,6 +9,27 @@ export default async function AppPage({ params }: { params: Promise<{ appId: str
   const app = apps.find((a) => a.id === appId);
   if (!app) return notFound();
 
+  const isExternal = app.source === 'registry' && Boolean(app.upstream_base_url);
+
+  if (isExternal) {
+    const proxyRoot = `/api/gateway/apps/${app.id}/proxy/`;
+    return (
+      <main style={{ display: 'grid', gap: 12 }}>
+        <div>
+          <h1 style={{ marginBottom: 6 }}>{app.name}</h1>
+          <p style={{ opacity: 0.7, margin: 0 }}>
+            External app via Citadel Gateway proxy · appId: {app.id}
+          </p>
+        </div>
+        <iframe
+          src={proxyRoot}
+          title={`${app.name} (${app.id})`}
+          style={{ width: '100%', minHeight: '80vh', border: '1px solid #2a2a2a', borderRadius: 8 }}
+        />
+      </main>
+    );
+  }
+
   return (
     <main>
       <h1>{app.name}</h1>
