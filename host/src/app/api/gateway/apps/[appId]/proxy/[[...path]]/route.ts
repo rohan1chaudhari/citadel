@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getRegisteredApp } from '@/lib/registry';
+import { getPermissionOverrides, isPermissionGranted } from '@/lib/permissionBroker';
+import type { AppPermission } from '@/lib/citadelAppContract';
 
 export const runtime = 'nodejs';
 
@@ -20,10 +22,37 @@ function copyHeaders(req: Request): Headers {
   return out;
 }
 
+function requiredPermissionForRequest(method: string, pathParts: string[]): AppPermission | null {
+  const path = `/${pathParts.join('/')}`.toLowerCase();
+  const m = method.toUpperCase();
+
+  // Heuristic capability mapping for external apps.
+  if (path.includes('transcribe') || path.includes('microphone') || path.includes('voice')) return 'microphone';
+  if (path.includes('camera') || path.includes('photo/capture')) return 'camera';
+  if (path.includes('gallery') || path.includes('photos')) return 'gallery';
+  if (path.includes('upload') || path.includes('files')) return 'filesystem';
+  if (path.includes('notify') || path.includes('notification')) return 'notifications';
+  if ((path.includes('agent') || path.includes('autopilot') || path.includes('trigger')) && m !== 'GET') return 'agent:run';
+
+  return null;
+}
+
 async function proxy(req: Request, appId: string, pathParts: string[]) {
   const app = getRegisteredApp(appId);
   if (!app || !app.upstream_base_url || app.enabled === false) {
     return NextResponse.json({ ok: false, error: 'app not registered or disabled' }, { status: 404 });
+  }
+
+  const requiredPermission = requiredPermissionForRequest(req.method, pathParts);
+  if (requiredPermission) {
+    const overrides = getPermissionOverrides(appId);
+    const allowed = isPermissionGranted(app.permissions, overrides, requiredPermission);
+    if (!allowed.allowed) {
+      return NextResponse.json(
+        { ok: false, error: 'permission denied', permission: requiredPermission, details: allowed.reason },
+        { status: 403 }
+      );
+    }
   }
 
   const url = new URL(req.url);

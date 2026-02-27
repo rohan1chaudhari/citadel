@@ -50,3 +50,24 @@ export function resolveEffectivePermissions(declared: AppPermission[], overrides
     granted: overrides[p] !== false,
   }));
 }
+
+export function isPermissionGranted(
+  declared: AppPermission[] | undefined,
+  overrides: Record<string, boolean>,
+  permission: AppPermission
+): { allowed: boolean; reason?: string } {
+  const d = declared ?? [];
+
+  // Legacy apps with no declared permissions are allowed for compatibility.
+  if (d.length === 0) return { allowed: true };
+
+  if (!d.includes(permission)) {
+    return { allowed: false, reason: `permission ${permission} not declared by app` };
+  }
+
+  if (overrides[permission] === false) {
+    return { allowed: false, reason: `permission ${permission} denied by policy` };
+  }
+
+  return { allowed: true };
+}

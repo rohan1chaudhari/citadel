@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import { triggerAutopilot } from '@/lib/triggerAutopilot';
+import { listApps } from '@/lib/registry';
+import { getPermissionOverrides, isPermissionGranted } from '@/lib/permissionBroker';
 
 export const runtime = 'nodejs';
 
@@ -10,6 +12,19 @@ export async function POST(req: Request) {
 
   if (!appId) {
     return NextResponse.json({ ok: false, error: 'appId required' }, { status: 400 });
+  }
+
+  const apps = await listApps(true);
+  const app = apps.find((a) => a.id === appId);
+  if (app) {
+    const overrides = getPermissionOverrides(appId);
+    const allowed = isPermissionGranted(app.permissions, overrides, 'agent:run');
+    if (!allowed.allowed) {
+      return NextResponse.json(
+        { ok: false, error: 'permission denied', permission: 'agent:run', details: allowed.reason },
+        { status: 403 }
+      );
+    }
   }
 
   const result = await triggerAutopilot(appId, appName || appId, true); // true = skip toggle check (manual trigger always works)
