@@ -1,11 +1,11 @@
 services:
   french-translator-external:
     build:
-      context: ./external-apps/french-translator-adapter
+      context: ./external-apps/french-translator-next
     container_name: citadel-french-translator-external
     environment:
       - PORT=4013
-      - CITADEL_HOST=http://host.docker.internal:3000
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
     ports:
       - "4013:4013"
     restart: unless-stopped

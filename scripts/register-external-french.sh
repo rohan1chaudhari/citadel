@@ -2,7 +2,7 @@
 set -euo pipefail
 
 CITADEL_HOST="${CITADEL_HOST:-http://localhost:3000}"
-APP_DIR="$(cd "$(dirname "$0")/../external-apps/french-translator-adapter" && pwd)"
+APP_DIR="$(cd "$(dirname "$0")/../external-apps/french-translator-next" && pwd)"
 MANIFEST_PATH="$APP_DIR/citadel.app.json"
 
 if [[ ! -f "$MANIFEST_PATH" ]]; then
