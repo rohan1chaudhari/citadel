@@ -1,9 +1,10 @@
-import { spawn } from 'child_process';
 import { audit } from '@/lib/audit';
 import { dbQuery, dbExec } from '@/lib/db';
 import { getSetting, acquireAgentLock, isAgentLocked, getActiveLock, createSession, updateSessionStatus } from '@/lib/scrumBoardSchema';
+import { OpenClawRuntime } from '@/lib/openclawRuntime';
 
 const APP_ID = 'scrum-board';
+const runtime = new OpenClawRuntime();
 
 /**
  * Poll an OpenClaw session and stream its messages to session_logs
@@ -24,28 +25,8 @@ async function streamSessionToLogs(
 
   while (Date.now() - startTime < maxWaitMs) {
     try {
-      // Query session history from OpenClaw
-      const result = await new Promise<{ ok: boolean; messages?: Array<{ role: string; content?: string; timestamp?: string }>; error?: string }>((resolve) => {
-        const child = spawn('openclaw', ['sessions', 'history', openclawSessionKey, '--json'], {
-          stdio: ['ignore', 'pipe', 'pipe'],
-        });
-        let stdout = '';
-        let stderr = '';
-        child.stdout?.on('data', (d) => (stdout += d));
-        child.stderr?.on('data', (d) => (stderr += d));
-        child.on('close', (code) => {
-          if (code !== 0) {
-            resolve({ ok: false, error: stderr || `exit ${code}` });
-            return;
-          }
-          try {
-            const data = JSON.parse(stdout);
-            resolve({ ok: true, messages: data.messages || [] });
-          } catch {
-            resolve({ ok: false, error: 'parse error' });
-          }
-        });
-      });
+      // Query session history from runtime
+      const result = await runtime.sessionHistory(openclawSessionKey);
 
       if (!result.ok || !result.messages) {
         await new Promise((r) => setTimeout(r, pollIntervalMs));
@@ -87,24 +68,10 @@ async function streamSessionToLogs(
       }
 
       // Also check if the cron job still exists (indicates completion)
-      const cronStatus = await new Promise<{ exists: boolean }>((resolve) => {
-        const child = spawn('openclaw', ['cron', 'list', '--json'], {
-          stdio: ['ignore', 'pipe', 'pipe'],
-        });
-        let stdout = '';
-        child.stdout?.on('data', (d) => (stdout += d));
-        child.on('close', () => {
-          try {
-            const jobs = JSON.parse(stdout);
-            const exists = Array.isArray(jobs) && jobs.some((j: { id?: string }) => j.id === cronJobId);
-            resolve({ exists });
-          } catch {
-            resolve({ exists: true }); // Assume exists on error
-          }
-        });
-      });
+      const cronStatus = await runtime.listCronJobs();
+      const exists = cronStatus.ok ? (cronStatus.ids ?? []).includes(cronJobId) : true;
 
-      if (!cronStatus.exists && messages.length > 0) {
+      if (!exists && messages.length > 0) {
         // Job completed, finalize
         updateSessionStatus(sessionId, 'completed');
         // eslint-disable-next-line no-console
@@ -294,54 +261,31 @@ Execution contract:
     // Schedule to run immediately
     const runAt = new Date(Date.now() + 1000).toISOString();
 
-    // Call openclaw cron add with proper flags (session persists for history)
-    const args = [
-      'cron', 'add',
-      '--name', `autopilot-${targetAppId}-${cronJobId}`,
-      '--session', 'isolated',
-      '--at', runAt,
-      '--message', message,
-      '--thinking', 'low',
-      '--timeout-seconds', '600',
-      '--json',
-    ];
-
-    // Execute and capture output
-    const child = spawn('openclaw', args, {
-      stdio: ['ignore', 'pipe', 'pipe'],
+    const result = await runtime.scheduleOneShot({
+      name: `autopilot-${targetAppId}-${cronJobId}`,
+      runAt,
+      message,
+      thinking: 'low',
+      timeoutSeconds: 600,
     });
 
-    let stdout = '';
-    let stderr = '';
-    child.stdout?.on('data', (d) => (stdout += d));
-    child.stderr?.on('data', (d) => (stderr += d));
-
-    const exitCode = await new Promise<number>((resolve) => child.on('close', resolve));
-
-    // Filter out config warnings from stderr
-    const cleanStderr = stderr
-      .split('\n')
-      .filter((l) => !l.includes('Config was last written'))
-      .join('\n')
-      .trim();
-
-    if (exitCode !== 0) {
-      throw new Error(cleanStderr || `openclaw exited ${exitCode}`);
+    if (!result.ok) {
+      throw new Error(result.error || 'failed to schedule runtime job');
     }
 
-    const result = JSON.parse(stdout || '{}');
-    const openclawSessionKey = result.sessionKey || result.session || result.id;
+    const openclawSessionKey = result.sessionKey;
 
     audit(APP_ID, 'scrum.trigger_agent', {
       appId: targetAppId,
       appName: targetAppName,
-      cronJobId: result.id || cronJobId,
+      cronJobId: result.jobId || cronJobId,
       openclawSessionKey,
+      runtime: runtime.id(),
     });
 
     // Start streaming session logs in the background (don't await, let it run)
     if (openclawSessionKey) {
-      streamSessionToLogs(sessionId, result.id || cronJobId, openclawSessionKey).catch((err) => {
+      streamSessionToLogs(sessionId, result.jobId || cronJobId, openclawSessionKey).catch((err) => {
         // eslint-disable-next-line no-console
         console.error('[SessionStream] Background stream failed:', err);
       });
@@ -350,7 +294,7 @@ Execution contract:
     return {
       ok: true,
       message: `Agent scheduled (${eligibleCount} eligible task${eligibleCount === 1 ? '' : 's'})`,
-      cronJobId: result.id || cronJobId,
+      cronJobId: result.jobId || cronJobId,
       sessionId,
       runAt,
       eligibleCount,
