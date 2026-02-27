@@ -8,3 +8,14 @@ services:
     ports:
       - "4011:4011"
     restart: unless-stopped
+
+  gym-tracker-external:
+    build:
+      context: ./external-apps/gym-tracker-adapter
+    container_name: citadel-gym-tracker-external
+    environment:
+      - PORT=4012
+      - CITADEL_HOST=http://host.docker.internal:3000
+    ports:
+      - "4012:4012"
+    restart: unless-stopped
