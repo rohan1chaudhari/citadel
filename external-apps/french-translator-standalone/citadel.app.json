@@ -1,0 +1,8 @@
+{
+  "id": "french-translator-external",
+  "name": "French Translator (External)",
+  "version": "0.1.0",
+  "entry": "/",
+  "health": "/healthz",
+  "permissions": ["microphone", "notifications"]
+}

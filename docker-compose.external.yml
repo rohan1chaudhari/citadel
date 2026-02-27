@@ -1,0 +1,10 @@
+services:
+  french-translator-external:
+    build:
+      context: ./external-apps/french-translator-standalone
+    container_name: citadel-french-translator-external
+    environment:
+      - PORT=4011
+    ports:
+      - "4011:4011"
+    restart: unless-stopped
