@@ -12,11 +12,12 @@ services:
 
   gym-tracker-external:
     build:
-      context: ./external-apps/gym-tracker-adapter
+      context: ./external-apps/gym-tracker-next
     container_name: citadel-gym-tracker-external
     environment:
-      - PORT=4012
-      - CITADEL_HOST=http://host.docker.internal:3000
+      - PORT=4014
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - ELEVENLABS_API_KEY=${ELEVENLABS_API_KEY}
     ports:
-      - "4012:4012"
+      - "4014:4014"
     restart: unless-stopped
