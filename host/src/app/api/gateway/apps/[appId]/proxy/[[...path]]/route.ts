@@ -91,6 +91,10 @@ async function proxy(req: Request, appId: string, pathParts: string[]) {
       });
     }
 
+    if (upstreamRes.status === 204 || upstreamRes.status === 304) {
+      return new NextResponse(null, { status: upstreamRes.status, headers: respHeaders });
+    }
+
     const body = await upstreamRes.arrayBuffer();
     return new NextResponse(body, { status: upstreamRes.status, headers: respHeaders });
   } catch (e: any) {
