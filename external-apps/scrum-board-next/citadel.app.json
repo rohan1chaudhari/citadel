@@ -1,0 +1,8 @@
+{
+  "id": "scrum-board-external",
+  "name": "Scrum Board (External)",
+  "version": "1.0.0",
+  "entry": "/",
+  "health": "/api/healthz",
+  "permissions": ["agent:run", "notifications"]
+}
