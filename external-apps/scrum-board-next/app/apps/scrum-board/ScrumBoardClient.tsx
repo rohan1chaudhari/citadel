@@ -67,7 +67,7 @@ type InboxTask = {
   questionCount: number;
 };
 
-const STATUSES: Task['status'][] = ['backlog', 'todo', 'in_progress', 'validating', 'waiting', 'done', 'failed'];
+const STATUSES: Task['status'][] = ['backlog', 'todo', 'in_progress', 'done', 'validating', 'waiting', 'failed'];
 const PRIORITIES: Task['priority'][] = ['high', 'medium', 'low'];
 
 const STATUS_COLORS: Record<Task['status'], string> = {
