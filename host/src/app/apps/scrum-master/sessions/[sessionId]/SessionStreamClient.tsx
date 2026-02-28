@@ -3,6 +3,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { Card, Shell } from '@/components/Shell';
 
+// Configurable scrum board app ID - defaults to 'scrum-board' but can be overridden
+const SCRUM_BOARD_APP_ID = process.env.NEXT_PUBLIC_SCRUM_BOARD_APP_ID || 'scrum-board';
+
 interface SessionLog {
   id: number;
   chunk: string;
@@ -48,7 +51,7 @@ export default function SessionStreamPage({ params }: { params: Promise<{ sessio
   useEffect(() => {
     if (!sessionId) return;
     
-    fetch(`/api/apps/scrum-board/sessions/${encodeURIComponent(sessionId)}`)
+    fetch(`/api/apps/${SCRUM_BOARD_APP_ID}/sessions/${encodeURIComponent(sessionId)}`)
       .then(r => r.json())
       .then(data => {
         if (data.ok) {
@@ -71,7 +74,7 @@ export default function SessionStreamPage({ params }: { params: Promise<{ sessio
   useEffect(() => {
     if (!sessionId || isEnded) return;
 
-    const es = new EventSource(`/api/apps/scrum-board/sessions/${encodeURIComponent(sessionId)}/stream`);
+    const es = new EventSource(`/api/apps/${SCRUM_BOARD_APP_ID}/sessions/${encodeURIComponent(sessionId)}/stream`);
     eventSourceRef.current = es;
 
     es.addEventListener('connected', (e) => {
@@ -313,7 +316,7 @@ export default function SessionStreamPage({ params }: { params: Promise<{ sessio
           
           <div className="mt-4">
             <a
-              href={`/apps/scrum-board?app=${encodeURIComponent(task.id.toString())}`}
+              href={`/apps/${SCRUM_BOARD_APP_ID}?app=${encodeURIComponent(task.id.toString())}`}
               className="inline-flex items-center gap-1.5 rounded border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50 transition"
             >
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

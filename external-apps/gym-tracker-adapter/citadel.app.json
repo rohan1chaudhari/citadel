@@ -1,8 +1,0 @@
-{
-  "id": "gym-tracker-external",
-  "name": "Gym Tracker (External Adapter)",
-  "version": "0.1.0",
-  "entry": "/",
-  "health": "/healthz",
-  "permissions": ["microphone"]
-}

@@ -1,8 +1,8 @@
 services:
-  french-translator-external:
+  french-translator:
     build:
       context: ./external-apps/french-translator-next
-    container_name: citadel-french-translator-external
+    container_name: citadel-french-translator
     environment:
       - PORT=4013
       - OPENAI_API_KEY=${OPENAI_API_KEY}
@@ -10,10 +10,10 @@ services:
       - "4013:4013"
     restart: unless-stopped
 
-  gym-tracker-external:
+  gym-tracker:
     build:
       context: ./external-apps/gym-tracker-next
-    container_name: citadel-gym-tracker-external
+    container_name: citadel-gym-tracker
     environment:
       - PORT=4014
       - OPENAI_API_KEY=${OPENAI_API_KEY}
@@ -22,36 +22,26 @@ services:
       - "4014:4014"
     restart: unless-stopped
 
-  scrum-board-external:
+  scrum-board:
     build:
       context: ./external-apps/scrum-board-next
-    container_name: citadel-scrum-board-external
+    container_name: citadel-scrum-board
     environment:
       - PORT=4015
       - CITADEL_HOST=http://host.docker.internal:3000
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - ELEVENLABS_API_KEY=${ELEVENLABS_API_KEY}
     ports:
       - "4015:4015"
     restart: unless-stopped
 
-  smart-notes-external:
+  smart-notes:
     build:
       context: ./external-apps/smart-notes-next
-    container_name: citadel-smart-notes-external
+    container_name: citadel-smart-notes
     environment:
       - PORT=4016
       - OPENAI_API_KEY=${OPENAI_API_KEY}
     ports:
       - "4016:4016"
-    restart: unless-stopped
-
-  scrum-board-external:
-    build:
-      context: ./external-apps/scrum-board-next
-    container_name: citadel-scrum-board-external
-    environment:
-      - PORT=4015
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - ELEVENLABS_API_KEY=${ELEVENLABS_API_KEY}
-    ports:
-      - "4015:4015"
     restart: unless-stopped
