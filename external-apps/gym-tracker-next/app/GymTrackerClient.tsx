@@ -319,12 +319,14 @@ export function GymTrackerClient({
     const groups = Array.from(map.entries()).map(([id, list]) => {
       const sorted = [...list].sort((a, b) => Date.parse(a.created_at) - Date.parse(b.created_at));
       const first = sorted[0];
-      const sessionDate = first.date || first.created_at.slice(0, 10);
+      const last = sorted[sorted.length - 1];
+      const sessionDate = (last.date || last.created_at.slice(0, 10));
       return {
         id,
         label: `${titleCase(first.category)} ${sessionDate}`,
         category: first.category,
-        startedAt: first.created_at,
+        // Use latest entry time so resumed sessions move to top in History.
+        startedAt: last.created_at,
         entries: sorted
       };
     });
