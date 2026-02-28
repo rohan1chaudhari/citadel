@@ -106,7 +106,14 @@ function formatRelativeTime(dateStr: string | null): string {
 
 function sessionLogUrl(sessionId: string) {
   const sid = String(sessionId || '').trim();
-  return `/apps/scrum-master/sessions/${encodeURIComponent(sid)}`;
+  if (!sid) return '#';
+  if (typeof window !== 'undefined') {
+    const m = window.location.pathname.match(/^(.*\/proxy)(?:\/.*)?$/);
+    if (m?.[1]) {
+      return `${m[1]}/api/scrum-board/sessions/${encodeURIComponent(sid)}`;
+    }
+  }
+  return `/api/scrum-board/sessions/${encodeURIComponent(sid)}`;
 }
 
 function boardLabel(id: string) {
@@ -148,7 +155,10 @@ export default function ScrumBoardClient({ appIds, externalIds = [] }: { appIds:
   
   // Initialize appId from URL or default to first app
   const urlAppIdRaw = searchParams?.get('app');
-  const urlAppId = urlAppIdRaw?.endsWith('-external') ? urlAppIdRaw.replace(/-external$/, '') : urlAppIdRaw;
+  // Check if the raw URL app ID is a valid external project first
+  const isExternalUrlApp = urlAppIdRaw && externalIds.includes(urlAppIdRaw);
+  // For external projects, use the raw ID; for regular apps, strip -external suffix if present
+  const urlAppId = isExternalUrlApp ? urlAppIdRaw : (urlAppIdRaw?.endsWith('-external') ? urlAppIdRaw.replace(/-external$/, '') : urlAppIdRaw);
   const initialAppId = urlAppId && allBoardIds.includes(urlAppId) ? urlAppId : (allBoardIds.includes('citadel') ? 'citadel' : (allBoardIds[0] ?? 'citadel'));
   
   const [appId, setAppId] = useState(initialAppId);
