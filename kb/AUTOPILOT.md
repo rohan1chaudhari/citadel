@@ -26,12 +26,15 @@ Task statuses: `todo` → `in_progress` → `done`/`needs_input`/`blocked`/`fail
 
 ### Available Endpoints
 
+Use Scrum Board external proxy base:
+- `SB_BASE=http://localhost:3000/api/gateway/apps/scrum-board-external/proxy/api/scrum-board`
+
 | Operation | Endpoint | Method |
 |-----------|----------|--------|
-| List tasks | `/api/apps/scrum-board/tasks?app={appId}` | GET |
-| Update task | `/api/apps/scrum-board/tasks` | PATCH |
-| Add comment | `/api/apps/scrum-board/comments` | POST |
-| Check lock | `/api/apps/scrum-board/lock` | GET |
+| List tasks | `${SB_BASE}/tasks?app={appId}` | GET |
+| Update task | `${SB_BASE}/tasks` | PATCH |
+| Add comment | `${SB_BASE}/comments` | POST |
+| Check lock | `${SB_BASE}/lock` | GET |
 
 ### Helper Library
 
@@ -85,10 +88,11 @@ validation: npm run build — passed
 
 ```bash
 # Fetch tasks
-curl -s "http://localhost:3000/api/apps/scrum-board/tasks?app=smart-notes"
+SB_BASE="http://localhost:3000/api/gateway/apps/scrum-board-external/proxy/api/scrum-board"
+curl -s "$SB_BASE/tasks?app=smart-notes"
 
 # Claim task (set in_progress)
-curl -s -X PATCH http://localhost:3000/api/apps/scrum-board/tasks \
+curl -s -X PATCH "$SB_BASE/tasks" \
   -H "Content-Type: application/json" \
   -d '{
     "id": 123,
@@ -99,12 +103,12 @@ curl -s -X PATCH http://localhost:3000/api/apps/scrum-board/tasks \
   }'
 
 # Add comment
-curl -s -X POST http://localhost:3000/api/apps/scrum-board/comments \
+curl -s -X POST "$SB_BASE/comments" \
   -H "Content-Type: application/json" \
   -d '{"taskId": 123, "body": "[AUTOPILOT_DONE] ..."}'
 
 # Mark done (releases lock automatically)
-curl -s -X PATCH http://localhost:3000/api/apps/scrum-board/tasks \
+curl -s -X PATCH "$SB_BASE/tasks" \
   -H "Content-Type: application/json" \
   -d '{"id": 123, "status": "done", "comment": "[AUTOPILOT_DONE] ..."}'
 ```
