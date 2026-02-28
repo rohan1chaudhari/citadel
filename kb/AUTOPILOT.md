@@ -134,7 +134,9 @@ From Scrum Board for target app only:
    - If external app changed: `npm run build` in that external app folder
    - If UI/route behavior changed and browser automation is available: run Playwright/browser smoke for the changed flow
    - If browser automation is not available: run equivalent API/curl smoke checks and record results in comment
-4. If `app_id` is `citadel`, restart host + all external app servers after changes.
+4. Restart servers after every completed task (required) to avoid stale Next.js cache:
+   - host (`:3000`)
+   - all external app servers (`:4013`, `:4014`, `:4015`, `:4016`)
 5. Mark result
 
 ## Completion
