@@ -1,4 +1,4 @@
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import { listApps } from '@/lib/registry';
 
 export const runtime = 'nodejs';
@@ -13,8 +13,26 @@ export default async function AppPage({
   const { appId } = await params;
   const qs = (await searchParams) ?? {};
 
+  const aliasMap: Record<string, string> = {
+    'french-translator-external': 'french-translator',
+    'gym-tracker-external': 'gym-tracker',
+    'smart-notes-external': 'smart-notes',
+    'scrum-board-external': 'scrum-board',
+  };
+  const canonicalId = aliasMap[appId] ?? appId;
+
+  if (canonicalId !== appId) {
+    const pass = new URLSearchParams();
+    for (const [k, v] of Object.entries(qs)) {
+      if (typeof v === 'string') pass.set(k, v);
+      else if (Array.isArray(v)) for (const item of v) if (item != null) pass.append(k, item);
+    }
+    const suffix = pass.toString();
+    redirect(`/apps/${canonicalId}${suffix ? `?${suffix}` : ''}`);
+  }
+
   const apps = await listApps();
-  const app = apps.find((a) => a.id === appId);
+  const app = apps.find((a) => a.id === canonicalId);
   if (!app) return notFound();
 
   const isExternal = app.source === 'registry' && Boolean(app.upstream_base_url);

@@ -26,8 +26,8 @@ Task statuses: `todo` → `in_progress` → `done`/`needs_input`/`blocked`/`fail
 
 ### Available Endpoints
 
-Use Scrum Board external proxy base:
-- `SB_BASE=http://localhost:3000/api/gateway/apps/scrum-board-external/proxy/api/scrum-board`
+Use Scrum Board proxy base:
+- `SB_BASE=http://localhost:3000/api/gateway/apps/scrum-board/proxy/api/scrum-board`
 
 | Operation | Endpoint | Method |
 |-----------|----------|--------|
@@ -88,7 +88,7 @@ validation: npm run build — passed
 
 ```bash
 # Fetch tasks
-SB_BASE="http://localhost:3000/api/gateway/apps/scrum-board-external/proxy/api/scrum-board"
+SB_BASE="http://localhost:3000/api/gateway/apps/scrum-board/proxy/api/scrum-board"
 curl -s "$SB_BASE/tasks?app=smart-notes"
 
 # Claim task (set in_progress)
