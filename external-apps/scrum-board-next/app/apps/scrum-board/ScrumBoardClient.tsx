@@ -110,10 +110,10 @@ function sessionLogUrl(sessionId: string) {
   if (typeof window !== 'undefined') {
     const m = window.location.pathname.match(/^(.*\/proxy)(?:\/.*)?$/);
     if (m?.[1]) {
-      return `${m[1]}/api/scrum-board/sessions/${encodeURIComponent(sid)}`;
+      return `${m[1]}/apps/scrum-board/sessions/${encodeURIComponent(sid)}`;
     }
   }
-  return `/api/scrum-board/sessions/${encodeURIComponent(sid)}`;
+  return `/apps/scrum-board/sessions/${encodeURIComponent(sid)}`;
 }
 
 function boardLabel(id: string) {
