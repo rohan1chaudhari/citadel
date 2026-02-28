@@ -3,16 +3,30 @@ import { listApps } from '@/lib/registry';
 
 export const runtime = 'nodejs';
 
-export default async function AppPage({
+// Legacy internal apps that have been removed without external equivalents
+const removedApps: Record<string, { redirectTo: string; message?: string }> = {
+  'friend-tracker': { redirectTo: '/', message: 'Friend Tracker has been removed' },
+  'promo-kit': { redirectTo: '/', message: 'Promo Kit has been removed' },
+  'soumil-mood-tracker': { redirectTo: '/', message: 'Mood Tracker has been removed' },
+};
+
+export default async function AppCatchAllPage({
   params,
   searchParams,
 }: {
-  params: Promise<{ appId: string }>;
+  params: Promise<{ appId: string; path?: string[] }>;
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const { appId } = await params;
+  const { appId, path = [] } = await params;
   const qs = (await searchParams) ?? {};
 
+  // Check if this is a removed legacy app
+  if (removedApps[appId]) {
+    const { redirectTo } = removedApps[appId];
+    redirect(`${redirectTo}?legacyApp=${appId}`);
+  }
+
+  // Handle legacy *-external aliases
   const aliasMap: Record<string, string> = {
     'french-translator-external': 'french-translator',
     'gym-tracker-external': 'gym-tracker',
@@ -21,14 +35,16 @@ export default async function AppPage({
   };
   const canonicalId = aliasMap[appId] ?? appId;
 
+  // Redirect to canonical ID if needed (preserving path and query)
   if (canonicalId !== appId) {
     const pass = new URLSearchParams();
     for (const [k, v] of Object.entries(qs)) {
       if (typeof v === 'string') pass.set(k, v);
       else if (Array.isArray(v)) for (const item of v) if (item != null) pass.append(k, item);
     }
+    const subPath = path.length > 0 ? `/${path.join('/')}` : '';
     const suffix = pass.toString();
-    redirect(`/apps/${canonicalId}${suffix ? `?${suffix}` : ''}`);
+    redirect(`/apps/${canonicalId}${subPath}${suffix ? `?${suffix}` : ''}`);
   }
 
   const apps = await listApps();
@@ -38,7 +54,9 @@ export default async function AppPage({
   const isExternal = app.source === 'registry' && Boolean(app.upstream_base_url);
 
   if (isExternal) {
-    const proxyRoot = `/api/gateway/apps/${app.id}/proxy`;
+    // Build proxy URL with sub-path
+    const subPath = path.length > 0 ? `/${path.join('/')}` : '';
+    const proxyRoot = `/api/gateway/apps/${app.id}/proxy${subPath}`;
 
     const passthrough = new URLSearchParams();
     for (const [k, v] of Object.entries(qs)) {
@@ -72,6 +90,12 @@ export default async function AppPage({
     );
   }
 
+  // For internal apps with sub-paths, redirect to main page
+  if (path.length > 0) {
+    redirect(`/apps/${canonicalId}`);
+  }
+
+  // Internal app root page
   return (
     <main>
       <h1>{app.name}</h1>

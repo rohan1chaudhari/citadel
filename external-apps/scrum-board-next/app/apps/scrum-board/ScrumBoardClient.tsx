@@ -236,6 +236,9 @@ export default function ScrumBoardClient({ appIds, externalIds = [] }: { appIds:
   // Mobile status filter
   const [mobileFilter, setMobileFilter] = useState<Task['status'] | 'all'>('all');
 
+  // Active/Done quick filter
+  const [quickFilter, setQuickFilter] = useState<'all' | 'active' | 'done'>('all');
+
   // Agent lock state
   const [agentLock, setAgentLock] = useState<{ locked: boolean; taskId?: number; sessionId?: string } | null>(null);
 
@@ -745,8 +748,16 @@ export default function ScrumBoardClient({ appIds, externalIds = [] }: { appIds:
   const visibleStatuses =
     mobileFilter === 'all'
       ? (() => {
-          const nonEmpty = STATUSES.filter((s) => grouped[s].length > 0);
-          return nonEmpty.length > 0 ? nonEmpty : STATUSES;
+          // Apply quick filter to determine which statuses to show
+          let statusesToShow = STATUSES;
+          if (quickFilter === 'active') {
+            statusesToShow = ['backlog', 'todo', 'in_progress', 'validating', 'waiting', 'failed'];
+          } else if (quickFilter === 'done') {
+            statusesToShow = ['done'];
+          }
+          
+          const nonEmpty = statusesToShow.filter((s) => grouped[s].length > 0);
+          return nonEmpty.length > 0 ? nonEmpty : statusesToShow;
         })()
       : [mobileFilter];
 
@@ -913,6 +924,55 @@ export default function ScrumBoardClient({ appIds, externalIds = [] }: { appIds:
             </div>
           );
         })()}
+
+        {/* Quick filters - Active/Done toggle */}
+        <div className="mt-4 pt-4 border-t border-zinc-200 flex items-center gap-3 flex-wrap">
+          <span className="text-xs text-zinc-500 font-medium">Quick filter:</span>
+          <div className="inline-flex rounded-lg border border-zinc-200 bg-white p-0.5">
+            <button
+              onClick={() => setQuickFilter('all')}
+              className={`px-3 py-1.5 rounded-md text-xs font-medium transition ${
+                quickFilter === 'all'
+                  ? 'bg-zinc-900 text-white'
+                  : 'text-zinc-600 hover:bg-zinc-100'
+              }`}
+            >
+              All
+            </button>
+            <button
+              onClick={() => setQuickFilter('active')}
+              className={`px-3 py-1.5 rounded-md text-xs font-medium transition ${
+                quickFilter === 'active'
+                  ? 'bg-zinc-900 text-white'
+                  : 'text-zinc-600 hover:bg-zinc-100'
+              }`}
+            >
+              Active
+            </button>
+            <button
+              onClick={() => setQuickFilter('done')}
+              className={`px-3 py-1.5 rounded-md text-xs font-medium transition ${
+                quickFilter === 'done'
+                  ? 'bg-zinc-900 text-white'
+                  : 'text-zinc-600 hover:bg-zinc-100'
+              }`}
+            >
+              Done
+            </button>
+          </div>
+          {quickFilter !== 'all' && (
+            <button
+              onClick={() => setQuickFilter('all')}
+              className="text-xs text-zinc-400 hover:text-zinc-600 underline"
+            >
+              Clear
+            </button>
+          )}
+          <span className="text-xs text-zinc-400 ml-auto">
+            {quickFilter === 'active' && 'Showing: backlog, todo, in_progress, validating, waiting'}
+            {quickFilter === 'done' && 'Showing: completed tasks only'}
+          </span>
+        </div>
       </Card>
 
       {/* Mobile filter - only show on small screens */}
@@ -1064,8 +1124,30 @@ export default function ScrumBoardClient({ appIds, externalIds = [] }: { appIds:
                 ))}
                 
                 {grouped[s].length === 0 && (
-                  <div className="text-center py-8 text-xs text-zinc-400">
-                    No tasks
+                  <div className="text-center py-8 px-4">
+                    <div className="text-zinc-300 mb-2">
+                      <svg className="w-10 h-10 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                      </svg>
+                    </div>
+                    <p className="text-sm text-zinc-500 font-medium">No {prettyStatus(s).toLowerCase()} tasks</p>
+                    <p className="text-xs text-zinc-400 mt-1">
+                      {s === 'todo' && 'Tasks ready to be worked on appear here'}
+                      {s === 'in_progress' && 'Active work appears here when claimed'}
+                      {s === 'done' && 'Completed tasks show here — great job!'}
+                      {s === 'backlog' && 'Future work can be added to the backlog'}
+                      {s === 'validating' && 'Tasks awaiting review appear here'}
+                      {s === 'waiting' && 'Blocked tasks needing input appear here'}
+                      {s === 'failed' && 'Tasks that need attention appear here'}
+                    </p>
+                    {(s === 'backlog' || s === 'todo') && (
+                      <button
+                        onClick={() => setCreateOpen(true)}
+                        className="mt-3 text-xs text-blue-600 hover:text-blue-700 font-medium"
+                      >
+                        + Create a task
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
