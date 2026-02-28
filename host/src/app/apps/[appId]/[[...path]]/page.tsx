@@ -26,29 +26,8 @@ export default async function AppCatchAllPage({
     redirect(`${redirectTo}?legacyApp=${appId}`);
   }
 
-  // Handle legacy *-external aliases
-  const aliasMap: Record<string, string> = {
-    'french-translator-external': 'french-translator',
-    'gym-tracker-external': 'gym-tracker',
-    'smart-notes-external': 'smart-notes',
-    'scrum-board-external': 'scrum-board',
-  };
-  const canonicalId = aliasMap[appId] ?? appId;
-
-  // Redirect to canonical ID if needed (preserving path and query)
-  if (canonicalId !== appId) {
-    const pass = new URLSearchParams();
-    for (const [k, v] of Object.entries(qs)) {
-      if (typeof v === 'string') pass.set(k, v);
-      else if (Array.isArray(v)) for (const item of v) if (item != null) pass.append(k, item);
-    }
-    const subPath = path.length > 0 ? `/${path.join('/')}` : '';
-    const suffix = pass.toString();
-    redirect(`/apps/${canonicalId}${subPath}${suffix ? `?${suffix}` : ''}`);
-  }
-
   const apps = await listApps();
-  const app = apps.find((a) => a.id === canonicalId);
+  const app = apps.find((a) => a.id === appId);
   if (!app) return notFound();
 
   const isExternal = app.source === 'registry' && Boolean(app.upstream_base_url);
@@ -92,7 +71,7 @@ export default async function AppCatchAllPage({
 
   // For internal apps with sub-paths, redirect to main page
   if (path.length > 0) {
-    redirect(`/apps/${canonicalId}`);
+    redirect(`/apps/${appId}`);
   }
 
   // Internal app root page
