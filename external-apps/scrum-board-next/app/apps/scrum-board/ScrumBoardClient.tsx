@@ -722,7 +722,8 @@ export default function ScrumBoardClient({ appIds, externalIds = [] }: { appIds:
                   // Sync to URL
                   const params = new URLSearchParams(searchParams?.toString() ?? '');
                   params.set('app', newAppId);
-                  router.replace(`/apps/scrum-board?${params.toString()}`, { scroll: false });
+                  // Keep navigation inside the current external app route (do not jump to host /apps/*).
+                  router.replace(`?${params.toString()}`, { scroll: false });
                 }}
                 className="mt-1 w-full sm:w-64 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm"
               >

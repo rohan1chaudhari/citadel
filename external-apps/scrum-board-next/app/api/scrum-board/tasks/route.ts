@@ -60,7 +60,8 @@ function nextPosition(boardId: number, status: string): number {
 
 export async function GET(req: Request) {
   ensureScrumBoardSchema();
-  const appId = (new URL(req.url).searchParams.get('app') ?? '').trim();
+  const sp = new URL(req.url).searchParams;
+  const appId = (sp.get('app') ?? sp.get('appId') ?? '').trim();
   if (!appId) return NextResponse.json({ ok: false, error: 'app required' }, { status: 400 });
 
   const boardId = getOrCreateBoardId(appId);
