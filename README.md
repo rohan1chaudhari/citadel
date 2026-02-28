@@ -77,7 +77,9 @@ Browser
 - `CONTRIBUTING.md` — contribution workflow
 - `SECURITY.md` — trust model + reporting
 - `SUPPORT.md` — troubleshooting and support flow
-- `plan.md` — migration roadmap
+- `kb/AUTOPILOT.md` — recurring autopilot execution contract
+- `kb/CRON.md` — cron behavior and operations
+- `kb/DECISIONS.md` — key architecture decisions
 
 ## Security/permissions
 - External apps declare permissions in `citadel.app.json`
