@@ -81,6 +81,14 @@ Browser
 - `kb/CRON.md` — cron behavior and operations
 - `kb/DECISIONS.md` — key architecture decisions
 
+## Documentation site (VitePress)
+```bash
+npm run docs:dev
+npm run docs:build
+npm run docs:preview
+```
+Docs content lives in `docs/` and deploys via GitHub Actions (`.github/workflows/docs.yml`).
+
 ## Security/permissions
 - External apps declare permissions in `citadel.app.json`
 - Host enforces effective permissions via gateway/runtime checks
