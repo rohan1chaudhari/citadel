@@ -33,6 +33,17 @@ services:
       - "4015:4015"
     restart: unless-stopped
 
+  smart-notes-external:
+    build:
+      context: ./external-apps/smart-notes-next
+    container_name: citadel-smart-notes-external
+    environment:
+      - PORT=4016
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+    ports:
+      - "4016:4016"
+    restart: unless-stopped
+
   scrum-board-external:
     build:
       context: ./external-apps/scrum-board-next
