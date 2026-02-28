@@ -8,7 +8,7 @@ export default async function AppPage({
   searchParams,
 }: {
   params: Promise<{ appId: string }>;
-  searchParams?: Promise<{ fullscreen?: string }>;
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { appId } = await params;
   const qs = (await searchParams) ?? {};
@@ -21,13 +21,21 @@ export default async function AppPage({
 
   if (isExternal) {
     const proxyRoot = `/api/gateway/apps/${app.id}/proxy`;
-    const openFull = `${proxyRoot}`;
+
+    const passthrough = new URLSearchParams();
+    for (const [k, v] of Object.entries(qs)) {
+      if (k === 'fullscreen') continue;
+      if (typeof v === 'string') passthrough.set(k, v);
+      else if (Array.isArray(v)) for (const item of v) if (item != null) passthrough.append(k, item);
+    }
+    const query = passthrough.toString();
+    const iframeSrc = query ? `${proxyRoot}?${query}` : proxyRoot;
 
     if (qs.fullscreen === '1') {
       return (
         <main style={{ padding: 0 }}>
           <iframe
-            src={proxyRoot}
+            src={iframeSrc}
             title={`${app.name} (${app.id})`}
             style={{ width: '100%', height: '100vh', border: 0 }}
           />
@@ -38,7 +46,7 @@ export default async function AppPage({
     return (
       <main style={{ padding: 0 }}>
         <iframe
-          src={proxyRoot}
+          src={iframeSrc}
           title={`${app.name} (${app.id})`}
           style={{ width: '100%', height: 'calc(100vh - 56px)', border: 0, display: 'block' }}
         />
