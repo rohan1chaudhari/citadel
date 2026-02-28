@@ -36,25 +36,11 @@ export default async function AppPage({
     }
 
     return (
-      <main style={{ display: 'grid', gap: 10 }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-          <div>
-            <h1 style={{ margin: 0 }}>{app.name}</h1>
-            <p style={{ opacity: 0.7, margin: '4px 0 0 0', fontSize: 13 }}>appId: {app.id}</p>
-          </div>
-          <a
-            href={openFull}
-            target="_blank"
-            rel="noreferrer"
-            style={{ fontSize: 13, textDecoration: 'none', padding: '6px 10px', border: '1px solid #ddd', borderRadius: 8 }}
-          >
-            Open full screen
-          </a>
-        </div>
+      <main style={{ margin: -16 }}>
         <iframe
           src={proxyRoot}
           title={`${app.name} (${app.id})`}
-          style={{ width: '100%', minHeight: '82vh', border: '1px solid #ddd', borderRadius: 10, background: '#fff' }}
+          style={{ width: '100%', height: 'calc(100vh - 56px)', border: 0, display: 'block' }}
         />
       </main>
     );
