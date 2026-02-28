@@ -1098,7 +1098,7 @@ export default function ScrumBoardClient({ appIds, externalIds = [] }: { appIds:
                           }`}
                           onClick={(e) => {
                             e.stopPropagation();
-                            window.open(sessionLogUrl(t.session_id as string), '_blank', 'noopener,noreferrer');
+                            window.location.href = sessionLogUrl(t.session_id as string);
                           }}
                         >
                           {t.status === 'in_progress' || t.status === 'validating' ? (
@@ -1510,7 +1510,7 @@ export default function ScrumBoardClient({ appIds, externalIds = [] }: { appIds:
                           ? 'border-indigo-300 bg-indigo-50 text-indigo-700 hover:bg-indigo-100'
                           : 'border-zinc-300 bg-white text-zinc-700 hover:bg-zinc-50'
                       }`}
-                      onClick={() => window.open(sessionLogUrl(openTask.session_id as string), '_blank', 'noopener,noreferrer')}
+                      onClick={() => { window.location.href = sessionLogUrl(openTask.session_id as string); }}
                     >
                       {openTask.status === 'in_progress' || openTask.status === 'validating' ? (
                         <>
