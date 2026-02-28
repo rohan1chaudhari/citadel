@@ -16,3 +16,15 @@ out/
 
 # logs
 *.log
+
+# external app local data snapshots
+external-apps/**/data/
+
+# local TLS certs
+host/certificates/
+
+# sqlite artifacts anywhere
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+
