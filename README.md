@@ -71,9 +71,12 @@ Browser
 ```
 
 ## Key docs
+- `VISION.md` — product philosophy and direction
 - `ARCHITECTURE.md` — system design overview
 - `EXTRACTION_PLAYBOOK.md` — how to extract apps safely (DB included)
 - `CONTRIBUTING.md` — contribution workflow
+- `SECURITY.md` — trust model + reporting
+- `SUPPORT.md` — troubleshooting and support flow
 - `plan.md` — migration roadmap
 
 ## Security/permissions
