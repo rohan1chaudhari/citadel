@@ -16,3 +16,15 @@ Personal App Hub / App Host monorepo.
 
 ## Knowledge base
 See `kb/PROJECT.md` for project overview + current state.
+
+## Documentation site (VitePress)
+- Source: `docs/`
+- Local preview:
+  ```bash
+  npx vitepress dev docs
+  ```
+- Build:
+  ```bash
+  npx vitepress build docs
+  ```
+- Deploy: GitHub Pages via `.github/workflows/docs.yml`
