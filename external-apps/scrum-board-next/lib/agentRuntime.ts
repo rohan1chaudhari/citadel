@@ -15,9 +15,21 @@ export interface ScheduleOneShotResult {
   error?: string;
 }
 
+export interface CronRunEntry {
+  ts?: number;
+  action?: string;
+  status?: string;
+  summary?: string;
+  sessionId?: string;
+  sessionKey?: string;
+  runAtMs?: number;
+  durationMs?: number;
+}
+
 export interface AgentRuntime {
   id(): string;
   scheduleOneShot(input: ScheduleOneShotInput): Promise<ScheduleOneShotResult>;
   sessionHistory(sessionKey: string): Promise<{ ok: boolean; messages?: SessionMessage[]; error?: string }>;
   listCronJobs(): Promise<{ ok: boolean; ids?: string[]; error?: string }>;
+  listCronRuns(jobId: string, limit?: number): Promise<{ ok: boolean; entries?: CronRunEntry[]; error?: string }>;
 }

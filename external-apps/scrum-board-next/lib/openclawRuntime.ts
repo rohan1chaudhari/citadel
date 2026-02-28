@@ -1,5 +1,5 @@
 import { spawn } from 'child_process';
-import type { AgentRuntime, ScheduleOneShotInput, ScheduleOneShotResult, SessionMessage } from '@/lib/agentRuntime';
+import type { AgentRuntime, ScheduleOneShotInput, ScheduleOneShotResult, SessionMessage, CronRunEntry } from '@/lib/agentRuntime';
 
 type CmdResult = { code: number; stdout: string; stderr: string };
 
@@ -77,10 +77,24 @@ export class OpenClawRuntime implements AgentRuntime {
     }
 
     try {
-      const data = JSON.parse(result.stdout || '[]');
-      if (!Array.isArray(data)) return { ok: true, ids: [] };
-      const ids = data.map((j: any) => String(j?.id ?? '')).filter(Boolean);
+      const data = JSON.parse(result.stdout || '{}');
+      const jobs = Array.isArray(data) ? data : (Array.isArray(data?.jobs) ? data.jobs : []);
+      const ids = jobs.map((j: any) => String(j?.id ?? '')).filter(Boolean);
       return { ok: true, ids };
+    } catch {
+      return { ok: false, error: 'parse error' };
+    }
+  }
+
+  async listCronRuns(jobId: string, limit = 10): Promise<{ ok: boolean; entries?: CronRunEntry[]; error?: string }> {
+    const result = await runOpenclaw(['cron', 'runs', '--id', jobId, '--limit', String(limit)]);
+    if (result.code !== 0) {
+      return { ok: false, error: cleanStderr(result.stderr) || `exit ${result.code}` };
+    }
+    try {
+      const data = JSON.parse(result.stdout || '{}');
+      const entries = Array.isArray(data?.entries) ? data.entries : [];
+      return { ok: true, entries };
     } catch {
       return { ok: false, error: 'parse error' };
     }

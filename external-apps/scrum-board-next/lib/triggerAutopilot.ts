@@ -7,84 +7,70 @@ const APP_ID = 'scrum-board';
 const runtime = new OpenClawRuntime();
 
 /**
- * Poll an OpenClaw session and stream its messages to session_logs
+ * Poll OpenClaw cron runs and stream run summaries/events into session_logs.
+ * This replaces deprecated sessions-history polling in newer OpenClaw versions.
  */
 async function streamSessionToLogs(
   sessionId: string,
   cronJobId: string,
-  openclawSessionKey: string
+  openclawSessionKey?: string
 ): Promise<void> {
-  const pollIntervalMs = 2000;
-  const maxWaitMs = 600000; // 10 minutes max
+  const pollIntervalMs = 3000;
+  const maxWaitMs = 20 * 60 * 1000; // 20 min
   const startTime = Date.now();
-  let lastMessageCount = 0;
-  let settledCount = 0;
+  const seen = new Set<string>();
 
   // eslint-disable-next-line no-console
-  console.log(`[SessionStream] Starting stream for ${sessionId} -> ${openclawSessionKey}`);
+  console.log(`[SessionStream] Starting stream for ${sessionId} (job ${cronJobId}${openclawSessionKey ? `, key ${openclawSessionKey}` : ''})`);
 
   while (Date.now() - startTime < maxWaitMs) {
     try {
-      // Query session history from runtime
-      const result = await runtime.sessionHistory(openclawSessionKey);
+      const runs = await runtime.listCronRuns(cronJobId, 20);
+      if (runs.ok && runs.entries) {
+        const ordered = [...runs.entries].sort((a, b) => (a.ts ?? 0) - (b.ts ?? 0));
 
-      if (!result.ok || !result.messages) {
-        await new Promise((r) => setTimeout(r, pollIntervalMs));
-        continue;
-      }
+        for (const entry of ordered) {
+          const sig = `${entry.ts ?? 0}:${entry.action ?? ''}:${entry.status ?? ''}`;
+          if (seen.has(sig)) continue;
+          seen.add(sig);
 
-      const messages = result.messages;
+          let chunk = `[cron:${entry.action ?? 'event'}] status=${entry.status ?? 'unknown'}`;
+          if (entry.summary) chunk += `\n\n${entry.summary}`;
+          chunk += '\n';
 
-      // If we have new messages, write them to session_logs
-      if (messages.length > lastMessageCount) {
-        const newMessages = messages.slice(lastMessageCount);
-        for (const msg of newMessages) {
-          const content = msg.content || '';
-          if (content) {
-            dbExec(
-              APP_ID,
-              `INSERT INTO session_logs (session_id, chunk, created_at) VALUES (?, ?, ?)`,
-              [sessionId, `[${msg.role}] ${content}\n`, msg.timestamp || new Date().toISOString()]
-            );
+          dbExec(
+            APP_ID,
+            `INSERT INTO session_logs (session_id, chunk, created_at) VALUES (?, ?, ?)`,
+            [sessionId, chunk, new Date(entry.ts ?? Date.now()).toISOString()]
+          );
+
+          if (entry.action === 'finished') {
+            const finalStatus = entry.status === 'ok' ? 'completed' : 'failed';
+            updateSessionStatus(sessionId, finalStatus as any);
+            // eslint-disable-next-line no-console
+            console.log(`[SessionStream] Session ${sessionId} finalized from cron-runs (${finalStatus})`);
+            return;
           }
         }
-        lastMessageCount = messages.length;
-        settledCount = 0;
-      } else {
-        settledCount++;
       }
 
-      // Check if session is complete (no new messages for 3 polls and has messages)
-      if (settledCount > 3 && messages.length > 0) {
-        // Check if there's a final assistant message indicating completion
-        const lastMsg = messages[messages.length - 1];
-        if (lastMsg.role === 'assistant') {
-          // Session likely complete
-          updateSessionStatus(sessionId, 'completed');
-          // eslint-disable-next-line no-console
-          console.log(`[SessionStream] Session ${sessionId} completed`);
-          break;
-        }
-      }
-
-      // Also check if the cron job still exists (indicates completion)
       const cronStatus = await runtime.listCronJobs();
       const exists = cronStatus.ok ? (cronStatus.ids ?? []).includes(cronJobId) : true;
-
-      if (!exists && messages.length > 0) {
-        // Job completed, finalize
+      if (!exists) {
+        // If job is gone and we never saw finished event, settle conservatively.
         updateSessionStatus(sessionId, 'completed');
-        // eslint-disable-next-line no-console
-        console.log(`[SessionStream] Session ${sessionId} finalized (job removed)`);
-        break;
+        return;
       }
     } catch (err) {
       // eslint-disable-next-line no-console
-      console.error('[SessionStream] Error polling:', err);
+      console.error('[SessionStream] Error polling cron-runs:', err);
     }
 
     await new Promise((r) => setTimeout(r, pollIntervalMs));
   }
+
+  // Timeout fallback
+  updateSessionStatus(sessionId, 'failed');
 }
 
 /**
@@ -274,6 +260,16 @@ Execution contract:
     }
 
     const openclawSessionKey = result.sessionKey;
+
+    dbExec(
+      APP_ID,
+      `INSERT INTO session_logs (session_id, chunk, created_at) VALUES (?, ?, ?)`,
+      [
+        sessionId,
+        `[cron:scheduled] job=${result.jobId || cronJobId}${openclawSessionKey ? ` session=${openclawSessionKey}` : ''}\n`,
+        new Date().toISOString(),
+      ]
+    );
 
     audit(APP_ID, 'scrum.trigger_agent', {
       appId: targetAppId,
