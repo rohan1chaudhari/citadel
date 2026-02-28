@@ -125,8 +125,13 @@ From Scrum Board for target app only:
 ## Execute
 1. Read task + acceptance criteria
 2. Implement minimally
-3. Validate: `npm run build` in `host/`
-4. Mark result
+3. Validate (required, end-of-run):
+   - `npm run build` in `host/`
+   - If external app changed: `npm run build` in that external app folder
+   - If UI/route behavior changed and browser automation is available: run Playwright/browser smoke for the changed flow
+   - If browser automation is not available: run equivalent API/curl smoke checks and record results in comment
+4. If `app_id` is `citadel`, restart host + all external app servers after changes.
+5. Mark result
 
 ## Completion
 
