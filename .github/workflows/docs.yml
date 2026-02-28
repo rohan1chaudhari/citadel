@@ -25,7 +25,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: DOCS_BASE=/citadel/ npm exec --yes vitepress@1.6.4 build docs
+          cache: npm
+      - run: npm ci
+      - run: DOCS_BASE=/citadel/ npm run docs:build
       - uses: actions/upload-pages-artifact@v3
         with:
           path: docs/.vitepress/dist
