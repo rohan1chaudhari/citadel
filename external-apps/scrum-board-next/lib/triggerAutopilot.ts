@@ -19,6 +19,7 @@ async function streamSessionToLogs(
   const maxWaitMs = 20 * 60 * 1000; // 20 min
   const startTime = Date.now();
   const seen = new Set<string>();
+  let lastHeartbeatAt = 0;
 
   // eslint-disable-next-line no-console
   console.log(`[SessionStream] Starting stream for ${sessionId} (job ${cronJobId}${openclawSessionKey ? `, key ${openclawSessionKey}` : ''})`);
@@ -56,6 +57,17 @@ async function streamSessionToLogs(
 
       const cronStatus = await runtime.listCronJobs();
       const exists = cronStatus.ok ? (cronStatus.ids ?? []).includes(cronJobId) : true;
+
+      const now = Date.now();
+      if (exists && now - lastHeartbeatAt > 15000) {
+        dbExec(
+          APP_ID,
+          `INSERT INTO session_logs (session_id, chunk, created_at) VALUES (?, ?, ?)`,
+          [sessionId, `[cron:running] waiting for next run event...\n`, new Date(now).toISOString()]
+        );
+        lastHeartbeatAt = now;
+      }
+
       if (!exists) {
         // If job is gone and we never saw finished event, settle conservatively.
         updateSessionStatus(sessionId, 'completed');
@@ -247,12 +259,15 @@ Execution contract:
     // Schedule to run immediately
     const runAt = new Date(Date.now() + 1000).toISOString();
 
+    const modelOverride = getSetting('autopilot_model') || 'openai-codex/gpt-5.3-codex';
+
     const result = await runtime.scheduleOneShot({
       name: `autopilot-${targetAppId}-${cronJobId}`,
       runAt,
       message,
       thinking: 'low',
       timeoutSeconds: 600,
+      model: modelOverride,
     });
 
     if (!result.ok) {
@@ -266,7 +281,7 @@ Execution contract:
       `INSERT INTO session_logs (session_id, chunk, created_at) VALUES (?, ?, ?)`,
       [
         sessionId,
-        `[cron:scheduled] job=${result.jobId || cronJobId}${openclawSessionKey ? ` session=${openclawSessionKey}` : ''}\n`,
+        `[cron:scheduled] job=${result.jobId || cronJobId}${openclawSessionKey ? ` session=${openclawSessionKey}` : ''} model=${modelOverride}\n`,
         new Date().toISOString(),
       ]
     );

@@ -6,6 +6,7 @@ export interface ScheduleOneShotInput {
   message: string;
   thinking?: 'low' | 'medium' | 'high';
   timeoutSeconds?: number;
+  model?: string;
 }
 
 export interface ScheduleOneShotResult {

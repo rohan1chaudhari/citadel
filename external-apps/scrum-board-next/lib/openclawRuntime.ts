@@ -38,6 +38,9 @@ export class OpenClawRuntime implements AgentRuntime {
       '--timeout-seconds', String(input.timeoutSeconds ?? 600),
       '--json',
     ];
+    if (input.model) {
+      args.splice(args.length - 1, 0, '--model', input.model);
+    }
 
     const result = await runOpenclaw(args);
     if (result.code !== 0) {
