@@ -1,8 +1,12 @@
 {
   "id": "smart-notes-external",
-  "name": "Smart Notes (External)",
+  "name": "Smart Notes",
   "version": "1.0.0",
   "entry": "/",
   "health": "/api/healthz",
-  "permissions": ["camera", "microphone", "filesystem"]
+  "permissions": [
+    "camera",
+    "microphone",
+    "filesystem"
+  ]
 }

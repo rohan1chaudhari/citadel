@@ -1,8 +1,11 @@
 {
   "id": "scrum-board-external",
-  "name": "Scrum Board (External)",
+  "name": "Scrum Board",
   "version": "1.0.0",
   "entry": "/",
   "health": "/api/healthz",
-  "permissions": ["agent:run", "notifications"]
+  "permissions": [
+    "agent:run",
+    "notifications"
+  ]
 }

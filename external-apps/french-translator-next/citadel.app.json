@@ -1,8 +1,11 @@
 {
   "id": "french-translator-external",
-  "name": "French Translator (External)",
+  "name": "French Translator",
   "version": "1.0.0",
   "entry": "/",
   "health": "/api/healthz",
-  "permissions": ["microphone", "notifications"]
+  "permissions": [
+    "microphone",
+    "notifications"
+  ]
 }
