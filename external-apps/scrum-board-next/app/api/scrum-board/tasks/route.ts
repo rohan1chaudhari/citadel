@@ -61,11 +61,13 @@ function nextPosition(boardId: number, status: string): number {
 export async function GET(req: Request) {
   ensureScrumBoardSchema();
   const sp = new URL(req.url).searchParams;
-  const appId = (sp.get('app') ?? sp.get('appId') ?? '').trim();
-  if (!appId) return NextResponse.json({ ok: false, error: 'app required' }, { status: 400 });
+  const requestedAppId = (sp.get('app') ?? sp.get('appId') ?? '').trim();
+  if (!requestedAppId) return NextResponse.json({ ok: false, error: 'app required' }, { status: 400 });
 
-  const boardId = getOrCreateBoardId(appId);
-  const tasks = dbQuery<TaskRow>(
+  let appId = requestedAppId;
+  let boardId = getOrCreateBoardId(appId);
+
+  const fetchTasks = (bId: number) => dbQuery<TaskRow>(
     APP_ID,
     `SELECT
       id, board_id, title, description, acceptance_criteria, status, position, priority, assignee, due_at, session_id,
@@ -74,8 +76,24 @@ export async function GET(req: Request) {
      FROM tasks
      WHERE board_id = ?
      ORDER BY status ASC, position ASC, id ASC`,
-    [boardId]
+    [bId]
   );
+
+  let tasks = fetchTasks(boardId);
+
+  // Compatibility: if board key changed from "<id>-external" to "<id>", fallback to legacy key with data.
+  if (tasks.length === 0 && appId.endsWith('-external')) {
+    const legacyAppId = appId.replace(/-external$/, '');
+    const legacy = dbQuery<{ id: number }>(APP_ID, `SELECT id FROM boards WHERE app_id = ? LIMIT 1`, [legacyAppId])[0];
+    if (legacy?.id) {
+      const legacyTasks = fetchTasks(legacy.id);
+      if (legacyTasks.length > 0) {
+        appId = legacyAppId;
+        boardId = legacy.id;
+        tasks = legacyTasks;
+      }
+    }
+  }
 
   const commentCounts = dbQuery<{ task_id: number; n: number }>(
     APP_ID,

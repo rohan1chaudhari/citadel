@@ -109,6 +109,10 @@ function sessionLogUrl(sessionId: string) {
   return `/apps/scrum-master/sessions/${encodeURIComponent(sid)}`;
 }
 
+function boardLabel(id: string) {
+  return id.replace(/-external$/, '');
+}
+
 function PriorityBadge({ p }: { p: Task['priority'] }) {
   const colors = {
     high: 'bg-red-100 text-red-700',
@@ -133,8 +137,9 @@ export default function ScrumBoardClient({ appIds, externalIds = [] }: { appIds:
   const isExternal = (id: string) => externalIds.includes(id);
   
   // Initialize appId from URL or default to first app
-  const urlAppId = searchParams?.get('app');
-  const initialAppId = urlAppId && allBoardIds.includes(urlAppId) ? urlAppId : (allBoardIds[0] ?? 'smart-notes');
+  const urlAppIdRaw = searchParams?.get('app');
+  const urlAppId = urlAppIdRaw?.endsWith('-external') ? urlAppIdRaw.replace(/-external$/, '') : urlAppIdRaw;
+  const initialAppId = urlAppId && allBoardIds.includes(urlAppId) ? urlAppId : (allBoardIds.includes('citadel') ? 'citadel' : (allBoardIds[0] ?? 'citadel'));
   
   const [appId, setAppId] = useState(initialAppId);
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -729,7 +734,7 @@ export default function ScrumBoardClient({ appIds, externalIds = [] }: { appIds:
               >
                 <optgroup label="Citadel Apps">
                   {appIds.map((id) => (
-                    <option key={id} value={id}>{id}</option>
+                    <option key={id} value={id}>{boardLabel(id)}</option>
                   ))}
                 </optgroup>
                 {externalIds.length > 0 && (
@@ -1209,7 +1214,7 @@ export default function ScrumBoardClient({ appIds, externalIds = [] }: { appIds:
                 <Label>Move to board</Label>
                 <select value={mTargetBoard} onChange={(e) => setMTargetBoard(e.target.value)} className="mt-1 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm">
                   <optgroup label="Citadel Apps">
-                    {appIds.map((id) => <option key={id} value={id}>{id}</option>)}
+                    {appIds.map((id) => <option key={id} value={id}>{boardLabel(id)}</option>)}
                   </optgroup>
                   {externalIds.length > 0 && (
                     <optgroup label="External Projects">
