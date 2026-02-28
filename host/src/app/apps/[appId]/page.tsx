@@ -36,7 +36,7 @@ export default async function AppPage({
     }
 
     return (
-      <main style={{ margin: -16 }}>
+      <main style={{ padding: 0 }}>
         <iframe
           src={proxyRoot}
           title={`${app.name} (${app.id})`}
