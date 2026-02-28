@@ -708,7 +708,13 @@ export default function ScrumBoardClient({ appIds, externalIds = [] }: { appIds:
     }
   }
 
-  const visibleStatuses = mobileFilter === 'all' ? STATUSES : [mobileFilter];
+  const visibleStatuses =
+    mobileFilter === 'all'
+      ? (() => {
+          const nonEmpty = STATUSES.filter((s) => grouped[s].length > 0);
+          return nonEmpty.length > 0 ? nonEmpty : STATUSES;
+        })()
+      : [mobileFilter];
 
   return (
     <div className="space-y-4">
