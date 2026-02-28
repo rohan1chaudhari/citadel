@@ -159,10 +159,24 @@ export default function ScrumBoardClient({ appIds, externalIds = [] }: { appIds:
   const isExternalUrlApp = urlAppIdRaw && externalIds.includes(urlAppIdRaw);
   // For external projects, use the raw ID; for regular apps, strip -external suffix if present
   const urlAppId = isExternalUrlApp ? urlAppIdRaw : (urlAppIdRaw?.endsWith('-external') ? urlAppIdRaw.replace(/-external$/, '') : urlAppIdRaw);
-  const initialAppId = urlAppId && allBoardIds.includes(urlAppId) ? urlAppId : (allBoardIds.includes('citadel') ? 'citadel' : (allBoardIds[0] ?? 'citadel'));
+  const storedAppId =
+    typeof window !== 'undefined'
+      ? (window.localStorage.getItem('scrum_board_selected_app') || '')
+      : '';
+  const preferredAppId = urlAppId || storedAppId;
+  const initialAppId =
+    preferredAppId && allBoardIds.includes(preferredAppId)
+      ? preferredAppId
+      : (allBoardIds.includes('citadel') ? 'citadel' : (allBoardIds[0] ?? 'citadel'));
   
   const [appId, setAppId] = useState(initialAppId);
   const [tasks, setTasks] = useState<Task[]>([]);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && appId) {
+      window.localStorage.setItem('scrum_board_selected_app', appId);
+    }
+  }, [appId]);
 
   // Create form (invoked via modal; board selection stays separate)
   const [createOpen, setCreateOpen] = useState(false);
@@ -750,6 +764,9 @@ export default function ScrumBoardClient({ appIds, externalIds = [] }: { appIds:
                 onChange={(e) => {
                   const newAppId = e.target.value;
                   setAppId(newAppId);
+                  if (typeof window !== 'undefined') {
+                    window.localStorage.setItem('scrum_board_selected_app', newAppId);
+                  }
                   // Sync to URL
                   const params = new URLSearchParams(searchParams?.toString() ?? '');
                   params.set('app', newAppId);
