@@ -10,41 +10,11 @@
 
 Make the host runtime solid, secure, and observable.
 
-### Authentication & Identity
-
-#### P1-01: Local passphrase authentication
-**Description:** Add a passphrase-based auth system to the host. On first launch, prompt the user to set a passphrase. On subsequent visits, require it before accessing any app or API. Store a bcrypt/argon2 hash in the host's own SQLite DB (`citadel` app). No external auth providers — this is local-first.
-**Acceptance Criteria:**
-- [ ] First-run setup flow prompts for passphrase creation
-- [ ] Login page at `/login` accepts passphrase
-- [ ] All `/api/*` and `/apps/*` routes return 401 if no valid session
-- [ ] Passphrase hash stored in `citadel` DB, never plaintext
-- [ ] "Change passphrase" option in host settings
-
-#### P1-02: Cookie-based session management
-**Description:** After passphrase login, issue an httpOnly secure cookie with a session token. Store active sessions in the `citadel` DB with expiry. Add Next.js middleware that validates the session on every request and redirects to `/login` if invalid.
-**Acceptance Criteria:**
-- [ ] Session token issued as httpOnly, SameSite=Strict cookie
-- [ ] Sessions table in `citadel` DB tracks token, created_at, expires_at, last_active_at
-- [ ] Middleware in `host/src/middleware.ts` validates session on all protected routes
-- [ ] Sessions expire after configurable duration (default 30 days)
-- [ ] Logout endpoint clears cookie and deletes session row
-- [ ] `/login` and `/api/health` are public (no session required)
-
-#### P1-03: WebAuthn / passkey support (optional)
-**Description:** Allow users to register a passkey (fingerprint, Face ID, hardware key) as an alternative to passphrase login. Uses the Web Authentication API. Falls back to passphrase if WebAuthn is unavailable.
-**Acceptance Criteria:**
-- [ ] "Add passkey" button in host settings triggers WebAuthn registration
-- [ ] Login page offers passkey login when a credential is registered
-- [ ] Passkey credentials stored in `citadel` DB
-- [ ] Passphrase login remains available as fallback
-- [ ] Works on Safari (iOS), Chrome, and Firefox
-
----
+> **Auth note:** Network-level auth is handled by Tailscale. No application-layer auth needed until the host is exposed publicly (Phase 3).
 
 ### Permissions & Isolation
 
-#### P1-04: Permission approval UI
+#### P1-01: Permission approval UI
 **Description:** When an app's `app.yaml` declares permissions (db read/write, storage read/write, network, ai), show the user an approval prompt on first launch. Store granted permissions in the host DB. Block app API calls that exceed granted permissions.
 **Acceptance Criteria:**
 - [ ] First visit to an app shows a permission consent screen listing requested scopes
@@ -55,7 +25,7 @@ Make the host runtime solid, secure, and observable.
 - [ ] Denied permission returns 403 with clear error message
 - [ ] "Manage permissions" page in host settings to revoke/grant per app
 
-#### P1-05: Network and AI API permission enforcement
+#### P1-02: Network and AI API permission enforcement
 **Description:** Extend the permission system beyond DB/storage. Apps that want to call external APIs (e.g., OpenAI, ElevenLabs) must declare `ai: true` or `network: [domains]` in their manifest. The host must proxy or gate these calls.
 **Acceptance Criteria:**
 - [ ] `app.yaml` schema supports `ai: true/false` and `network: [list of allowed domains]`
@@ -63,7 +33,7 @@ Make the host runtime solid, secure, and observable.
 - [ ] Apps without `network` permission get blocked outbound (enforced at API route level in MVP)
 - [ ] Permission violations logged via audit
 
-#### P1-06: CSP headers and app sandboxing
+#### P1-03: CSP headers and app sandboxing
 **Description:** Add Content-Security-Policy headers to app pages to prevent XSS and limit what app code can do in the browser. Each app's pages should have restrictive CSP that only allows loading resources from the host origin.
 **Acceptance Criteria:**
 - [ ] Next.js middleware sets CSP headers on all `/apps/*` responses
@@ -72,7 +42,7 @@ Make the host runtime solid, secure, and observable.
 - [ ] `frame-ancestors 'none'` — prevents clickjacking
 - [ ] CSP violations reported to a host endpoint for logging
 
-#### P1-07: Per-app rate limiting
+#### P1-04: Per-app rate limiting
 **Description:** Prevent a misbehaving app (or runaway autopilot) from hammering the host. Add a simple in-memory rate limiter (token bucket) keyed by app ID that limits API requests per minute.
 **Acceptance Criteria:**
 - [ ] Rate limiter middleware applied to all `/api/apps/*` routes
@@ -85,7 +55,7 @@ Make the host runtime solid, secure, and observable.
 
 ### Audit & Observability
 
-#### P1-08: Persist audit logs to DB
+#### P1-05: Persist audit logs to DB
 **Description:** Currently `audit()` logs JSON to stdout. Add a second sink that writes to an `audit_log` table in the `citadel` DB. Keep stdout logging as-is for dev/debugging. Include retention — auto-delete logs older than 90 days.
 **Acceptance Criteria:**
 - [ ] `audit_log` table in `citadel` DB with columns: id, ts, app_id, event, payload (JSON), created_at
@@ -94,7 +64,7 @@ Make the host runtime solid, secure, and observable.
 - [ ] Auto-cleanup: logs older than 90 days deleted on host startup
 - [ ] No performance regression on hot paths (batch inserts or async write)
 
-#### P1-09: Audit log viewer UI
+#### P1-06: Audit log viewer UI
 **Description:** Add a host-level page at `/audit` that displays audit logs with filtering by app, event type, and time range. Paginated, most recent first.
 **Acceptance Criteria:**
 - [ ] Page at `/audit` accessible from host nav
@@ -104,7 +74,7 @@ Make the host runtime solid, secure, and observable.
 - [ ] Paginated results (50 per page)
 - [ ] Each log entry shows timestamp, app, event, and expandable payload
 
-#### P1-10: App health dashboard
+#### P1-07: App health dashboard
 **Description:** Add a host-level page at `/status` (enhance existing) that shows per-app health metrics: SQLite DB file size, storage directory size, total API calls (from audit), and last activity timestamp.
 **Acceptance Criteria:**
 - [ ] `/status` page shows a card per installed app
@@ -116,7 +86,7 @@ Make the host runtime solid, secure, and observable.
 
 ### Data & Backup
 
-#### P1-11: Per-app data export
+#### P1-08: Per-app data export
 **Description:** Add an API endpoint and UI button to export a single app's data as a zip archive containing its SQLite DB file and storage directory. Useful for backup and portability.
 **Acceptance Criteria:**
 - [ ] `GET /api/apps/{appId}/export` returns a zip file
@@ -125,7 +95,7 @@ Make the host runtime solid, secure, and observable.
 - [ ] Filename includes app ID and ISO timestamp: `smart-notes-2026-03-01T12-00-00.zip`
 - [ ] Streams the zip (doesn't buffer entire archive in memory)
 
-#### P1-12: Per-app data import
+#### P1-09: Per-app data import
 **Description:** Add an API endpoint and UI to restore an app's data from a previously exported zip. Overwrites existing DB and storage. Requires confirmation.
 **Acceptance Criteria:**
 - [ ] `POST /api/apps/{appId}/import` accepts a zip upload
@@ -134,7 +104,7 @@ Make the host runtime solid, secure, and observable.
 - [ ] Confirmation dialog warns that current data will be replaced
 - [ ] App's cached DB connection is invalidated after import
 
-#### P1-13: Scheduled local backups
+#### P1-10: Scheduled local backups
 **Description:** On host startup and then every 24 hours, snapshot all app data directories into a timestamped zip under `data/backups/`. Keep the last 7 backups, delete older ones.
 **Acceptance Criteria:**
 - [ ] Backup runs on host startup and every 24h (setInterval or cron-like)
@@ -147,7 +117,7 @@ Make the host runtime solid, secure, and observable.
 
 ### Platform UX
 
-#### P1-14: Responsive host shell
+#### P1-11: Responsive host shell
 **Description:** Make the home grid, navigation drawer, and root layout responsive for mobile screens. The nav drawer should collapse to a hamburger menu on small screens. App grid should reflow from multi-column to single-column.
 **Acceptance Criteria:**
 - [ ] Home grid: 1 column on mobile (<640px), 2 on tablet, 3 on desktop
@@ -156,7 +126,7 @@ Make the host runtime solid, secure, and observable.
 - [ ] Touch targets are at least 44x44px
 - [ ] Tested on iPhone SE (375px) and iPad (768px) viewports
 
-#### P1-15: PWA manifest and service worker
+#### P1-12: PWA manifest and service worker
 **Description:** Add a web app manifest and basic service worker so Citadel can be "installed" to the home screen on iOS and Android. Cache the app shell for fast loads.
 **Acceptance Criteria:**
 - [ ] `manifest.json` with name, icons (192px, 512px), theme color, display: standalone
@@ -165,7 +135,7 @@ Make the host runtime solid, secure, and observable.
 - [ ] App launches in standalone mode (no browser chrome)
 - [ ] Offline: shows cached shell with "you're offline" message if network unavailable
 
-#### P1-16: Dark mode
+#### P1-13: Dark mode
 **Description:** Add a dark mode toggle to the host shell. Use Tailwind's `dark:` variant. Store preference in localStorage. Provide a theme context that apps can read to match the host theme.
 **Acceptance Criteria:**
 - [ ] Toggle in nav drawer or host header (sun/moon icon)
@@ -174,7 +144,7 @@ Make the host runtime solid, secure, and observable.
 - [ ] `ThemeContext` exported from host so apps can read `isDark`
 - [ ] No flash of wrong theme on page load (script in `<head>` sets class early)
 
-#### P1-17: Global search
+#### P1-14: Global search
 **Description:** Add a search bar to the home page that searches across all apps. Each app can register a search provider (a function that takes a query and returns results). MVP: search app names from the registry. Later: apps provide full-text search endpoints.
 **Acceptance Criteria:**
 - [ ] Search input on home page (with keyboard shortcut Cmd/Ctrl+K)
@@ -187,7 +157,7 @@ Make the host runtime solid, secure, and observable.
 
 ### Tech Debt
 
-#### P1-18: Extract core packages from host/src/lib
+#### P1-15: Extract core packages from host/src/lib
 **Description:** Move the shared platform primitives (`db.ts`, `audit.ts`, `storage.ts`, `sqlGuardrails.ts`, `paths.ts`, `appIds.ts`, `registry.ts`) into the `core/` directory as proper npm workspace packages. Apps and host import from `@citadel/core` instead of relative paths.
 **Acceptance Criteria:**
 - [ ] `core/` is an npm workspace package with `package.json` (`@citadel/core`)
@@ -196,7 +166,7 @@ Make the host runtime solid, secure, and observable.
 - [ ] All existing functionality unchanged (no regressions)
 - [ ] `npm run build` passes in both `core/` and `host/`
 
-#### P1-19: Replace hand-rolled YAML parser
+#### P1-16: Replace hand-rolled YAML parser
 **Description:** The registry uses a regex-based YAML parser that only handles scalar values. Replace it with a proper YAML library (e.g., `yaml` npm package) or switch `app.yaml` to `app.json` for zero-dependency parsing.
 **Acceptance Criteria:**
 - [ ] App manifests are parsed correctly including nested objects, arrays, and multi-line strings
@@ -204,7 +174,7 @@ Make the host runtime solid, secure, and observable.
 - [ ] Manifest schema validated at parse time (required fields: id, name, version, permissions)
 - [ ] Invalid manifests produce clear error messages with file path and line number
 
-#### P1-20: Evaluate node:sqlite stability
+#### P1-17: Evaluate node:sqlite stability
 **Description:** Research whether `node:sqlite` has stabilized in the current Node.js version. If still experimental, evaluate migrating to `better-sqlite3`. Document the decision and rationale.
 **Acceptance Criteria:**
 - [ ] Written assessment in `kb/DECISIONS.md` covering: current stability status, breaking change risk, performance comparison, migration effort
@@ -212,7 +182,7 @@ Make the host runtime solid, secure, and observable.
 - [ ] If staying: document why and what Node.js version stabilizes the API
 - [ ] No runtime warnings about experimental APIs (either suppressed intentionally or eliminated)
 
-#### P1-21: Integration tests for host APIs and isolation
+#### P1-18: Integration tests for host APIs and isolation
 **Description:** Add a test suite that validates the host's core guarantees: per-app DB isolation, storage path traversal protection, SQL guardrails, and permission enforcement. Use Node.js test runner or vitest.
 **Acceptance Criteria:**
 - [ ] Test: app A cannot read app B's database
