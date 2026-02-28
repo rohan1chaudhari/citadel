@@ -38,7 +38,7 @@ export default function VisionSuggester({ appId, onTasksAdded }: VisionSuggester
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch('/api/scrum-board/vision-suggest', {
+      const res = await fetch('api/scrum-board/vision-suggest', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ appId, forceRefresh }),
@@ -73,7 +73,7 @@ export default function VisionSuggester({ appId, onTasksAdded }: VisionSuggester
     setSuggestion({ ...suggestion, tasks: updatedTasks });
 
     try {
-      const res = await fetch('/api/scrum-board/tasks', {
+      const res = await fetch('api/scrum-board/tasks', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({

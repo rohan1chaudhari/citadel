@@ -225,7 +225,7 @@ export default function ScrumBoardClient({ appIds, externalIds = [] }: { appIds:
   }
 
   async function loadSettings() {
-    const res = await fetch('/api/scrum-board/settings', { cache: 'no-store' });
+    const res = await fetch('api/scrum-board/settings', { cache: 'no-store' });
     const data = await res.json();
     if (data?.ok && data?.settings) {
       setAutopilotEnabled(data.settings.autopilot_enabled ?? true);
@@ -233,7 +233,7 @@ export default function ScrumBoardClient({ appIds, externalIds = [] }: { appIds:
   }
 
   async function loadAgentLock() {
-    const res = await fetch('/api/scrum-board/lock', { cache: 'no-store' });
+    const res = await fetch('api/scrum-board/lock', { cache: 'no-store' });
     const data = await res.json();
     if (data?.ok) {
       setAgentLock({
@@ -248,7 +248,7 @@ export default function ScrumBoardClient({ appIds, externalIds = [] }: { appIds:
     setInboxLoading(true);
     setInboxError(null);
     try {
-      const res = await fetch('/api/scrum-board/request-input', { cache: 'no-store' });
+      const res = await fetch('api/scrum-board/request-input', { cache: 'no-store' });
       const data = await res.json();
       if (data?.ok) {
         setInboxTasks(data.tasks || []);
@@ -306,7 +306,7 @@ export default function ScrumBoardClient({ appIds, externalIds = [] }: { appIds:
   async function toggleAutopilot(enabled: boolean) {
     setSettingsLoading(true);
     try {
-      const res = await fetch('/api/scrum-board/settings', {
+      const res = await fetch('api/scrum-board/settings', {
         method: 'PATCH',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ autopilot_enabled: enabled }),
@@ -361,7 +361,7 @@ export default function ScrumBoardClient({ appIds, externalIds = [] }: { appIds:
     if (!openTaskId || !planTitle.trim()) return;
     setPlanCreating(true);
     try {
-      const res = await fetch('/api/scrum-board/plans', {
+      const res = await fetch('api/scrum-board/plans', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
@@ -417,7 +417,7 @@ export default function ScrumBoardClient({ appIds, externalIds = [] }: { appIds:
     setCreateLoading(true);
     setCreateResult(null);
     try {
-      const res = await fetch('/api/scrum-board/tasks', {
+      const res = await fetch('api/scrum-board/tasks', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
@@ -484,7 +484,7 @@ export default function ScrumBoardClient({ appIds, externalIds = [] }: { appIds:
     if (!title.trim() || aiGenerating) return;
     setAiGenerating(true);
     try {
-      const res = await fetch('/api/scrum-board/ai-generate', {
+      const res = await fetch('api/scrum-board/ai-generate', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ title: title.trim(), appId }),
@@ -520,7 +520,7 @@ export default function ScrumBoardClient({ appIds, externalIds = [] }: { appIds:
 
   async function saveModal() {
     if (!openTaskId) return;
-    const res = await fetch('/api/scrum-board/tasks', {
+    const res = await fetch('api/scrum-board/tasks', {
       method: 'PATCH',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
@@ -545,7 +545,7 @@ export default function ScrumBoardClient({ appIds, externalIds = [] }: { appIds:
   }
 
   async function moveTask(t: Task, dir: 'up' | 'down') {
-    await fetch('/api/scrum-board/tasks', {
+    await fetch('api/scrum-board/tasks', {
       method: 'PATCH',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ id: t.id, move: dir })
@@ -555,7 +555,7 @@ export default function ScrumBoardClient({ appIds, externalIds = [] }: { appIds:
 
   async function addComment() {
     if (!openTaskId) return;
-    const res = await fetch('/api/scrum-board/comments', {
+    const res = await fetch('api/scrum-board/comments', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ taskId: openTaskId, body: commentText })
@@ -578,7 +578,7 @@ export default function ScrumBoardClient({ appIds, externalIds = [] }: { appIds:
     setValidationResult(null);
     try {
       // Add a system comment to trigger wake
-      const res = await fetch('/api/scrum-board/comments', {
+      const res = await fetch('api/scrum-board/comments', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ 
@@ -608,7 +608,7 @@ export default function ScrumBoardClient({ appIds, externalIds = [] }: { appIds:
     setTriggering(true);
     setTriggerResult(null);
     try {
-      const res = await fetch('/api/scrum-board/trigger', {
+      const res = await fetch('api/scrum-board/trigger', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
@@ -632,7 +632,7 @@ export default function ScrumBoardClient({ appIds, externalIds = [] }: { appIds:
     setValidating(true);
     setValidationResult(null);
     try {
-      const res = await fetch('/api/scrum-board/tasks', {
+      const res = await fetch('api/scrum-board/tasks', {
         method: 'PATCH',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
@@ -659,7 +659,7 @@ export default function ScrumBoardClient({ appIds, externalIds = [] }: { appIds:
     setValidating(true);
     setValidationResult(null);
     try {
-      const res = await fetch('/api/scrum-board/tasks', {
+      const res = await fetch('api/scrum-board/tasks', {
         method: 'PATCH',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
@@ -686,7 +686,7 @@ export default function ScrumBoardClient({ appIds, externalIds = [] }: { appIds:
     setValidating(true);
     setValidationResult(null);
     try {
-      const res = await fetch('/api/scrum-board/tasks', {
+      const res = await fetch('api/scrum-board/tasks', {
         method: 'PATCH',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({

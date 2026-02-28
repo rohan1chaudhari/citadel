@@ -40,7 +40,7 @@ export function VisionSuggestPanel({ appId, onTasksCreated }: VisionSuggestPanel
     setCreatedCount(0);
 
     try {
-      const res = await fetch('/api/scrum-board/vision-suggest', {
+      const res = await fetch('api/scrum-board/vision-suggest', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ appId, forceRefresh }),
@@ -85,7 +85,7 @@ export function VisionSuggestPanel({ appId, onTasksCreated }: VisionSuggestPanel
     try {
       let created = 0;
       for (const task of selectedTasks) {
-        const res = await fetch('/api/scrum-board/tasks', {
+        const res = await fetch('api/scrum-board/tasks', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
