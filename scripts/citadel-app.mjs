@@ -52,7 +52,7 @@ async function writeTemplate(appDir, { appId, appName, port }) {
     health: '/healthz',
     permissions: [],
     runtime: {
-      cwd: '.',
+      cwd: appDir,
       build: 'npm run build',
       start: 'npm start',
       port: port
