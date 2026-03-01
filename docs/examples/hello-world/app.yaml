@@ -1,0 +1,15 @@
+id: hello-world
+name: Hello World
+description: A minimal example app demonstrating the Citadel app package spec
+version: 0.1.0
+author: Citadel Team
+homepage: https://github.com/openclaw/citadel
+permissions:
+  db:
+    read: true
+    write: true
+  storage:
+    read: false
+    write: false
+  ai: false
+  network: []
