@@ -1,6 +1,6 @@
 import { Shell, Card } from '@/components/Shell';
-import { listApps, type AppManifest } from '@/lib/registry';
-import { getAppPermissions, getAllAppPermissions, type AppPermissions, type PermissionScopes } from '@/lib/permissions';
+import { listApps, type AppManifest } from '@citadel/core';
+import { getAppPermissions, getAllAppPermissions, type AppPermissions, type PermissionScopes } from '@citadel/core';
 import Link from 'next/link';
 
 export const runtime = 'nodejs';

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { assertAppId } from '@/lib/appIds';
+import { assertAppId } from '@citadel/core';
 
 export const runtime = 'nodejs';
 

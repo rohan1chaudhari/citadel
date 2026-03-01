@@ -1,4 +1,4 @@
-import { dbExec, dbQuery } from '@/lib/db';
+import { dbExec, dbQuery } from '@citadel/core';
 
 const APP_ID = 'smart-notes';
 

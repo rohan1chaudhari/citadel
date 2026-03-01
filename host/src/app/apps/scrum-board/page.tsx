@@ -1,13 +1,18 @@
 import { Shell } from '@/components/Shell';
-import { listApps } from '@/lib/registry';
+import { listApps } from '@citadel/core';
 import { externalProjects } from '@/lib/externalProjects';
 import { ensureScrumBoardSchema } from '@/lib/scrumBoardSchema';
+import { requirePermissionConsent } from '@/lib/requirePermissionConsent';
 import { Suspense } from 'react';
 import ScrumBoardClient from './ScrumBoardClient';
 
 export const runtime = 'nodejs';
+const APP_ID = 'scrum-board';
 
 export default async function ScrumBoardPage() {
+  // Check and require permission consent on first visit
+  await requirePermissionConsent(APP_ID);
+  
   ensureScrumBoardSchema();
   const apps = await listApps();
   const appIds = apps.map((a) => a.id);

@@ -1,5 +1,6 @@
 import { Shell } from '@/components/Shell';
-import { dbExec, dbQuery } from '@/lib/db';
+import { dbExec, dbQuery } from '@citadel/core';
+import { requirePermissionConsent } from '@/lib/requirePermissionConsent';
 import { SoumilMoodTrackerClient } from './SoumilMoodTrackerClient';
 
 export const runtime = 'nodejs';
@@ -45,6 +46,9 @@ async function fetchEntries() {
 }
 
 export default async function SoumilMoodTrackerPage() {
+  // Check and require permission consent on first visit
+  await requirePermissionConsent(APP_ID);
+  
   const entries = await fetchEntries();
 
   return (

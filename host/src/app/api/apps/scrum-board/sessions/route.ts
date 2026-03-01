@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { dbQuery } from '@/lib/db';
+import { dbQuery } from '@citadel/core';
 import { ensureScrumBoardSchema, getSessionsForTask, getRecentSessions, archiveOldSessions } from '@/lib/scrumBoardSchema';
 
 export const runtime = 'nodejs';

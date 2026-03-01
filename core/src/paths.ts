@@ -15,3 +15,15 @@ export function appDataRoot(appId: string) {
 export function appDbPath(appId: string) {
   return path.join(appDataRoot(appId), 'db.sqlite');
 }
+
+/**
+ * Get the configured apps directory path.
+ * Uses CITADEL_APPS_DIR env var, or falls back to ../apps relative to repo root.
+ */
+export function appsDir() {
+  if (process.env.CITADEL_APPS_DIR) {
+    return path.resolve(process.env.CITADEL_APPS_DIR);
+  }
+  // Default: ../apps relative to repo root (monorepo structure)
+  return path.join(repoRoot(), 'apps');
+}

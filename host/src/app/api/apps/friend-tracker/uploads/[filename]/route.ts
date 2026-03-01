@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { createReadStream } from 'fs';
 import { stat } from 'fs/promises';
 import path from 'path';
-import { appDataRoot } from '@/lib/paths';
+import { appDataRoot } from '@citadel/core';
 
 export const runtime = 'nodejs';
 const APP_ID = 'friend-tracker';

@@ -1,6 +1,6 @@
 import { Shell, Card, Button } from '@/components/Shell';
 import { ensurePromoKitSchema } from '@/lib/promoKitSchema';
-import { dbExec } from '@/lib/db';
+import { dbExec } from '@citadel/core';
 import Link from 'next/link';
 import { execSync } from 'child_process';
 import { revalidatePath } from 'next/cache';

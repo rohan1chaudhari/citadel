@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
-import { dbExec, dbQuery } from '@/lib/db';
-import { audit } from '@/lib/audit';
+import { dbExec, dbQuery } from '@citadel/core';
+import { audit } from '@citadel/core';
 import { ensureScrumBoardSchema } from '@/lib/scrumBoardSchema';
 import fs from 'node:fs';
 import path from 'node:path';

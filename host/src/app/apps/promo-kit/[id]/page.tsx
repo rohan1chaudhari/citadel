@@ -1,6 +1,6 @@
 import { Shell, Card, Button } from '@/components/Shell';
 import { ensurePromoKitSchema } from '@/lib/promoKitSchema';
-import { dbQuery, dbExec } from '@/lib/db';
+import { dbQuery, dbExec } from '@citadel/core';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { revalidatePath } from 'next/cache';

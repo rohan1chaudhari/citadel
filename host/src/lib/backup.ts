@@ -3,8 +3,8 @@ import fsSync from 'node:fs';
 import path from 'node:path';
 import { exec } from 'node:child_process';
 import { promisify } from 'node:util';
-import { dataRoot } from './paths';
-import { audit } from './audit';
+import { dataRoot } from '@citadel/core';
+import { audit } from '@citadel/core';
 
 const execAsync = promisify(exec);
 const RETENTION_COUNT = 7;

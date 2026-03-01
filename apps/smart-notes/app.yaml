@@ -1,6 +1,8 @@
 id: smart-notes
 name: Smart Notes
+description: AI-powered note taking with voice input and photo attachments
 version: 0.1.0
+manifest_version: "1.0"
 permissions:
   db:
     read: true

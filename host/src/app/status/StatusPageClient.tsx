@@ -363,6 +363,13 @@ export default function StatusPageClient({ apps, backups, latestBackup }: Status
           </Card>
 
           <Card>
+            <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 mb-4">Settings</h2>
+            <div className="flex flex-wrap gap-3">
+              <LinkA href="/permissions">App Permissions →</LinkA>
+            </div>
+          </Card>
+
+          <Card>
             <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 mb-4">Diagnostics</h2>
             <div className="flex flex-wrap gap-3">
               <LinkA href="/api/health" target="_blank" rel="noreferrer">

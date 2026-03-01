@@ -1,6 +1,6 @@
 import { Shell } from '@/components/Shell';
 import { ensureSmartNotesSchema } from '@/lib/smartNotesSchema';
-import { dbExec, dbQuery } from '@/lib/db';
+import { dbExec, dbQuery } from '@citadel/core';
 import { redirect } from 'next/navigation';
 
 export const runtime = 'nodejs';

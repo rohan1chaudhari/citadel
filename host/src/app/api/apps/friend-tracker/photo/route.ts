@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { writeFile } from 'fs/promises';
 import { mkdir } from 'fs/promises';
 import path from 'path';
-import { appDataRoot } from '@/lib/paths';
+import { appDataRoot } from '@citadel/core';
 
 export const runtime = 'nodejs';
 const APP_ID = 'friend-tracker';

@@ -1,5 +1,5 @@
 import { Shell, Card, Button, LinkA } from '@/components/Shell';
-import { listHiddenApps } from '@/lib/registry';
+import { listHiddenApps } from '@citadel/core';
 import { HiddenAppGrid } from './HiddenAppGrid';
 
 export const runtime = 'nodejs';

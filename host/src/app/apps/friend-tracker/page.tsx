@@ -1,6 +1,7 @@
 import { Shell, Card, LinkA } from '@/components/Shell';
 import { FriendTrackerClient } from './FriendTrackerClient';
-import { dbExec, dbQuery } from '@/lib/db';
+import { dbExec, dbQuery } from '@citadel/core';
+import { requirePermissionConsent } from '@/lib/requirePermissionConsent';
 
 export const runtime = 'nodejs';
 const APP_ID = 'friend-tracker';
@@ -77,6 +78,9 @@ async function fetchData() {
 }
 
 export default async function FriendTrackerPage() {
+  // Check and require permission consent on first visit
+  await requirePermissionConsent(APP_ID);
+  
   const data = await fetchData();
   
   return (

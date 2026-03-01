@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getAppManifest } from '@/lib/registry';
+import { getAppManifest } from '@citadel/core';
 import { 
   getAppPermissions, 
   getAllAppPermissions, 
@@ -7,7 +7,7 @@ import {
   revokeAppPermissions,
   needsPermissionConsent,
   type PermissionScopes 
-} from '@/lib/permissions';
+} from '@citadel/core';
 
 export const runtime = 'nodejs';
 

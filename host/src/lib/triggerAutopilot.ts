@@ -1,6 +1,6 @@
 import { spawn } from 'child_process';
-import { audit } from '@/lib/audit';
-import { dbQuery, dbExec } from '@/lib/db';
+import { audit } from '@citadel/core';
+import { dbQuery, dbExec } from '@citadel/core';
 import { getSetting, acquireAgentLock, isAgentLocked, getActiveLock, createSession, updateSessionStatus } from '@/lib/scrumBoardSchema';
 
 const APP_ID = 'scrum-board';

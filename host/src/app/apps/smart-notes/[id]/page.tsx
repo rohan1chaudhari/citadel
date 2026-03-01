@@ -1,5 +1,5 @@
 import { Shell } from '@/components/Shell';
-import { dbQuery, dbExec } from '@/lib/db';
+import { dbQuery, dbExec } from '@citadel/core';
 import { ensureSmartNotesSchema } from '@/lib/smartNotesSchema';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';

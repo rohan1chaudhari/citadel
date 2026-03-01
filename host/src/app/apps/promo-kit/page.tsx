@@ -1,6 +1,7 @@
 import { Shell, Card, Button } from '@/components/Shell';
 import { ensurePromoKitSchema } from '@/lib/promoKitSchema';
-import { dbQuery } from '@/lib/db';
+import { dbQuery } from '@citadel/core';
+import { requirePermissionConsent } from '@/lib/requirePermissionConsent';
 import Link from 'next/link';
 import { CopyButton } from './CopyButton';
 
@@ -90,6 +91,9 @@ function ensureSeedPosts() {
 }
 
 export default async function PromoKitPage() {
+  // Check and require permission consent on first visit
+  await requirePermissionConsent(APP_ID);
+
   ensurePromoKitSchema();
   ensureSeedPosts();
 

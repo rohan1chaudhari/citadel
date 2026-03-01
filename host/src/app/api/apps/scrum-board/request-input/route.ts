@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { dbExec, dbQuery } from '@/lib/db';
+import { dbExec, dbQuery } from '@citadel/core';
 import { ensureScrumBoardSchema, normalizeStatus } from '@/lib/scrumBoardSchema';
 
 export const runtime = 'nodejs';

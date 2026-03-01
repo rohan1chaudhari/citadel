@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { dbExec, dbQuery } from '@/lib/db';
+import { dbExec, dbQuery } from '@citadel/core';
 
 export const runtime = 'nodejs';
 const APP_ID = 'friend-tracker';

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { audit } from '@/lib/audit';
+import { audit } from '@citadel/core';
 
 export async function POST(request: NextRequest) {
   try {

@@ -283,6 +283,31 @@ export function NavigationDrawer({ apps, currentAppId }: NavigationDrawerProps) 
               </div>
             </div>
           </Link>
+
+          {/* Audit Logs Link */}
+          <Link
+            href="/audit"
+            onClick={handleLinkClick}
+            className={`flex items-center gap-3 px-3 py-2.5 min-h-[44px] rounded-lg transition-colors ${
+              currentAppId === 'audit'
+                ? 'bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900'
+                : 'hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300'
+            }`}
+          >
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+              currentAppId === 'audit' ? 'bg-white/20 dark:bg-zinc-900/20' : 'bg-zinc-100 dark:bg-zinc-800'
+            }`}>
+              <svg className={`w-5 h-5 ${currentAppId === 'audit' ? 'text-white dark:text-zinc-900' : 'text-zinc-600 dark:text-zinc-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+              </svg>
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="font-medium truncate">Audit Logs</div>
+              <div className={`text-xs truncate ${currentAppId === 'audit' ? 'text-white/70 dark:text-zinc-900/70' : 'text-zinc-500 dark:text-zinc-400'}`}>
+                System activity & API calls
+              </div>
+            </div>
+          </Link>
         </nav>
       </aside>
     </>

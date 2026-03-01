@@ -1,5 +1,5 @@
-import { hasAiPermission } from '@/lib/permissions';
-import { audit } from '@/lib/audit';
+import { hasAiPermission } from '@citadel/core';
+import { audit } from '@citadel/core';
 import { NextResponse } from 'next/server';
 
 /**

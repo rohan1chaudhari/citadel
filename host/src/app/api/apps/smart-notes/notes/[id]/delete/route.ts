@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
-import { dbExec } from '@/lib/db';
-import { audit } from '@/lib/audit';
+import { dbExec } from '@citadel/core';
+import { audit } from '@citadel/core';
 import { ensureSmartNotesSchema } from '@/lib/smartNotesSchema';
 
 export const runtime = 'nodejs';

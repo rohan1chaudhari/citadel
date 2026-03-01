@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
-import { appDbPath, appDataRoot } from '@/lib/paths';
-import { audit } from '@/lib/audit';
-import { listApps } from '@/lib/registry';
+import { appDbPath, appDataRoot } from '@citadel/core';
+import { audit } from '@citadel/core';
+import { listApps } from '@citadel/core';
 import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import path from 'node:path';

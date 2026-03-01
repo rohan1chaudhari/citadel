@@ -1,6 +1,7 @@
 import { Shell } from '@/components/Shell';
-import { dbQuery } from '@/lib/db';
+import { dbQuery } from '@citadel/core';
 import { ensureSmartNotesSchema } from '@/lib/smartNotesSchema';
+import { requirePermissionConsent } from '@/lib/requirePermissionConsent';
 import Link from 'next/link';
 import PhotoCaptureButton from './PhotoCaptureButton';
 import VoiceCaptureButton from './VoiceCaptureButton';
@@ -9,6 +10,9 @@ export const runtime = 'nodejs';
 const APP_ID = 'smart-notes';
 
 export default async function SmartNotesListPage() {
+  // Check and require permission consent on first visit
+  await requirePermissionConsent(APP_ID);
+  
   ensureSmartNotesSchema();
   const rows = dbQuery<any>(
     APP_ID,

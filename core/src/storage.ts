@@ -1,9 +1,9 @@
 import fsp from 'node:fs/promises';
 import path from 'node:path';
-import { assertAppId } from '@/lib/appIds';
-import { appDataRoot } from '@/lib/paths';
-import { audit } from '@/lib/audit';
-import { hasStoragePermission } from '@/lib/permissions';
+import { assertAppId } from './appIds.js';
+import { appDataRoot } from './paths.js';
+import { audit } from './audit.js';
+import { hasStoragePermission } from './permissions.js';
 
 function resolveScoped(appId: string, rel: string) {
   assertAppId(appId);

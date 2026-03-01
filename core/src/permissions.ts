@@ -1,5 +1,5 @@
 import { DatabaseSync } from 'node:sqlite';
-import { appDbPath } from '@/lib/paths';
+import { appDbPath } from './paths.js';
 
 const CITADEL_APP_ID = 'citadel';
 

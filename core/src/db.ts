@@ -1,11 +1,11 @@
 import { DatabaseSync } from 'node:sqlite';
 import fs from 'node:fs';
 import fsp from 'node:fs/promises';
-import { assertAppId } from '@/lib/appIds';
-import { appDbPath, appDataRoot } from '@/lib/paths';
-import { assertSqlAllowed } from '@/lib/sqlGuardrails';
-import { audit } from '@/lib/audit';
-import { hasDbPermission } from '@/lib/permissions';
+import { assertAppId } from './appIds.js';
+import { appDbPath, appDataRoot } from './paths.js';
+import { assertSqlAllowed } from './sqlGuardrails.js';
+import { audit } from './audit.js';
+import { hasDbPermission } from './permissions.js';
 
 const dbs = new Map<string, DatabaseSync>();
 

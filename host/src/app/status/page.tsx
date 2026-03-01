@@ -1,8 +1,8 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { listApps } from '@/lib/registry';
-import { appDbPath, appDataRoot } from '@/lib/paths';
-import { dbQuery } from '@/lib/db';
+import { listApps } from '@citadel/core';
+import { appDbPath, appDataRoot } from '@citadel/core';
+import { dbQuery } from '@citadel/core';
 import { listBackups, getLatestBackup, formatBytes } from '@/lib/backup';
 import StatusPageClient from './StatusPageClient';
 

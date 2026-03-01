@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
-import { dbExec, dbQuery } from '@/lib/db';
-import { storageReadText, storageWriteText } from '@/lib/storage';
+import { dbExec, dbQuery } from '@citadel/core';
+import { storageReadText, storageWriteText } from '@citadel/core';
 
 export const runtime = 'nodejs';
 

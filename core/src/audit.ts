@@ -1,6 +1,7 @@
 import { DatabaseSync } from 'node:sqlite';
 import fs from 'node:fs';
 import path from 'node:path';
+import { appDbPath } from './paths.js';
 
 const CITADEL_APP_ID = 'citadel';
 const RETENTION_DAYS = 90;

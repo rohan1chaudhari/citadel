@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getSetting, setSetting, ensureScrumBoardSchema } from '@/lib/scrumBoardSchema';
-import { audit } from '@/lib/audit';
+import { audit } from '@citadel/core';
 
 export const runtime = 'nodejs';
 const APP_ID = 'scrum-board';

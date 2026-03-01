@@ -1,6 +1,7 @@
 import { Card, LinkA, Shell } from '@/components/Shell';
 import { GymTrackerClient } from './GymTrackerClient';
-import { dbExec, dbQuery } from '@/lib/db';
+import { dbExec, dbQuery } from '@citadel/core';
+import { requirePermissionConsent } from '@/lib/requirePermissionConsent';
 
 export const runtime = 'nodejs';
 const APP_ID = 'gym-tracker';
@@ -130,6 +131,9 @@ async function fetchData() {
 }
 
 export default async function GymTrackerPage() {
+  // Check and require permission consent on first visit
+  await requirePermissionConsent(APP_ID);
+  
   const data = await fetchData();
 
   return (

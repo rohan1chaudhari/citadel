@@ -1,4 +1,4 @@
-import { dbExec, dbQuery } from '@/lib/db';
+import { dbExec, dbQuery } from '@citadel/core';
 import { NextRequest, NextResponse } from 'next/server';
 
 const CITADEL_APP_ID = 'citadel';

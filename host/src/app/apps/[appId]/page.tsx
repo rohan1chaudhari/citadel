@@ -1,5 +1,5 @@
-import { notFound } from 'next/navigation';
-import { listApps } from '@/lib/registry';
+import { notFound, redirect } from 'next/navigation';
+import { listApps, needsPermissionConsent } from '@citadel/core';
 
 export const runtime = 'nodejs';
 
@@ -8,6 +8,11 @@ export default async function AppPage({ params }: { params: Promise<{ appId: str
   const apps = await listApps();
   const app = apps.find((a) => a.id === appId);
   if (!app) return notFound();
+
+  // Check if app needs permission consent on first visit
+  if (needsPermissionConsent(appId, app.permissions ?? {})) {
+    redirect(`/permissions/${appId}`);
+  }
 
   return (
     <main>

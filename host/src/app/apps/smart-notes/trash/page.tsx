@@ -1,5 +1,5 @@
 import { Button, Card, LinkA, Shell } from '@/components/Shell';
-import { dbExec, dbQuery } from '@/lib/db';
+import { dbExec, dbQuery } from '@citadel/core';
 import { ensureSmartNotesSchema } from '@/lib/smartNotesSchema';
 
 export const runtime = 'nodejs';

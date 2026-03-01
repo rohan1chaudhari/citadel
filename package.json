@@ -2,6 +2,7 @@
   "name": "citadel",
   "private": true,
   "workspaces": [
+    "core",
     "host",
     "apps/*"
   ],
