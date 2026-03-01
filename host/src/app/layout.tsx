@@ -2,8 +2,8 @@ import type { ReactNode } from 'react';
 import type { Viewport } from 'next';
 import './globals.css';
 import { NavigationDrawer } from '@/components/NavigationDrawer';
-import { listApps } from '@/lib/registry';
-import { cleanupOldAuditLogs } from '@/lib/audit';
+import { listApps } from '@citadel/core';
+import { cleanupOldAuditLogs } from '@citadel/core';
 import { startBackupScheduler, runBackupIfNeeded } from '@/lib/backup';
 import { ThemeProvider } from '@/lib/theme';
 
@@ -59,7 +59,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
             {children}
           </div>
         </ThemeProvider>
-        <ServiceWorkerRegistration />
+        {process.env.NODE_ENV === 'production' ? <ServiceWorkerRegistration /> : null}
       </body>
     </html>
   );
