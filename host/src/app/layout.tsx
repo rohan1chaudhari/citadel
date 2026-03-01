@@ -3,6 +3,7 @@ import type { Viewport } from 'next';
 import './globals.css';
 import { NavigationDrawer } from '@/components/NavigationDrawer';
 import { listApps } from '@/lib/registry';
+import { cleanupOldAuditLogs } from '@/lib/audit';
 
 export const viewport: Viewport = {
   width: 'device-width',
@@ -14,6 +15,9 @@ export const viewport: Viewport = {
 
 export default async function RootLayout({ children }: { children: ReactNode }) {
   const apps = await listApps(false);
+
+  // Run audit log cleanup on startup (server-side only)
+  cleanupOldAuditLogs();
 
   return (
     <html lang="en">

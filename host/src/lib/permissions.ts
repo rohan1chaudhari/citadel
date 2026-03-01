@@ -1,6 +1,20 @@
-import { dbExec, dbQuery } from '@/lib/db';
+import { DatabaseSync } from 'node:sqlite';
+import { appDbPath } from '@/lib/paths';
 
 const CITADEL_APP_ID = 'citadel';
+
+// Raw DB access for permissions system to avoid circular dependency
+// (permissions.ts cannot use db.ts which depends on permissions.ts)
+let citadelDb: DatabaseSync | null = null;
+
+function getCitadelDb(): DatabaseSync {
+  if (!citadelDb) {
+    citadelDb = new DatabaseSync(appDbPath(CITADEL_APP_ID));
+    citadelDb.exec('PRAGMA journal_mode = WAL');
+    citadelDb.exec('PRAGMA foreign_keys = ON');
+  }
+  return citadelDb;
+}
 
 export type PermissionScopes = {
   db?: { read?: boolean; write?: boolean };
@@ -17,7 +31,8 @@ export type AppPermissions = {
 };
 
 function ensurePermissionsTable() {
-  dbExec(CITADEL_APP_ID, `
+  const db = getCitadelDb();
+  db.exec(`
     CREATE TABLE IF NOT EXISTS app_permissions (
       app_id TEXT PRIMARY KEY,
       scopes TEXT NOT NULL,
@@ -29,11 +44,9 @@ function ensurePermissionsTable() {
 
 export function getAppPermissions(appId: string): AppPermissions | null {
   ensurePermissionsTable();
-  const row = dbQuery<{ app_id: string; scopes: string; granted_at: string; updated_at: string }>(
-    CITADEL_APP_ID,
-    'SELECT app_id, scopes, granted_at, updated_at FROM app_permissions WHERE app_id = ? LIMIT 1',
-    [appId]
-  )[0];
+  const db = getCitadelDb();
+  const stmt = db.prepare('SELECT app_id, scopes, granted_at, updated_at FROM app_permissions WHERE app_id = ? LIMIT 1');
+  const row = stmt.get(appId) as { app_id: string; scopes: string; granted_at: string; updated_at: string } | undefined;
   
   if (!row) return null;
   
@@ -51,10 +64,9 @@ export function getAppPermissions(appId: string): AppPermissions | null {
 
 export function getAllAppPermissions(): AppPermissions[] {
   ensurePermissionsTable();
-  const rows = dbQuery<{ app_id: string; scopes: string; granted_at: string; updated_at: string }>(
-    CITADEL_APP_ID,
-    'SELECT app_id, scopes, granted_at, updated_at FROM app_permissions ORDER BY app_id'
-  );
+  const db = getCitadelDb();
+  const stmt = db.prepare('SELECT app_id, scopes, granted_at, updated_at FROM app_permissions ORDER BY app_id');
+  const rows = stmt.all() as { app_id: string; scopes: string; granted_at: string; updated_at: string }[];
   
   return rows
     .map((row) => {
@@ -74,38 +86,46 @@ export function getAllAppPermissions(): AppPermissions[] {
 
 export function setAppPermissions(appId: string, scopes: PermissionScopes): void {
   ensurePermissionsTable();
+  const db = getCitadelDb();
   const now = new Date().toISOString();
   const scopesJson = JSON.stringify(scopes);
   
-  dbExec(
-    CITADEL_APP_ID,
-    `INSERT INTO app_permissions (app_id, scopes, granted_at, updated_at)
-     VALUES (?, ?, ?, ?)
-     ON CONFLICT(app_id) DO UPDATE SET
-       scopes = excluded.scopes,
-       updated_at = excluded.updated_at`,
-    [appId, scopesJson, now, now]
-  );
+  const stmt = db.prepare(`
+    INSERT INTO app_permissions (app_id, scopes, granted_at, updated_at)
+    VALUES (?, ?, ?, ?)
+    ON CONFLICT(app_id) DO UPDATE SET
+      scopes = excluded.scopes,
+      updated_at = excluded.updated_at
+  `);
+  stmt.run(appId, scopesJson, now, now);
 }
 
 export function revokeAppPermissions(appId: string): void {
   ensurePermissionsTable();
-  dbExec(CITADEL_APP_ID, 'DELETE FROM app_permissions WHERE app_id = ?', [appId]);
+  const db = getCitadelDb();
+  const stmt = db.prepare('DELETE FROM app_permissions WHERE app_id = ?');
+  stmt.run(appId);
 }
 
 export function hasDbPermission(appId: string, operation: 'read' | 'write'): boolean {
+  // Citadel host app has full database access
+  if (appId === CITADEL_APP_ID) return true;
   const perms = getAppPermissions(appId);
   if (!perms) return false;
   return perms.scopes.db?.[operation] === true;
 }
 
 export function hasStoragePermission(appId: string, operation: 'read' | 'write'): boolean {
+  // Citadel host app has full storage access
+  if (appId === CITADEL_APP_ID) return true;
   const perms = getAppPermissions(appId);
   if (!perms) return false;
   return perms.scopes.storage?.[operation] === true;
 }
 
 export function hasAiPermission(appId: string): boolean {
+  // Citadel host app has full AI access
+  if (appId === CITADEL_APP_ID) return true;
   const perms = getAppPermissions(appId);
   if (!perms) return false;
   return perms.scopes.ai === true;
