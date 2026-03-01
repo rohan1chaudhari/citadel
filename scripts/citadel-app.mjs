@@ -8,6 +8,7 @@
  *   citadel-app update <app-id>                Update an installed app
  *   citadel-app create <app-id>                Create a new app from template
  *   citadel-app migrate <app-id>               Run migrations for an app
+ *   citadel-app dev <path-to-app>              Start dev mode for local app development
  * 
  * Environment:
  *   CITADEL_APPS_DIR    - Apps directory (default: ../apps from script location)
@@ -391,6 +392,168 @@ async function migrateCommand(appId, options = {}) {
   }
 }
 
+// Rollback migrations for an app using the core module or inline fallback
+async function rollbackMigrations(appId, steps = 1) {
+  const core = await getMigrationModule();
+  
+  if (core && core.rollbackMigrationsForApp) {
+    // Use the core module's rollback runner
+    const result = await core.rollbackMigrationsForApp(appId, steps);
+    
+    if (result.failed) {
+      throw new Error(`Rollback ${result.failed.file} failed: ${result.failed.error}`);
+    }
+    
+    for (const file of result.skipped) {
+      info(`Skipped (no down file): ${file}`);
+    }
+    
+    for (const file of result.rolledBack) {
+      success(`Rolled back: ${file}`);
+    }
+    
+    return result;
+  }
+  
+  // Fallback: inline rollback runner
+  const { DatabaseSync } = await import('node:sqlite');
+  const appDir = path.join(APPS_DIR, appId);
+  const migrationsDir = path.join(appDir, 'migrations');
+  const appDataDir = path.join(DATA_DIR, 'apps', appId);
+
+  // Check if migrations directory exists
+  try {
+    await fs.access(migrationsDir);
+  } catch {
+    info('No migrations to rollback');
+    return { rolledBack: [], skipped: [] };
+  }
+
+  // Get list of migration files (excluding down files)
+  const files = await fs.readdir(migrationsDir);
+  const migrationFiles = files
+    .filter(f => f.endsWith('.sql') && !f.endsWith('.down.sql'))
+    .sort();
+
+  if (migrationFiles.length === 0) {
+    info('No migrations to rollback');
+    return { rolledBack: [], skipped: [] };
+  }
+
+  const citadelDbPath = path.join(DATA_DIR, 'citadel.sqlite');
+  const citadelDb = new DatabaseSync(citadelDbPath);
+  
+  try {
+    // Ensure migrations table exists
+    citadelDb.exec(`
+      CREATE TABLE IF NOT EXISTS migrations (
+        app_id TEXT NOT NULL,
+        migration_name TEXT NOT NULL,
+        applied_at TEXT NOT NULL,
+        PRIMARY KEY (app_id, migration_name)
+      )
+    `);
+
+    // Get applied migrations
+    const appliedStmt = citadelDb.prepare('SELECT migration_name FROM migrations WHERE app_id = ?');
+    const appliedRows = appliedStmt.all(appId);
+    const appliedSet = new Set(appliedRows.map(r => r.migration_name));
+    const appliedMigrations = migrationFiles.filter(m => appliedSet.has(m));
+
+    if (appliedMigrations.length === 0) {
+      info('No applied migrations to rollback');
+      return { rolledBack: [], skipped: [] };
+    }
+
+    // Get last N migrations to rollback (in reverse order)
+    const toRollback = appliedMigrations.slice(-steps).reverse();
+    const result = { rolledBack: [], skipped: [] };
+
+    // Connect to app DB
+    const appDbPath = path.join(appDataDir, 'db.sqlite');
+    const appDb = new DatabaseSync(appDbPath);
+
+    try {
+      for (const file of toRollback) {
+        const downFile = file.replace(/\.sql$/, '.down.sql');
+        const downPath = path.join(migrationsDir, downFile);
+
+        // Check if down migration exists
+        let downSql;
+        try {
+          await fs.access(downPath);
+          downSql = await fs.readFile(downPath, 'utf8');
+        } catch {
+          info(`Skipped (no down file): ${file}`);
+          result.skipped.push(file);
+          continue;
+        }
+
+        // Run rollback in a transaction
+        appDb.exec('BEGIN TRANSACTION');
+        try {
+          appDb.exec(downSql);
+          appDb.exec('COMMIT');
+        } catch (e) {
+          appDb.exec('ROLLBACK');
+          throw e;
+        }
+
+        // Remove from migrations table
+        const deleteStmt = citadelDb.prepare('DELETE FROM migrations WHERE app_id = ? AND migration_name = ?');
+        deleteStmt.run(appId, file);
+
+        success(`Rolled back: ${file}`);
+        result.rolledBack.push(file);
+      }
+    } finally {
+      appDb.close();
+    }
+    
+    return result;
+  } finally {
+    citadelDb.close();
+  }
+}
+
+// MIGRATE ROLLBACK COMMAND
+async function migrateRollbackCommand(appId, options = {}) {
+  if (!appId) {
+    error('Usage: citadel-app migrate:rollback <app-id> [--steps=N]');
+  }
+
+  // Validate app ID
+  const idCheck = validateAppId(appId);
+  if (!idCheck.valid) {
+    error(idCheck.error);
+  }
+
+  // Check if app is installed
+  const appDir = path.join(APPS_DIR, appId);
+  try {
+    await fs.access(appDir);
+  } catch {
+    error(`App "${appId}" is not installed`);
+  }
+
+  const steps = options.steps || 1;
+  log(`Rolling back ${steps} migration(s) for: ${appId}`, 'blue');
+
+  try {
+    const result = await rollbackMigrations(appId, steps);
+    
+    if (result.rolledBack.length === 0 && result.skipped.length === 0) {
+      info('No migrations to rollback');
+    } else if (result.rolledBack.length === 0) {
+      info('No rollbacks performed (migrations may be missing down files)');
+    } else {
+      success(`${result.rolledBack.length} migration(s) rolled back`);
+    }
+  } catch (err) {
+    error(`Rollback failed: ${err.message}`);
+  }
+}
+
 // UPDATE COMMAND
 async function updateCommand(appId, options = {}) {
   if (options.all) {
@@ -692,10 +855,195 @@ async function uninstallCommand(appId, options = {}) {
   }
 }
 
+// Templates for app scaffolding
+const TEMPLATES = {
+  blank: {
+    name: 'Blank',
+    description: 'Minimal app with basic structure',
+    migration: `CREATE TABLE IF NOT EXISTS entries (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  title TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);`,
+    pageComponent: (appId, title, componentName) => `import { Shell, Card } from '@/components/Shell';
+
+export const runtime = 'nodejs';
+
+export default function ${componentName}Page() {
+  return (
+    <Shell title="${title}" subtitle="Generated by citadel-app create">
+      <Card>
+        <p>Welcome to ${title}.</p>
+        <p className="text-sm text-zinc-500 mt-2">
+          App ID: ${appId}
+        </p>
+      </Card>
+    </Shell>
+  );
+}`,
+    apiRoute: (appId) => `import { NextResponse } from 'next/server';
+
+export const runtime = 'nodejs';
+
+export async function GET() {
+  return NextResponse.json({ ok: true, appId: '${appId}' });
+}`,
+  },
+  crud: {
+    name: 'CRUD',
+    description: 'Full CRUD app with list, create, edit, and delete',
+    migration: `CREATE TABLE IF NOT EXISTS items (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  title TEXT NOT NULL,
+  description TEXT,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_items_created_at ON items(created_at);`,
+    pageComponent: (appId, title, componentName) => `import { Shell, Card, LinkA } from '@/components/Shell';
+import { dbQuery, dbExec } from '@citadel/core';
+import { requirePermissionConsent } from '@/lib/requirePermissionConsent';
+import Link from 'next/link';
+
+export const runtime = 'nodejs';
+const APP_ID = '${appId}';
+
+type Item = {
+  id: number;
+  title: string;
+  description: string | null;
+  created_at: string;
+};
+
+function ensureSchema() {
+  dbExec(APP_ID, \`
+    CREATE TABLE IF NOT EXISTS items (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      title TEXT NOT NULL,
+      description TEXT,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT
+    )
+  \`);
+}
+
+async function fetchItems(): Promise<Item[]> {
+  ensureSchema();
+  const rows = dbQuery<{ id: number; title: string; description: string | null; created_at: string }>(
+    APP_ID,
+    'SELECT id, title, description, created_at FROM items ORDER BY id DESC LIMIT 50'
+  );
+  return rows.map(r => ({
+    id: Number(r.id),
+    title: String(r.title),
+    description: r.description,
+    created_at: String(r.created_at)
+  }));
+}
+
+export default async function ${componentName}Page() {
+  await requirePermissionConsent(APP_ID);
+  const items = await fetchItems();
+
+  return (
+    <Shell title="${title}" subtitle="Manage your items">
+      <div className="flex items-center justify-between">
+        <LinkA href="/">← home</LinkA>
+        <Link
+          href={\`/apps/\${APP_ID}/new\`}
+          className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-800"
+        >
+          + New Item
+        </Link>
+      </div>
+
+      <div className="grid gap-3">
+        {items.map((item) => (
+          <Link
+            key={item.id}
+            href={\`/apps/\${APP_ID}/\${item.id}\`}
+            className="block rounded-xl border border-zinc-200 bg-white p-4 transition hover:border-zinc-400"
+          >
+            <h3 className="font-semibold text-zinc-900">{item.title}</h3>
+            {item.description && (
+              <p className="mt-1 text-sm text-zinc-500">{item.description}</p>
+            )}
+            <p className="mt-2 text-xs text-zinc-400">#{item.id}</p>
+          </Link>
+        ))}
+
+        {items.length === 0 && (
+          <Card>
+            <p className="text-zinc-600">No items yet.</p>
+            <Link
+              href={\`/apps/\${APP_ID}/new\`}
+              className="mt-4 inline-block rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-800"
+            >
+              Create your first item
+            </Link>
+          </Card>
+        )}
+      </div>
+    </Shell>
+  );
+}`,
+    apiRoute: (appId) => `import { NextResponse } from 'next/server';
+import { dbQuery, dbExec } from '@citadel/core';
+
+export const runtime = 'nodejs';
+const APP_ID = '${appId}';
+
+export async function GET() {
+  try {
+    const items = dbQuery(
+      APP_ID,
+      'SELECT id, title, description, created_at FROM items ORDER BY id DESC LIMIT 100'
+    );
+    return NextResponse.json({ ok: true, items });
+  } catch (err) {
+    return NextResponse.json({ ok: false, error: err instanceof Error ? err.message : String(err) }, { status: 500 });
+  }
+}
+
+export async function POST(request: Request) {
+  try {
+    const body = await request.json();
+    const { title, description } = body;
+
+    if (!title || typeof title !== 'string') {
+      return NextResponse.json({ ok: false, error: 'Title is required' }, { status: 400 });
+    }
+
+    dbExec(APP_ID, \`
+      INSERT INTO items (title, description, created_at)
+      VALUES (?, ?, datetime('now'))
+    \`, [title, description || null]);
+
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    return NextResponse.json({ ok: false, error: err instanceof Error ? err.message : String(err) }, { status: 500 });
+  }
+}`,
+  },
+};
+
+function listTemplates() {
+  log('Available templates:', 'blue');
+  for (const [key, tmpl] of Object.entries(TEMPLATES)) {
+    info(`  ${key}: ${tmpl.name} - ${tmpl.description}`);
+  }
+}
+
 // CREATE COMMAND
-async function createCommand(appId) {
+async function createCommand(appId, options = {}) {
+  if (options.listTemplates) {
+    listTemplates();
+    return;
+  }
+
   if (!appId) {
-    error('Usage: citadel-app create <app-id>');
+    error('Usage: citadel-app create <app-id> [--template=<name>] [--list-templates]');
   }
 
   const idCheck = validateAppId(appId);
@@ -703,7 +1051,18 @@ async function createCommand(appId) {
     error(idCheck.error);
   }
 
+  // Validate template
+  const templateName = options.template || 'blank';
+  const template = TEMPLATES[templateName];
+  if (!template) {
+    error(`Unknown template: "${templateName}". Use --list-templates to see available templates.`);
+  }
+
   const targetDir = path.join(APPS_DIR, appId);
+  const hostAppDir = path.join(REPO_ROOT, 'host', 'src', 'app', 'apps', appId);
+  const hostApiDir = path.join(REPO_ROOT, 'host', 'src', 'app', 'api', 'apps', appId);
+
+  // Check if app already exists
   try {
     await fs.access(targetDir);
     error(`App directory already exists: ${targetDir}`);
@@ -711,9 +1070,20 @@ async function createCommand(appId) {
     // expected: does not exist
   }
 
-  log(`Creating app scaffold: ${appId}`, 'blue');
+  // Check if host page already exists
+  try {
+    await fs.access(hostAppDir);
+    error(`Host app directory already exists: ${hostAppDir}`);
+  } catch {
+    // expected: does not exist
+  }
+
+  log(`Creating app scaffold: ${appId} (template: ${templateName})`, 'blue');
+
+  // Create directories
   await fs.mkdir(path.join(targetDir, 'migrations'), { recursive: true });
-  await fs.mkdir(path.join(targetDir, 'api'), { recursive: true });
+  await fs.mkdir(hostAppDir, { recursive: true });
+  await fs.mkdir(hostApiDir, { recursive: true });
 
   const title = appId
     .split('-')
@@ -721,26 +1091,170 @@ async function createCommand(appId) {
     .map((p) => p[0].toUpperCase() + p.slice(1))
     .join(' ');
 
-  const appYaml = `id: ${appId}\nname: ${title}\nversion: 0.1.0\nmanifest_version: "1.0"\npermissions:\n  db:\n    read: true\n    write: true\n  storage:\n    read: false\n    write: false\nconnectors: []\n`;
+  const componentName = title.replace(/[^A-Za-z0-9]/g, '') || 'NewApp';
 
-  const migrationSql = `CREATE TABLE IF NOT EXISTS entries (\n  id INTEGER PRIMARY KEY AUTOINCREMENT,\n  title TEXT NOT NULL,\n  created_at TEXT NOT NULL\n);\n`;
+  const appYaml = `id: ${appId}
+name: ${title}
+version: 0.1.0
+manifest_version: "1.0"
+permissions:
+  db:
+    read: true
+    write: true
+  storage:
+    read: false
+    write: false
+connectors: []
+`;
 
-  const pageTsx = `import { Shell, Card } from '@/components/Shell';\n\nexport const runtime = 'nodejs';\n\nexport default function ${title.replace(/[^A-Za-z0-9]/g, '') || 'NewApp'}Page() {\n  return (\n    <Shell title=\"${title}\" subtitle=\"Generated by citadel-app create\">\n      <Card>\n        <p>Welcome to ${title}.</p>\n      </Card>\n    </Shell>\n  );\n}\n`;
+  const readme = `# ${title}
 
-  const apiRoute = `import { NextResponse } from 'next/server';\n\nexport const runtime = 'nodejs';\n\nexport async function GET() {\n  return NextResponse.json({ ok: true, appId: '${appId}' });\n}\n`;
+Generated with:
 
-  const readme = `# ${title}\n\nGenerated with:\n\n\`\`\`bash\ncitadel-app create ${appId}\n\`\`\`\n\n## Files\n- \`app.yaml\` manifest\n- \`migrations/001_initial.sql\` initial DB schema\n- \`page.tsx\` host page scaffold\n- \`api/route.ts\` sample API route\n`;
+\`\`\`bash
+citadel-app create ${appId} --template=${templateName}
+\`\`\`
 
+## Files
+- \`app.yaml\` - App manifest
+- \`migrations/001_initial.sql\` - Initial DB schema
+- \`host/src/app/apps/${appId}/page.tsx\` - Main page component
+- \`host/src/app/api/apps/${appId}/route.ts\` - API route
+
+## Next Steps
+
+1. Review and customize \`app.yaml\`
+2. Edit the page at \`host/src/app/apps/${appId}/page.tsx\`
+3. Add API endpoints in \`host/src/app/api/apps/${appId}/\`
+4. Run migrations: \`npm run citadel-app migrate ${appId}\`
+5. Start the host and visit http://localhost:3000/apps/${appId}
+`;
+
+  // Write app files
   await fs.writeFile(path.join(targetDir, 'app.yaml'), appYaml, 'utf8');
-  await fs.writeFile(path.join(targetDir, 'migrations', '001_initial.sql'), migrationSql, 'utf8');
-  await fs.writeFile(path.join(targetDir, 'page.tsx'), pageTsx, 'utf8');
-  await fs.writeFile(path.join(targetDir, 'api', 'route.ts'), apiRoute, 'utf8');
+  await fs.writeFile(path.join(targetDir, 'migrations', '001_initial.sql'), template.migration, 'utf8');
   await fs.writeFile(path.join(targetDir, 'README.md'), readme, 'utf8');
 
+  // Write host files
+  await fs.writeFile(path.join(hostAppDir, 'page.tsx'), template.pageComponent(appId, title, componentName), 'utf8');
+  await fs.writeFile(path.join(hostApiDir, 'route.ts'), template.apiRoute(appId), 'utf8');
+
   success(`Created app scaffold at ${targetDir}`);
+  info('Files created:');
+  info(`  - ${path.join(targetDir, 'app.yaml')}`);
+  info(`  - ${path.join(targetDir, 'migrations', '001_initial.sql')}`);
+  info(`  - ${path.join(hostAppDir, 'page.tsx')}`);
+  info(`  - ${path.join(hostApiDir, 'route.ts')}`);
+  info(`  - ${path.join(targetDir, 'README.md')}`);
+  info('');
   info('Next steps:');
-  info(`1) Review ${path.join(targetDir, 'app.yaml')}`);
-  info(`2) Start host and open /apps/${appId}`);
+  info('1) Review the generated files');
+  info(`2) Run: npm run citadel-app migrate ${appId}`);
+  info(`3) Start host and open /apps/${appId}`);
+}
+
+// DEV COMMAND
+async function devCommand(appPath, options = {}) {
+  if (!appPath) {
+    error('Usage: citadel-app dev <path-to-app>');
+  }
+
+  const resolvedPath = path.resolve(appPath);
+  
+  // Check if path exists
+  try {
+    await fs.access(resolvedPath);
+  } catch {
+    error(`Path does not exist: ${resolvedPath}`);
+  }
+
+  // Check if it's a directory
+  const stats = await fs.stat(resolvedPath);
+  if (!stats.isDirectory()) {
+    error(`Path is not a directory: ${resolvedPath}`);
+  }
+
+  // Read and validate manifest
+  const manifestPath = path.join(resolvedPath, 'app.yaml');
+  try {
+    await fs.access(manifestPath);
+  } catch {
+    error(`No app.yaml found in ${resolvedPath}`);
+  }
+
+  log(`Reading app manifest...`, 'blue');
+  const manifest = await readManifest(manifestPath);
+  const validation = validateManifest(manifest, manifestPath);
+  
+  if (!validation.valid) {
+    error(`Invalid manifest:\n  - ${validation.errors.join('\n  - ')}`);
+  }
+
+  const appId = manifest.id;
+  info(`App ID: ${appId}`);
+  info(`Name: ${manifest.name}`);
+  info(`Version: ${manifest.version}`);
+
+  // Check if this app ID is already installed (not as a symlink)
+  const targetLinkPath = path.join(APPS_DIR, appId);
+  
+  try {
+    const existingStat = await fs.lstat(targetLinkPath);
+    if (existingStat.isDirectory() && !existingStat.isSymbolicLink()) {
+      // It's a regular directory - error unless --force
+      if (!options.force) {
+        error(`App "${appId}" is already installed as a regular directory. Use --force to replace with symlink, or uninstall first.`);
+      }
+      // Remove the existing directory
+      log(`Removing existing app directory (forced)...`, 'yellow');
+      await fs.rm(targetLinkPath, { recursive: true, force: true });
+    } else if (existingStat.isSymbolicLink()) {
+      // It's already a symlink - remove it to recreate
+      const existingTarget = await fs.readlink(targetLinkPath);
+      info(`Removing existing symlink (pointed to: ${existingTarget})`);
+      await fs.unlink(targetLinkPath);
+    }
+  } catch {
+    // Path doesn't exist - good to go
+  }
+
+  // Create the symlink
+  log(`Creating symlink...`, 'blue');
+  info(`From: ${targetLinkPath}`);
+  info(`To: ${resolvedPath}`);
+  
+  try {
+    await fs.symlink(resolvedPath, targetLinkPath, 'dir');
+    success(`Symlink created successfully`);
+  } catch (err) {
+    error(`Failed to create symlink: ${err.message}`);
+  }
+
+  // Run migrations
+  log(`Running migrations...`, 'blue');
+  try {
+    await runMigrations(appId);
+  } catch (err) {
+    log(`Migration warning: ${err.message}`, 'yellow');
+    info('You may need to run migrations manually after fixing the issue');
+  }
+
+  // Success message
+  log(`\n${colors.green}✓ Dev mode active for: ${manifest.name}${colors.reset}`, 'green');
+  log(`\n${colors.cyan}App is now linked:${colors.reset}`);
+  info(`${resolvedPath}`);
+  info(`→ ${targetLinkPath}`);
+  
+  log(`\n${colors.cyan}Next steps:${colors.reset}`);
+  info('1. Ensure the host is running: cd host && npm run dev');
+  info(`2. Open the app: http://localhost:3000/apps/${appId}`);
+  info('3. Edit files in your app directory - changes will hot-reload automatically');
+  
+  log(`\n${colors.yellow}Notes:${colors.reset}`);
+  info('- The app is symlinked, so changes are reflected immediately');
+  info('- API routes will hot-reload without restarting the host');
+  info('- Run citadel-app migrate after changing DB schema');
+  info(`- To unlink: citadel-app uninstall ${appId}`);
 }
 
 // INSTALL COMMAND
@@ -860,6 +1374,9 @@ async function main() {
     deleteData: args.includes('--delete-data'),
     force: args.includes('--force'),
     all: args.includes('--all'),
+    steps: parseInt(args.find(a => a.startsWith('--steps='))?.split('=')[1] || '1', 10),
+    template: args.find(a => a.startsWith('--template='))?.split('=')[1],
+    listTemplates: args.includes('--list-templates'),
   };
 
   // Ensure apps directory exists
@@ -879,8 +1396,14 @@ async function main() {
     case 'migrate':
       await migrateCommand(arg, flags);
       break;
+    case 'migrate:rollback':
+      await migrateRollbackCommand(arg, flags);
+      break;
     case 'create':
-      await createCommand(arg);
+      await createCommand(arg, flags);
+      break;
+    case 'dev':
+      await devCommand(arg, flags);
       break;
     case 'help':
     case '--help':
@@ -896,12 +1419,19 @@ Commands:
   update --all                  Update all git-installed apps
   migrate <app-id>              Run migrations for an app
   migrate --all                 Run migrations for all apps
-  create <app-id>               Create a new app from template
+  migrate:rollback <app-id>     Rollback the last migration for an app
+  migrate:rollback <app-id> --steps=N  Rollback N migrations
+  create <app-id> [--template=<name>]  Create a new app from template (default: blank)
+  create --list-templates       List available templates
+  dev <path-to-app>             Start dev mode for local app development
 
 Options:
   --delete-data                 Delete app data when uninstalling
   --force                       Skip confirmation prompts
   --all                         Update all apps (with update command)
+  --steps=N                     Number of migrations to rollback
+  --template=<name>             Template to use for create (blank, crud)
+  --list-templates              List available templates
 
 Environment:
   CITADEL_APPS_DIR    Apps directory (default: ../apps)
@@ -916,6 +1446,12 @@ Examples:
   citadel-app update --all
   citadel-app migrate my-app
   citadel-app migrate --all
+  citadel-app migrate:rollback my-app
+  citadel-app migrate:rollback my-app --steps=3
+  citadel-app create my-app
+  citadel-app create my-app --template=crud
+  citadel-app create --list-templates
+  citadel-app dev ./my-local-app
       `);
   }
 }

@@ -4,6 +4,7 @@ import './globals.css';
 import { NavigationDrawer } from '@/components/NavigationDrawer';
 import { listApps } from '@citadel/core';
 import { cleanupOldAuditLogs } from '@citadel/core';
+import { runAllMigrations } from '@citadel/core';
 import { startBackupScheduler, runBackupIfNeeded } from '@/lib/backup';
 import { ThemeProvider } from '@/lib/theme';
 
@@ -36,6 +37,9 @@ export const metadata = {
 
 export default async function RootLayout({ children }: { children: ReactNode }) {
   const apps = await listApps(false);
+
+  // Run migrations for all apps on startup
+  runAllMigrations().catch(err => console.error('Migration error:', err));
 
   // Run audit log cleanup on startup (server-side only)
   cleanupOldAuditLogs();

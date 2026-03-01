@@ -55,3 +55,13 @@ export {
   type ManifestValidationError,
   type ManifestValidationResult,
 } from './manifest-schema.js';
+
+// Migrations
+export {
+  runMigrationsForApp,
+  runAllMigrations,
+  getMigrationStatus,
+  rollbackMigrationsForApp,
+  type MigrationResult,
+  type RollbackResult,
+} from './migrations.js';

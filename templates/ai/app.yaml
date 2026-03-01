@@ -1,0 +1,14 @@
+id: {{app_id}}
+name: {{app_name}}
+description: {{description}}
+version: 0.1.0
+manifest_version: "1.0"
+permissions:
+  db:
+    read: true
+    write: true
+  storage:
+    read: false
+    write: false
+  ai: true
+connectors: []
