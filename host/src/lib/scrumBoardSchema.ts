@@ -185,6 +185,32 @@ export function ensureScrumBoardSchema() {
       ['agent_runner', 'openclaw', new Date().toISOString()]
     );
   }
+
+  // Default LLM provider = openai
+  const llmProvider = dbQuery<{ count: number }>(
+    APP_ID,
+    `SELECT COUNT(*) as count FROM settings WHERE key = 'llm_provider'`
+  )[0]?.count ?? 0;
+  if (llmProvider === 0) {
+    dbExec(
+      APP_ID,
+      `INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?)`,
+      ['llm_provider', 'openai', new Date().toISOString()]
+    );
+  }
+
+  // Default LLM model = empty (uses provider default)
+  const llmModel = dbQuery<{ count: number }>(
+    APP_ID,
+    `SELECT COUNT(*) as count FROM settings WHERE key = 'llm_model'`
+  )[0]?.count ?? 0;
+  if (llmModel === 0) {
+    dbExec(
+      APP_ID,
+      `INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?)`,
+      ['llm_model', '', new Date().toISOString()]
+    );
+  }
 }
 
 export function getOrCreateBoardId(targetAppId: string): number {

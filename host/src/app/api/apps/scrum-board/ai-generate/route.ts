@@ -3,17 +3,17 @@ import { readFile } from 'fs/promises';
 import { existsSync } from 'fs';
 import { join } from 'path';
 import { checkAiPermission } from '@/lib/aiPermission';
+import { 
+  llmRequest, 
+  checkLLMConfig, 
+  parseLLMJSON,
+  LLMError 
+} from '@/lib/llmProvider';
 
 export const runtime = 'nodejs';
 
 const APP_ID = 'scrum-board';
 const KB_DIR = '/home/rohanchaudhari/personal/citadel/kb';
-
-function requireEnv(name: string) {
-  const v = process.env[name];
-  if (!v) throw new Error(`Missing env var: ${name}`);
-  return v;
-}
 
 async function getAppKb(appId: string): Promise<string | null> {
   // Try different KB file patterns
@@ -35,19 +35,10 @@ async function getAppKb(appId: string): Promise<string | null> {
     }
   }
 
-  // Try to read any .md files in app-specific kb folder
-  const appKbDir = join(KB_DIR, appId);
-  if (existsSync(appKbDir)) {
-    // We'll just return null for now as reading directories is more complex
-    // and the roadmap file is the primary source
-  }
-
   return null;
 }
 
 async function generateTaskDetails(title: string, appId: string, kbContext: string | null) {
-  const key = requireEnv('OPENAI_API_KEY');
-
   const systemPrompt = `You are a helpful assistant that creates clear, actionable task descriptions and acceptance criteria for software development tasks.
 
 Given a task title and optional app context, generate:
@@ -71,70 +62,36 @@ Task Title: ${title}
 
 ${kbContext ? `App Context (from KB):\n${kbContext}\n\n` : ''}Generate a description and acceptance criteria for this task.`;
 
-  const res = await fetch('https://api.openai.com/v1/responses', {
-    method: 'POST',
-    headers: {
-      authorization: `Bearer ${key}`,
-      'content-type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: 'gpt-4.1-mini',
-      temperature: 0.3,
-      text: {
-        format: {
-          type: 'json_schema',
-          name: 'task_details',
-          strict: true,
-          schema: {
-            type: 'object',
-            additionalProperties: false,
-            properties: {
-              description: {
-                type: 'string',
-                description: 'A concise description of the task',
-              },
-              acceptanceCriteria: {
-                type: 'string',
-                description: 'Specific acceptance criteria for completing the task',
-              },
-            },
-            required: ['description', 'acceptanceCriteria'],
+  const response = await llmRequest({
+    temperature: 0.3,
+    messages: [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userPrompt },
+    ],
+    jsonSchema: {
+      name: 'task_details',
+      schema: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          description: {
+            type: 'string',
+            description: 'A concise description of the task',
+          },
+          acceptanceCriteria: {
+            type: 'string',
+            description: 'Specific acceptance criteria for completing the task',
           },
         },
+        required: ['description', 'acceptanceCriteria'],
       },
-      input: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt },
-      ],
-    }),
+    },
   });
 
-  const data = await res.json().catch(() => null);
-  if (!res.ok) {
-    throw new Error(`LLM generation failed (${res.status}): ${JSON.stringify(data)}`);
-  }
-
-  const text =
-    data?.output?.[0]?.content?.[0]?.text ??
-    data?.output_text ??
-    '';
-
-  if (!text) {
-    throw new Error('Empty response from LLM');
-  }
-
-  try {
-    return JSON.parse(text);
-  } catch {
-    // Try to extract JSON from markdown code block
-    const match = text.match(/```(?:json)?\s*([\s\S]*?)```/);
-    if (match) {
-      try {
-        return JSON.parse(match[1].trim());
-      } catch {}
-    }
-    throw new Error('Failed to parse LLM response as JSON');
-  }
+  return parseLLMJSON(response.text) as {
+    description: string;
+    acceptanceCriteria: string;
+  };
 }
 
 export async function POST(req: Request) {
@@ -161,10 +118,11 @@ export async function POST(req: Request) {
       );
     }
 
-    // Check for API key
-    if (!process.env.OPENAI_API_KEY) {
+    // Check LLM configuration
+    const configError = checkLLMConfig();
+    if (configError) {
       return NextResponse.json(
-        { ok: false, error: 'OpenAI API key not configured' },
+        { ok: false, error: configError },
         { status: 500 }
       );
     }
@@ -181,11 +139,13 @@ export async function POST(req: Request) {
       acceptanceCriteria: result.acceptanceCriteria,
       hasKbContext: kbContext !== null,
     });
-  } catch (e: any) {
+  } catch (e: unknown) {
     console.error('AI generate error:', e);
+    const message = e instanceof Error ? e.message : String(e);
+    const statusCode = e instanceof LLMError ? e.statusCode || 500 : 500;
     return NextResponse.json(
-      { ok: false, error: String(e?.message ?? e) },
-      { status: 500 }
+      { ok: false, error: message },
+      { status: statusCode }
     );
   }
 }

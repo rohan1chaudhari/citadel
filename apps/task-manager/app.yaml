@@ -1,0 +1,13 @@
+id: task-manager
+name: Task Manager
+description: A simple task management app with priorities and status tracking
+version: 0.1.0
+manifest_version: "1.0"
+permissions:
+  db:
+    read: true
+    write: true
+  storage:
+    read: false
+    write: false
+connectors: []

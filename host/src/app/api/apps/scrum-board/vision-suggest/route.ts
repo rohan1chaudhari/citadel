@@ -5,6 +5,12 @@ import { join } from 'path';
 import { exec, spawn } from 'child_process';
 import { promisify } from 'util';
 import { checkAiPermission } from '@/lib/aiPermission';
+import { 
+  llmRequest, 
+  checkLLMConfig, 
+  parseLLMJSON,
+  LLMError 
+} from '@/lib/llmProvider';
 
 export const runtime = 'nodejs';
 
@@ -33,12 +39,6 @@ type AgentResult = {
   stateSummary: string;
   lastAnalyzedCommit: string;
 };
-
-function requireEnv(name: string) {
-  const v = process.env[name];
-  if (!v) throw new Error(`Missing env var: ${name}`);
-  return v;
-}
 
 function getStatePath(appId: string): string {
   return join(KB_DIR, `${appId}-state.md`);
@@ -163,108 +163,71 @@ async function gatherCodeContext(appId: string): Promise<string> {
 }
 
 async function generateStateSummary(appId: string, codeContext: string): Promise<string> {
-  const key = requireEnv('OPENAI_API_KEY');
-
   const systemPrompt = `You are a product+engineering analyst. Create a concise but concrete app state summary in markdown. Focus on what exists in code.`;
-  const userPrompt = `Analyze app: ${appId}\n\nCode context:\n${codeContext}\n\nReturn markdown with these sections exactly:\n## Summary\n## Features (IMPLEMENTED)\n## Data Model\n## UI Components\n## API Routes\n## Technical Notes\n## Enhancement Opportunities\n## New Feature Opportunities`;
+  const userPrompt = `Analyze app: ${appId}\n\nCode context:\n${codeContext}\n\nReturn markdown with these sections exactly:
+## Summary
+## Features (IMPLEMENTED)
+## Data Model
+## UI Components
+## API Routes
+## Technical Notes
+## Enhancement Opportunities
+## New Feature Opportunities`;
 
-  const res = await fetch('https://api.openai.com/v1/responses', {
-    method: 'POST',
-    headers: {
-      authorization: `Bearer ${key}`,
-      'content-type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: 'gpt-4.1-mini',
-      temperature: 0.2,
-      input: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt },
-      ],
-    }),
+  const response = await llmRequest({
+    temperature: 0.2,
+    messages: [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userPrompt },
+    ],
   });
 
-  const data = await res.json().catch(() => null);
-  if (!res.ok) {
-    throw new Error(`State generation failed (${res.status}): ${JSON.stringify(data)}`);
-  }
-
-  const text = data?.output?.[0]?.content?.[0]?.text ?? data?.output_text ?? '';
-  if (!text) throw new Error('Empty state summary from LLM');
-  return String(text).trim();
+  return response.text;
 }
 
 async function generateVisionAndTasks(appId: string, stateSummary: string): Promise<{ vision: string; tasks: SuggestedTask[] }> {
-  const key = requireEnv('OPENAI_API_KEY');
-
-  const res = await fetch('https://api.openai.com/v1/responses', {
-    method: 'POST',
-    headers: {
-      authorization: `Bearer ${key}`,
-      'content-type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: 'gpt-4.1-mini',
-      temperature: 0.4,
-      text: {
-        format: {
-          type: 'json_schema',
-          name: 'vision_tasks',
-          strict: true,
-          schema: {
-            type: 'object',
-            additionalProperties: false,
-            properties: {
-              vision: { type: 'string' },
-              tasks: {
-                type: 'array',
-                minItems: 3,
-                maxItems: 7,
-                items: {
-                  type: 'object',
-                  additionalProperties: false,
-                  properties: {
-                    title: { type: 'string' },
-                    description: { type: 'string' },
-                    acceptanceCriteria: { type: 'string' },
-                  },
-                  required: ['title', 'description', 'acceptanceCriteria'],
-                },
+  const response = await llmRequest({
+    temperature: 0.4,
+    messages: [
+      {
+        role: 'system',
+        content:
+          'You are a product strategist. Propose one inspiring but practical vision and 3-7 actionable tasks based only on current app state.',
+      },
+      {
+        role: 'user',
+        content: `App: ${appId}\n\nState summary:\n${stateSummary}`,
+      },
+    ],
+    jsonSchema: {
+      name: 'vision_tasks',
+      schema: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          vision: { type: 'string' },
+          tasks: {
+            type: 'array',
+            minItems: 3,
+            maxItems: 7,
+            items: {
+              type: 'object',
+              additionalProperties: false,
+              properties: {
+                title: { type: 'string' },
+                description: { type: 'string' },
+                acceptanceCriteria: { type: 'string' },
               },
+              required: ['title', 'description', 'acceptanceCriteria'],
             },
-            required: ['vision', 'tasks'],
           },
         },
+        required: ['vision', 'tasks'],
       },
-      input: [
-        {
-          role: 'system',
-          content:
-            'You are a product strategist. Propose one inspiring but practical vision and 3-7 actionable tasks based only on current app state.',
-        },
-        {
-          role: 'user',
-          content: `App: ${appId}\n\nState summary:\n${stateSummary}`,
-        },
-      ],
-    }),
+    },
   });
 
-  const data = await res.json().catch(() => null);
-  if (!res.ok) {
-    throw new Error(`Vision generation failed (${res.status}): ${JSON.stringify(data)}`);
-  }
-
-  const text = data?.output?.[0]?.content?.[0]?.text ?? data?.output_text ?? '';
-  if (!text) throw new Error('Empty vision response from LLM');
-
-  try {
-    return JSON.parse(text);
-  } catch {
-    const match = String(text).match(/```(?:json)?\s*([\s\S]*?)```/);
-    if (match) return JSON.parse(match[1].trim());
-    throw new Error('Failed to parse vision response as JSON');
-  }
+  return parseLLMJSON(response.text) as { vision: string; tasks: SuggestedTask[] };
 }
 
 async function writeStateFile(appId: string, commit: string | null, summary: string) {
@@ -278,7 +241,7 @@ async function runOpenClawAnalysisAgent(appId: string, currentCommit: string | n
   const commitToUse = currentCommit || 'initial';
   const sessionId = `vision-${appId}-${Date.now()}`;
 
-  const prompt = `You are analyzing the Citadel app \"${appId}\".
+  const prompt = `You are analyzing the Citadel app "${appId}".
 
 Goal:
 1) Read the app code SELECTIVELY (do not read every file end-to-end).
@@ -360,7 +323,7 @@ Constraints:
   });
 
   // Try direct parse first
-  let envelope: any;
+  let envelope: unknown;
   try {
     envelope = JSON.parse(stdout);
   } catch {
@@ -369,7 +332,10 @@ Constraints:
     envelope = JSON.parse(match[0]);
   }
 
-  const text = envelope?.result?.outputText ?? envelope?.outputText ?? envelope?.text ?? '';
+  const text = (envelope as { result?: { outputText?: string }; outputText?: string; text?: string })?.result?.outputText 
+    ?? (envelope as { outputText?: string }).outputText 
+    ?? (envelope as { text?: string }).text 
+    ?? '';
   if (!text) {
     throw new Error('OpenClaw agent returned empty outputText');
   }
@@ -404,8 +370,10 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: 'appId required' }, { status: 400 });
     }
 
-    if (!process.env.OPENAI_API_KEY) {
-      return NextResponse.json({ ok: false, error: 'OpenAI API key not configured' }, { status: 500 });
+    // Check LLM configuration
+    const configError = checkLLMConfig();
+    if (configError) {
+      return NextResponse.json({ ok: false, error: configError }, { status: 500 });
     }
 
     const currentCommit = await getCurrentCommit(appId);
@@ -440,9 +408,11 @@ export async function POST(req: Request) {
       refreshed: shouldRefresh,
       source: shouldRefresh ? 'openclaw-agent' : 'cached-state',
     });
-  } catch (e: any) {
+  } catch (e: unknown) {
     console.error('Vision suggest error:', e);
-    return NextResponse.json({ ok: false, error: String(e?.message ?? e) }, { status: 500 });
+    const message = e instanceof Error ? e.message : String(e);
+    const statusCode = e instanceof LLMError ? e.statusCode || 500 : 500;
+    return NextResponse.json({ ok: false, error: message }, { status: statusCode });
   }
 }
 
@@ -466,8 +436,8 @@ export async function GET(req: Request) {
       stateCommit: state?.lastAnalyzedCommit || null,
       currentCommit,
     });
-  } catch (e: any) {
+  } catch (e: unknown) {
     console.error('Vision suggest GET error:', e);
-    return NextResponse.json({ ok: false, error: String(e?.message ?? e) }, { status: 500 });
+    return NextResponse.json({ ok: false, error: String(e) }, { status: 500 });
   }
 }

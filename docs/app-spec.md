@@ -321,4 +321,4 @@ INSERT INTO greetings (message) VALUES ('Hello, Citadel!');
 
 - [Runtime API](./RUNTIME.md) - Host primitives reference
 - [CLI Guide](./cli.md) - `citadel-app` commands
-- [Example App](../examples/hello-world/) - Complete working example
+- Example App at `docs/examples/hello-world/` - Complete working example
