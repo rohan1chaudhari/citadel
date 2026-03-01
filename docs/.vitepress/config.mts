@@ -8,6 +8,7 @@ export default defineConfig({
   base,
   themeConfig: {
     nav: [
+      { text: 'What is Citadel?', link: '/what-is-citadel' },
       { text: 'Introduction', link: '/intro' },
       { text: 'CLI', link: '/cli' },
       { text: 'Knowledge Base', link: '/kb/' },
@@ -17,7 +18,8 @@ export default defineConfig({
       {
         text: 'Start Here',
         items: [
-          { text: 'Introduction', link: '/intro' },
+          { text: 'What is Citadel?', link: '/what-is-citadel' },
+          { text: 'Introduction (technical)', link: '/intro' },
           { text: 'Quickstart', link: '/how-to/quickstart' }
         ]
       },

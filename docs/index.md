@@ -7,11 +7,11 @@ hero:
   tagline: Self-hosted shell for installable, isolated personal apps — your data, your machine
   actions:
     - theme: brand
+      text: What is Citadel?
+      link: /what-is-citadel
+    - theme: alt
       text: Get Started
       link: /how-to/quickstart
-    - theme: alt
-      text: Build an App
-      link: /how-to/build-an-app
 
 features:
   - title: Local-first & private
