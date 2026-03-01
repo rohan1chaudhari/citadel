@@ -100,7 +100,7 @@ export function NavigationDrawer({ apps, currentAppId }: NavigationDrawerProps) 
       {/* Hamburger Menu Button - 44x44px touch target for mobile */}
       <button
         onClick={() => setIsOpen(true)}
-        className="fixed top-3 sm:top-4 left-3 sm:left-4 z-30 min-w-[44px] min-h-[44px] p-2.5 rounded-lg bg-white/80 dark:bg-zinc-900/80 backdrop-blur-sm border border-zinc-200 dark:border-zinc-800 shadow-sm hover:bg-white dark:hover:bg-zinc-900 hover:shadow-md transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-zinc-900/15 dark:focus:ring-zinc-100/15 flex items-center justify-center"
+        className="fixed top-[max(env(safe-area-inset-top),0.75rem)] sm:top-[max(env(safe-area-inset-top),1rem)] left-[max(env(safe-area-inset-left),0.75rem)] sm:left-[max(env(safe-area-inset-left),1rem)] z-[70] min-w-[44px] min-h-[44px] p-2.5 rounded-lg bg-white/80 dark:bg-zinc-900/80 backdrop-blur-sm border border-zinc-200 dark:border-zinc-800 shadow-sm hover:bg-white dark:hover:bg-zinc-900 hover:shadow-md transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-zinc-900/15 dark:focus:ring-zinc-100/15 flex items-center justify-center pointer-events-auto"
         aria-label="Open navigation menu"
         aria-expanded={isOpen}
       >
