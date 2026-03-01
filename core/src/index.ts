@@ -1,10 +1,10 @@
 // Core platform primitives for Citadel
 
 // Database
-export { dbExec, dbQuery } from './db.js';
+export { dbExec, dbQuery, __clearDbCache } from './db.js';
 
 // Audit logging
-export { audit, cleanupOldAuditLogs } from './audit.js';
+export { audit, cleanupOldAuditLogs, __clearAuditDb } from './audit.js';
 
 // Storage
 export { storageWriteText, storageWriteBuffer, storageReadText } from './storage.js';

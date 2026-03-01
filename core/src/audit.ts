@@ -6,16 +6,18 @@ import { appDbPath } from './paths.js';
 const CITADEL_APP_ID = 'citadel';
 const RETENTION_DAYS = 90;
 
-const DATA_ROOT = process.env.CITADEL_DATA_ROOT ?? path.join(process.cwd(), '..', 'data');
-const CITADEL_DB_PATH = path.join(DATA_ROOT, 'apps', CITADEL_APP_ID, 'db.sqlite');
-
 let db: DatabaseSync | null = null;
 let cleanupDone = false;
 
+function getCitadelDbPath(): string {
+  return appDbPath(CITADEL_APP_ID);
+}
+
 function getDb(): DatabaseSync {
   if (db) return db;
-  fs.mkdirSync(path.dirname(CITADEL_DB_PATH), { recursive: true });
-  db = new DatabaseSync(CITADEL_DB_PATH);
+  const dbPath = getCitadelDbPath();
+  fs.mkdirSync(path.dirname(dbPath), { recursive: true });
+  db = new DatabaseSync(dbPath);
   db.exec('PRAGMA journal_mode = WAL');
   db.exec('PRAGMA foreign_keys = ON');
   return db;
@@ -83,4 +85,10 @@ export function audit(appId: string, event: string, payload: Record<string, unkn
     // Fail silently - don't break app functionality if audit logging fails
     console.error('Audit DB write failed:', e);
   }
+}
+
+// Test-only: clear DB cache to allow fresh connections
+export function __clearAuditDb(): void {
+  db = null;
+  cleanupDone = false;
 }

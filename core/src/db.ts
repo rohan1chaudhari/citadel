@@ -88,3 +88,8 @@ export function dbQuery<T = unknown>(appId: string, sql: string, params: unknown
     throw e;
   }
 }
+
+// Test-only: clear DB cache to allow fresh connections
+export function __clearDbCache(): void {
+  dbs.clear();
+}
