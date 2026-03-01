@@ -396,7 +396,10 @@ export default function ScrumBoardClient({ appIds, externalIds = [] }: { appIds:
       done: [],
       failed: []
     };
-    for (const t of tasks) g[t.status].push(t);
+    for (const t of tasks) {
+      const key = (t.status in g ? t.status : 'backlog') as keyof typeof g;
+      g[key].push(t);
+    }
     // Sort done tasks by completed_at descending (most recent first)
     g.done.sort((a, b) => {
       const aTime = a.completed_at ? new Date(a.completed_at).getTime() : 0;
