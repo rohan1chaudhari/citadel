@@ -6,7 +6,7 @@
 
 ---
 
-## Phase 1 — Platform Foundations (Now → v0.5)
+## Phase 1 — Platform Foundations ✅ COMPLETE (v0.5)
 
 Make the host runtime solid, secure, and observable.
 
@@ -17,39 +17,39 @@ Make the host runtime solid, secure, and observable.
 #### P1-01: Permission approval UI
 **Description:** When an app's `app.yaml` declares permissions (db read/write, storage read/write, network, ai), show the user an approval prompt on first launch. Store granted permissions in the host DB. Block app API calls that exceed granted permissions.
 **Acceptance Criteria:**
-- [ ] First visit to an app shows a permission consent screen listing requested scopes
-- [ ] User can approve or deny each scope individually
-- [ ] Granted permissions stored in `citadel` DB (`app_permissions` table)
-- [ ] `dbQuery`/`dbExec` check granted permissions before executing
-- [ ] `storageWriteBuffer`/`storageReadText` check granted permissions
-- [ ] Denied permission returns 403 with clear error message
-- [ ] "Manage permissions" page in host settings to revoke/grant per app
+- [x] First visit to an app shows a permission consent screen listing requested scopes
+- [x] User can approve or deny each scope individually
+- [x] Granted permissions stored in `citadel` DB (`app_permissions` table)
+- [x] `dbQuery`/`dbExec` check granted permissions before executing
+- [x] `storageWriteBuffer`/`storageReadText` check granted permissions
+- [x] Denied permission returns 403 with clear error message
+- [x] "Manage permissions" page in host settings to revoke/grant per app
 
 #### P1-02: Network and AI API permission enforcement
 **Description:** Extend the permission system beyond DB/storage. Apps that want to call external APIs (e.g., OpenAI, ElevenLabs) must declare `ai: true` or `network: [domains]` in their manifest. The host must proxy or gate these calls.
 **Acceptance Criteria:**
-- [ ] `app.yaml` schema supports `ai: true/false` and `network: [list of allowed domains]`
-- [ ] Apps without `ai: true` cannot call AI API routes
-- [ ] Apps without `network` permission get blocked outbound (enforced at API route level in MVP)
-- [ ] Permission violations logged via audit
+- [x] `app.yaml` schema supports `ai: true/false` and `network: [list of allowed domains]`
+- [x] Apps without `ai: true` cannot call AI API routes
+- [x] Apps without `network` permission get blocked outbound (enforced at API route level in MVP)
+- [x] Permission violations logged via audit
 
 #### P1-03: CSP headers and app sandboxing
 **Description:** Add Content-Security-Policy headers to app pages to prevent XSS and limit what app code can do in the browser. Each app's pages should have restrictive CSP that only allows loading resources from the host origin.
 **Acceptance Criteria:**
-- [ ] Next.js middleware sets CSP headers on all `/apps/*` responses
-- [ ] `script-src 'self'` — no inline scripts except nonce-based
-- [ ] `connect-src 'self'` — apps can only fetch from the host
-- [ ] `frame-ancestors 'none'` — prevents clickjacking
-- [ ] CSP violations reported to a host endpoint for logging
+- [x] Next.js middleware sets CSP headers on all `/apps/*` responses
+- [x] `script-src 'self'` — no inline scripts except nonce-based
+- [x] `connect-src 'self'` — apps can only fetch from the host
+- [x] `frame-ancestors 'none'` — prevents clickjacking
+- [x] CSP violations reported to a host endpoint for logging
 
 #### P1-04: Per-app rate limiting
 **Description:** Prevent a misbehaving app (or runaway autopilot) from hammering the host. Add a simple in-memory rate limiter (token bucket) keyed by app ID that limits API requests per minute.
 **Acceptance Criteria:**
-- [ ] Rate limiter middleware applied to all `/api/apps/*` routes
-- [ ] Default limit: 120 requests/minute per app (configurable)
-- [ ] Returns 429 with `Retry-After` header when exceeded
-- [ ] Rate limit state resets on host restart (in-memory is fine for MVP)
-- [ ] Scrum-board/autopilot exempt or has higher limit
+- [x] Rate limiter middleware applied to all `/api/apps/*` routes
+- [x] Default limit: 120 requests/minute per app (configurable)
+- [x] Returns 429 with `Retry-After` header when exceeded
+- [x] Rate limit state resets on host restart (in-memory is fine for MVP)
+- [x] Scrum-board/autopilot exempt or has higher limit
 
 ---
 
@@ -58,29 +58,29 @@ Make the host runtime solid, secure, and observable.
 #### P1-05: Persist audit logs to DB
 **Description:** Currently `audit()` logs JSON to stdout. Add a second sink that writes to an `audit_log` table in the `citadel` DB. Keep stdout logging as-is for dev/debugging. Include retention — auto-delete logs older than 90 days.
 **Acceptance Criteria:**
-- [ ] `audit_log` table in `citadel` DB with columns: id, ts, app_id, event, payload (JSON), created_at
-- [ ] `audit()` function writes to both stdout and DB
-- [ ] Index on (app_id, ts) for efficient querying
-- [ ] Auto-cleanup: logs older than 90 days deleted on host startup
-- [ ] No performance regression on hot paths (batch inserts or async write)
+- [x] `audit_log` table in `citadel` DB with columns: id, ts, app_id, event, payload (JSON), created_at
+- [x] `audit()` function writes to both stdout and DB
+- [x] Index on (app_id, ts) for efficient querying
+- [x] Auto-cleanup: logs older than 90 days deleted on host startup
+- [x] No performance regression on hot paths (batch inserts or async write)
 
 #### P1-06: Audit log viewer UI
 **Description:** Add a host-level page at `/audit` that displays audit logs with filtering by app, event type, and time range. Paginated, most recent first.
 **Acceptance Criteria:**
-- [ ] Page at `/audit` accessible from host nav
-- [ ] Filter by app_id (dropdown of installed apps)
-- [ ] Filter by event type (db.query, db.exec, storage.write, etc.)
-- [ ] Filter by date range
-- [ ] Paginated results (50 per page)
-- [ ] Each log entry shows timestamp, app, event, and expandable payload
+- [x] Page at `/audit` accessible from host nav
+- [x] Filter by app_id (dropdown of installed apps)
+- [x] Filter by event type (db.query, db.exec, storage.write, etc.)
+- [x] Filter by date range
+- [x] Paginated results (50 per page)
+- [x] Each log entry shows timestamp, app, event, and expandable payload
 
 #### P1-07: App health dashboard
 **Description:** Add a host-level page at `/status` (enhance existing) that shows per-app health metrics: SQLite DB file size, storage directory size, total API calls (from audit), and last activity timestamp.
 **Acceptance Criteria:**
-- [ ] `/status` page shows a card per installed app
-- [ ] Each card displays: DB file size (bytes), storage dir size, total audit events (last 24h), last activity time
-- [ ] Refreshes on page load (server-rendered, no polling needed for MVP)
-- [ ] Warning indicators for apps with large DB (>100MB) or storage (>1GB)
+- [x] `/status` page shows a card per installed app
+- [x] Each card displays: DB file size (bytes), storage dir size, total audit events (last 24h), last activity time
+- [x] Refreshes on page load (server-rendered, no polling needed for MVP)
+- [x] Warning indicators for apps with large DB (>100MB) or storage (>1GB)
 
 ---
 
@@ -89,29 +89,29 @@ Make the host runtime solid, secure, and observable.
 #### P1-08: Per-app data export
 **Description:** Add an API endpoint and UI button to export a single app's data as a zip archive containing its SQLite DB file and storage directory. Useful for backup and portability.
 **Acceptance Criteria:**
-- [ ] `GET /api/apps/{appId}/export` returns a zip file
-- [ ] Zip contains `db.sqlite` and all files under the app's storage root
-- [ ] Export button visible on each app's settings or the host status page
-- [ ] Filename includes app ID and ISO timestamp: `smart-notes-2026-03-01T12-00-00.zip`
-- [ ] Streams the zip (doesn't buffer entire archive in memory)
+- [x] `GET /api/apps/{appId}/export` returns a zip file
+- [x] Zip contains `db.sqlite` and all files under the app's storage root
+- [x] Export button visible on each app's settings or the host status page
+- [x] Filename includes app ID and ISO timestamp: `smart-notes-2026-03-01T12-00-00.zip`
+- [x] Streams the zip (doesn't buffer entire archive in memory)
 
 #### P1-09: Per-app data import
 **Description:** Add an API endpoint and UI to restore an app's data from a previously exported zip. Overwrites existing DB and storage. Requires confirmation.
 **Acceptance Criteria:**
-- [ ] `POST /api/apps/{appId}/import` accepts a zip upload
-- [ ] Validates zip structure (must contain `db.sqlite` at minimum)
-- [ ] Backs up current data before overwriting (moves to `data/backups/{appId}/{timestamp}/`)
-- [ ] Confirmation dialog warns that current data will be replaced
-- [ ] App's cached DB connection is invalidated after import
+- [x] `POST /api/apps/{appId}/import` accepts a zip upload
+- [x] Validates zip structure (must contain `db.sqlite` at minimum)
+- [x] Backs up current data before overwriting (moves to `data/backups/{appId}/{timestamp}/`)
+- [x] Confirmation dialog warns that current data will be replaced
+- [x] App's cached DB connection is invalidated after import
 
 #### P1-10: Scheduled local backups
 **Description:** On host startup and then every 24 hours, snapshot all app data directories into a timestamped zip under `data/backups/`. Keep the last 7 backups, delete older ones.
 **Acceptance Criteria:**
-- [ ] Backup runs on host startup and every 24h (setInterval or cron-like)
-- [ ] Creates `data/backups/citadel-backup-{ISO-timestamp}.zip`
-- [ ] Includes all `data/apps/*/` directories
-- [ ] Retains last 7 backups, deletes oldest when limit exceeded
-- [ ] Backup status visible on `/status` page (last backup time, size)
+- [x] Backup runs on host startup and every 24h (setInterval or cron-like)
+- [x] Creates `data/backups/citadel-backup-{ISO-timestamp}.zip`
+- [x] Includes all `data/apps/*/` directories
+- [x] Retains last 7 backups, deletes oldest when limit exceeded
+- [x] Backup status visible on `/status` page (last backup time, size)
 
 ---
 
@@ -120,38 +120,38 @@ Make the host runtime solid, secure, and observable.
 #### P1-11: Responsive host shell
 **Description:** Make the home grid, navigation drawer, and root layout responsive for mobile screens. The nav drawer should collapse to a hamburger menu on small screens. App grid should reflow from multi-column to single-column.
 **Acceptance Criteria:**
-- [ ] Home grid: 1 column on mobile (<640px), 2 on tablet, 3 on desktop
-- [ ] Nav drawer: collapses to hamburger menu on mobile, slide-out overlay
-- [ ] Root layout: removes excess padding on mobile, uses full width
-- [ ] Touch targets are at least 44x44px
-- [ ] Tested on iPhone SE (375px) and iPad (768px) viewports
+- [x] Home grid: 1 column on mobile (<640px), 2 on tablet, 3 on desktop
+- [x] Nav drawer: collapses to hamburger menu on mobile, slide-out overlay
+- [x] Root layout: removes excess padding on mobile, uses full width
+- [x] Touch targets are at least 44x44px
+- [x] Tested on iPhone SE (375px) and iPad (768px) viewports
 
 #### P1-12: PWA manifest and service worker
 **Description:** Add a web app manifest and basic service worker so Citadel can be "installed" to the home screen on iOS and Android. Cache the app shell for fast loads.
 **Acceptance Criteria:**
-- [ ] `manifest.json` with name, icons (192px, 512px), theme color, display: standalone
-- [ ] Service worker caches the Next.js app shell (HTML, CSS, JS bundles)
-- [ ] "Add to Home Screen" works on iOS Safari and Android Chrome
-- [ ] App launches in standalone mode (no browser chrome)
-- [ ] Offline: shows cached shell with "you're offline" message if network unavailable
+- [x] `manifest.json` with name, icons (192px, 512px), theme color, display: standalone
+- [x] Service worker caches the Next.js app shell (HTML, CSS, JS bundles)
+- [x] "Add to Home Screen" works on iOS Safari and Android Chrome
+- [x] App launches in standalone mode (no browser chrome)
+- [x] Offline: shows cached shell with "you're offline" message if network unavailable
 
 #### P1-13: Dark mode
 **Description:** Add a dark mode toggle to the host shell. Use Tailwind's `dark:` variant. Store preference in localStorage. Provide a theme context that apps can read to match the host theme.
 **Acceptance Criteria:**
-- [ ] Toggle in nav drawer or host header (sun/moon icon)
-- [ ] Preference persisted in localStorage, defaults to system preference
-- [ ] Host shell (nav, home grid, status pages) fully styled for dark mode
-- [ ] `ThemeContext` exported from host so apps can read `isDark`
-- [ ] No flash of wrong theme on page load (script in `<head>` sets class early)
+- [x] Toggle in nav drawer or host header (sun/moon icon)
+- [x] Preference persisted in localStorage, defaults to system preference
+- [x] Host shell (nav, home grid, status pages) fully styled for dark mode
+- [x] `ThemeContext` exported from host so apps can read `isDark`
+- [x] No flash of wrong theme on page load (script in `<head>` sets class early)
 
 #### P1-14: Global search
 **Description:** Add a search bar to the home page that searches across all apps. Each app can register a search provider (a function that takes a query and returns results). MVP: search app names from the registry. Later: apps provide full-text search endpoints.
 **Acceptance Criteria:**
-- [ ] Search input on home page (with keyboard shortcut Cmd/Ctrl+K)
-- [ ] Searches app names and descriptions from registry (instant, client-side)
-- [ ] Results link to the matching app
-- [ ] Extensible: apps can register a `/api/apps/{appId}/search?q=` endpoint
-- [ ] If an app has a search endpoint, results from that app appear in global search
+- [x] Search input on home page (with keyboard shortcut Cmd/Ctrl+K)
+- [x] Searches app names and descriptions from registry (instant, client-side)
+- [x] Results link to the matching app
+- [x] Extensible: apps can register a `/api/apps/{appId}/search?q=` endpoint
+- [x] If an app has a search endpoint, results from that app appear in global search
 
 ---
 
@@ -160,42 +160,42 @@ Make the host runtime solid, secure, and observable.
 #### P1-15: Extract core packages from host/src/lib
 **Description:** Move the shared platform primitives (`db.ts`, `audit.ts`, `storage.ts`, `sqlGuardrails.ts`, `paths.ts`, `appIds.ts`, `registry.ts`) into the `core/` directory as proper npm workspace packages. Apps and host import from `@citadel/core` instead of relative paths.
 **Acceptance Criteria:**
-- [ ] `core/` is an npm workspace package with `package.json` (`@citadel/core`)
-- [ ] All shared primitives moved from `host/src/lib/` to `core/src/`
-- [ ] Host imports from `@citadel/core` via workspace resolution
-- [ ] All existing functionality unchanged (no regressions)
-- [ ] `npm run build` passes in both `core/` and `host/`
+- [x] `core/` is an npm workspace package with `package.json` (`@citadel/core`)
+- [x] All shared primitives moved from `host/src/lib/` to `core/src/`
+- [x] Host imports from `@citadel/core` via workspace resolution
+- [x] All existing functionality unchanged (no regressions)
+- [x] `npm run build` passes in both `core/` and `host/`
 
 #### P1-16: Replace hand-rolled YAML parser
 **Description:** The registry uses a regex-based YAML parser that only handles scalar values. Replace it with a proper YAML library (e.g., `yaml` npm package) or switch `app.yaml` to `app.json` for zero-dependency parsing.
 **Acceptance Criteria:**
-- [ ] App manifests are parsed correctly including nested objects, arrays, and multi-line strings
-- [ ] All existing `app.yaml` files parse without changes
-- [ ] Manifest schema validated at parse time (required fields: id, name, version, permissions)
-- [ ] Invalid manifests produce clear error messages with file path and line number
+- [x] App manifests are parsed correctly including nested objects, arrays, and multi-line strings
+- [x] All existing `app.yaml` files parse without changes
+- [x] Manifest schema validated at parse time (required fields: id, name, version, permissions)
+- [x] Invalid manifests produce clear error messages with file path and line number
 
 #### P1-17: Evaluate node:sqlite stability
 **Description:** Research whether `node:sqlite` has stabilized in the current Node.js version. If still experimental, evaluate migrating to `better-sqlite3`. Document the decision and rationale.
 **Acceptance Criteria:**
-- [ ] Written assessment in `kb/DECISIONS.md` covering: current stability status, breaking change risk, performance comparison, migration effort
-- [ ] If migrating: `better-sqlite3` replaces `node:sqlite` in `db.ts`, all tests pass
-- [ ] If staying: document why and what Node.js version stabilizes the API
-- [ ] No runtime warnings about experimental APIs (either suppressed intentionally or eliminated)
+- [x] Written assessment in `kb/DECISIONS.md` covering: current stability status, breaking change risk, performance comparison, migration effort
+- [x] If migrating: `better-sqlite3` replaces `node:sqlite` in `db.ts`, all tests pass
+- [x] If staying: document why and what Node.js version stabilizes the API
+- [x] No runtime warnings about experimental APIs (either suppressed intentionally or eliminated)
 
 #### P1-18: Integration tests for host APIs and isolation
 **Description:** Add a test suite that validates the host's core guarantees: per-app DB isolation, storage path traversal protection, SQL guardrails, and permission enforcement. Use Node.js test runner or vitest.
 **Acceptance Criteria:**
-- [ ] Test: app A cannot read app B's database
-- [ ] Test: storage path traversal (`../`) is blocked
-- [ ] Test: SQL guardrails block `ATTACH`, `DETACH`, `PRAGMA`, `VACUUM`, multi-statement
-- [ ] Test: `assertAppId` rejects invalid app IDs
-- [ ] Test: audit events are emitted for DB and storage operations
-- [ ] Tests run via `npm test` in `host/`
-- [ ] CI-ready (no external dependencies, no running server needed)
+- [x] Test: app A cannot read app B's database
+- [x] Test: storage path traversal (`../`) is blocked
+- [x] Test: SQL guardrails block `ATTACH`, `DETACH`, `PRAGMA`, `VACUUM`, multi-statement
+- [x] Test: `assertAppId` rejects invalid app IDs
+- [x] Test: audit events are emitted for DB and storage operations
+- [x] Tests run via `npm test` in `host/`
+- [x] CI-ready (no external dependencies, no running server needed)
 
 ---
 
-## Phase 2 — App Separation (v0.5 → v0.8)
+## Phase 2 — App Separation ✅ COMPLETE (v0.8)
 
 Decouple apps from the monorepo so they're independently installable packages.
 
@@ -204,29 +204,29 @@ Decouple apps from the monorepo so they're independently installable packages.
 #### P2-01: Define the app package spec
 **Description:** Design and document the canonical structure of a Citadel app package. This is the contract between app developers and the host. It defines what files an app must/can contain and how the host discovers and loads them.
 **Acceptance Criteria:**
-- [ ] Spec document at `docs/app-spec.md` covering: manifest format, directory structure, migration convention, UI entry point, API route convention, asset handling
-- [ ] Manifest schema formally defined (JSON Schema or TypeScript type)
-- [ ] Required fields: `id`, `name`, `version`, `permissions`
-- [ ] Optional fields: `description`, `icon`, `author`, `homepage`, `dependencies`
-- [ ] Example app package in `docs/examples/` that conforms to the spec
+- [x] Spec document at `docs/app-spec.md` covering: manifest format, directory structure, migration convention, UI entry point, API route convention, asset handling
+- [x] Manifest schema formally defined (JSON Schema or TypeScript type)
+- [x] Required fields: `id`, `name`, `version`, `permissions`
+- [x] Optional fields: `description`, `icon`, `author`, `homepage`, `dependencies`
+- [x] Example app package in `docs/examples/` that conforms to the spec
 
 #### P2-02: Dynamic app loading from external directories
 **Description:** Currently apps are hardcoded as subdirectories under `host/src/app/apps/`. Modify the host to discover and load apps from an external `apps/` directory (or configurable path). App UI and API routes are dynamically registered at startup.
 **Acceptance Criteria:**
-- [ ] Host reads app directories from a configurable path (`$CITADEL_APPS_DIR` or `../apps/`)
-- [ ] App UI pages are served under `/apps/{appId}/*`
-- [ ] App API routes are served under `/api/apps/{appId}/*`
-- [ ] Adding a new app directory and restarting the host registers it automatically
-- [ ] Removing an app directory deregisters it (data preserved in `data/apps/`)
-- [ ] Existing monorepo apps continue to work during migration
+- [x] Host reads app directories from a configurable path (`$CITADEL_APPS_DIR` or `../apps/`)
+- [x] App UI pages are served under `/apps/{appId}/*`
+- [x] App API routes are served under `/api/apps/{appId}/*`
+- [x] Adding a new app directory and restarting the host registers it automatically
+- [x] Removing an app directory deregisters it (data preserved in `data/apps/`)
+- [x] Existing monorepo apps continue to work during migration
 
 #### P2-03: Versioned app manifests with schema validation
 **Description:** Add a `manifest_version` field to `app.yaml`/`app.json` and validate all manifests against their declared schema version at registration time. This allows evolving the manifest format without breaking older apps.
 **Acceptance Criteria:**
-- [ ] `manifest_version: 1` added to all existing app manifests
-- [ ] Validation function checks manifest against schema for its declared version
-- [ ] Unknown manifest versions produce a clear error (not silently ignored)
-- [ ] Schema versions are documented with changelogs
+- [x] `manifest_version: 1` added to all existing app manifests
+- [x] Validation function checks manifest against schema for its declared version
+- [x] Unknown manifest versions produce a clear error (not silently ignored)
+- [x] Schema versions are documented with changelogs
 
 ---
 
@@ -235,30 +235,30 @@ Decouple apps from the monorepo so they're independently installable packages.
 #### P2-04: `citadel-app install`
 **Description:** CLI command that installs an app from a git repo URL or local path. Clones the repo (or copies the directory), validates the manifest, registers the app in the host, and runs any migrations.
 **Acceptance Criteria:**
-- [ ] `citadel-app install <git-url>` clones repo into apps directory
-- [ ] `citadel-app install <local-path>` copies or symlinks app directory
-- [ ] Validates manifest (id, name, version, permissions) before registering
-- [ ] Rejects if app ID conflicts with an existing app
-- [ ] Runs app migrations (if any) after install
-- [ ] Prints success message with app URL
+- [x] `citadel-app install <git-url>` clones repo into apps directory
+- [x] `citadel-app install <local-path>` copies or symlinks app directory
+- [x] Validates manifest (id, name, version, permissions) before registering
+- [x] Rejects if app ID conflicts with an existing app
+- [x] Runs app migrations (if any) after install
+- [x] Prints success message with app URL
 
 #### P2-05: `citadel-app uninstall`
 **Description:** CLI command that removes an installed app. Deregisters it from the host. Optionally deletes the app's data directory (with confirmation).
 **Acceptance Criteria:**
-- [ ] `citadel-app uninstall <app-id>` removes app from apps directory
-- [ ] Prompts "Delete app data? (y/N)" — default keeps data
-- [ ] `--delete-data` flag skips the prompt and deletes data
-- [ ] Cannot uninstall `citadel` (the host itself) or `scrum-board` (meta-app)
-- [ ] Prints confirmation of what was removed
+- [x] `citadel-app uninstall <app-id>` removes app from apps directory
+- [x] Prompts "Delete app data? (y/N)" — default keeps data
+- [x] `--delete-data` flag skips the prompt and deletes data
+- [x] Cannot uninstall `citadel` (the host itself) or `scrum-board` (meta-app)
+- [x] Prints confirmation of what was removed
 
 #### P2-06: `citadel-app update`
 **Description:** CLI command that updates an installed app to the latest version. Pulls latest from git (if git-installed), validates manifest, runs new migrations.
 **Acceptance Criteria:**
-- [ ] `citadel-app update <app-id>` runs `git pull` in the app directory
-- [ ] Validates updated manifest
-- [ ] Runs any new migrations (compares current version vs new version)
-- [ ] Rolls back on migration failure (restores previous app directory)
-- [ ] `citadel-app update --all` updates all git-installed apps
+- [x] `citadel-app update <app-id>` runs `git pull` in the app directory
+- [x] Validates updated manifest
+- [x] Runs any new migrations (compares current version vs new version)
+- [x] Rolls back on migration failure (restores previous app directory)
+- [x] `citadel-app update --all` updates all git-installed apps
 
 ---
 
@@ -267,21 +267,21 @@ Decouple apps from the monorepo so they're independently installable packages.
 #### P2-07: Formal migration runner
 **Description:** Replace the current ad-hoc schema initialization (`ensureSmartNotesSchema`, etc.) with a proper migration system. Each app has a `migrations/` directory with numbered SQL files. The host tracks which migrations have run per app in a `migrations` table in the host DB.
 **Acceptance Criteria:**
-- [ ] Apps place migration files in `migrations/001_initial.sql`, `migrations/002_add_tags.sql`, etc.
-- [ ] Host `citadel` DB has a `migrations` table: app_id, migration_name, applied_at
-- [ ] On app startup, host runs any unapplied migrations in order
-- [ ] Each migration runs in a transaction (rolls back on error)
-- [ ] Existing apps migrated to use this system (initial schema becomes `001_initial.sql`)
-- [ ] `citadel-app migrate <app-id>` CLI command to manually trigger migrations
+- [x] Apps place migration files in `migrations/001_initial.sql`, `migrations/002_add_tags.sql`, etc.
+- [x] Host `citadel` DB has a `migrations` table: app_id, migration_name, applied_at
+- [x] On app startup, host runs any unapplied migrations in order
+- [x] Each migration runs in a transaction (rolls back on error)
+- [x] Existing apps migrated to use this system (initial schema becomes `001_initial.sql`)
+- [x] `citadel-app migrate <app-id>` CLI command to manually trigger migrations
 
 #### P2-08: Migration rollback support
 **Description:** Each migration can have an optional `down` file (e.g., `001_initial.down.sql`). The host can roll back the last N migrations for an app.
 **Acceptance Criteria:**
-- [ ] Down migrations stored alongside up migrations: `001_initial.down.sql`
-- [ ] `citadel-app migrate:rollback <app-id>` rolls back the last applied migration
-- [ ] `citadel-app migrate:rollback <app-id> --steps=3` rolls back N migrations
-- [ ] Rollback updates the `migrations` table (removes rolled-back entries)
-- [ ] Rollback runs in a transaction
+- [x] Down migrations stored alongside up migrations: `001_initial.down.sql`
+- [x] `citadel-app migrate:rollback <app-id>` rolls back the last applied migration
+- [x] `citadel-app migrate:rollback <app-id> --steps=3` rolls back N migrations
+- [x] Rollback updates the `migrations` table (removes rolled-back entries)
+- [x] Rollback runs in a transaction
 
 ---
 
@@ -290,38 +290,38 @@ Decouple apps from the monorepo so they're independently installable packages.
 #### P2-09: `citadel-app create` scaffolding
 **Description:** CLI command that creates a new app from a template. Generates the directory structure, manifest, initial migration, and placeholder UI/API files. Gets a developer from zero to a running app in one command.
 **Acceptance Criteria:**
-- [ ] `citadel-app create <app-id>` generates a complete app directory
-- [ ] Generated files: `app.yaml`, `migrations/001_initial.sql`, `page.tsx`, `route.ts`, `README.md`
-- [ ] `--template=<name>` flag selects a template (default: `blank`)
-- [ ] App ID validated (lowercase, alphanumeric + hyphens, 1-64 chars)
-- [ ] Created app is immediately usable: install + start host → see the app
+- [x] `citadel-app create <app-id>` generates a complete app directory
+- [x] Generated files: `app.yaml`, `migrations/001_initial.sql`, `page.tsx`, `route.ts`, `README.md`
+- [x] `--template=<name>` flag selects a template (default: `blank`)
+- [x] App ID validated (lowercase, alphanumeric + hyphens, 1-64 chars)
+- [x] Created app is immediately usable: install + start host → see the app
 
 #### P2-10: App templates
 **Description:** Provide a set of starter templates for common app types. Templates are directories under `templates/` in the Citadel repo (or fetched from a registry later).
 **Acceptance Criteria:**
-- [ ] `blank` template: empty app with manifest, one page, one API route
-- [ ] `crud` template: list/create/edit/delete with SQLite table
-- [ ] `ai` template: app with AI API integration (chat or structured output)
-- [ ] `dashboard` template: read-only data display with charts placeholder
-- [ ] Each template includes a README explaining the structure
+- [x] `blank` template: empty app with manifest, one page, one API route
+- [x] `crud` template: list/create/edit/delete with SQLite table
+- [x] `ai` template: app with AI API integration (chat or structured output)
+- [x] `dashboard` template: read-only data display with charts placeholder
+- [x] Each template includes a README explaining the structure
 
 #### P2-11: Local dev mode
 **Description:** Allow developers to work on an app with hot-reload against a running host. The app directory is symlinked or watched, and changes are reflected without restarting the host.
 **Acceptance Criteria:**
-- [ ] `citadel-app dev <path-to-app>` starts watching the app directory
-- [ ] File changes in the app trigger a Next.js hot-reload
-- [ ] App's API routes hot-reload without host restart
-- [ ] Dev mode shows clear error overlay for app-level errors
-- [ ] Works with `npm run dev` in the host (standard Next.js dev server)
+- [x] `citadel-app dev <path-to-app>` starts watching the app directory
+- [x] File changes in the app trigger a Next.js hot-reload
+- [x] App's API routes hot-reload without host restart
+- [x] Dev mode shows clear error overlay for app-level errors
+- [x] Works with `npm run dev` in the host (standard Next.js dev server)
 
 #### P2-12: App development tutorial
 **Description:** Write a step-by-step tutorial in the VitePress docs site that walks a developer through building a complete app from scratch — from `citadel-app create` to a working CRUD app with DB, API, and UI.
 **Acceptance Criteria:**
-- [ ] Tutorial at `docs/how-to/build-an-app.md`
-- [ ] Covers: create app, define manifest, write migration, build API route, build UI page
-- [ ] Includes code snippets that can be copy-pasted
-- [ ] Links to API reference for host primitives
-- [ ] Tested: following the tutorial produces a working app
+- [x] Tutorial at `docs/how-to/build-an-app.md`
+- [x] Covers: create app, define manifest, write migration, build API route, build UI page
+- [x] Includes code snippets that can be copy-pasted
+- [x] Links to API reference for host primitives
+- [x] Tested: following the tutorial produces a working app
 
 ---
 
@@ -330,24 +330,24 @@ Decouple apps from the monorepo so they're independently installable packages.
 #### P2-13: Pluggable agent runner
 **Description:** Replace the hard dependency on `openclaw` CLI for autopilot with an abstraction layer. The host should define an `AgentRunner` interface, and `openclaw` becomes one implementation. Users can swap in other runners (e.g., Claude Code, custom scripts).
 **Acceptance Criteria:**
-- [ ] `AgentRunner` interface defined: `spawn(task, config) → session`
-- [ ] OpenClaw runner implements the interface (preserves current behavior)
-- [ ] Config in host settings: `agent_runner: "openclaw" | "claude-code" | "script"`
-- [ ] `triggerAutopilot.ts` uses the runner interface, not `openclaw` directly
-- [ ] Documentation for implementing a custom runner
+- [x] `AgentRunner` interface defined: `spawn(task, config) → session`
+- [x] OpenClaw runner implements the interface (preserves current behavior)
+- [x] Config in host settings: `agent_runner: "openclaw" | "claude-code" | "script"`
+- [x] `triggerAutopilot.ts` uses the runner interface, not `openclaw` directly
+- [x] Documentation for implementing a custom runner
 
 #### P2-14: Multi-provider LLM support for autopilot
 **Description:** The autopilot's AI features (task generation, vision suggest) currently hardcode OpenAI models. Make the LLM provider configurable so users can use Anthropic, local models (Ollama), or other providers.
 **Acceptance Criteria:**
-- [ ] Host settings include `llm_provider` and `llm_model` configuration
-- [ ] AI-generate and vision-suggest routes use the configured provider
-- [ ] Supported providers: OpenAI, Anthropic (MVP)
-- [ ] Provider API keys stored securely (env vars or encrypted in host DB)
-- [ ] Clear error if provider is not configured
+- [x] Host settings include `llm_provider` and `llm_model` configuration
+- [x] AI-generate and vision-suggest routes use the configured provider
+- [x] Supported providers: OpenAI, Anthropic (MVP)
+- [x] Provider API keys stored securely (env vars or encrypted in host DB)
+- [x] Clear error if provider is not configured
 
 ---
 
-## Phase 3 — Open Source Ready (v0.8 → v1.0)
+## Phase 3 — Open Source Ready 🚧 NEXT (v0.8 → v1.0)
 
 Ship something others can clone, self-host, and build on.
 
@@ -371,7 +371,7 @@ Ship something others can clone, self-host, and build on.
 
 ---
 
-## Phase 4 — App Marketplace (v1.0+)
+## Phase 4 — App Marketplace 🔮 FUTURE (v1.0+)
 
 Enable a community ecosystem. Only possible because Phase 2 separated apps.
 
