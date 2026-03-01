@@ -219,21 +219,24 @@ export function getHiddenApps(): string[] {
 }
 
 export async function listHiddenApps(): Promise<AppManifest[]> {
-  const hiddenIds = getHiddenApps();
-  if (hiddenIds.length === 0) return [];
-
+  const hiddenIds = new Set(getHiddenApps());
   const appsPath = appsDir();
+  const entries = await fs.readdir(appsPath, { withFileTypes: true });
   const manifests: AppManifest[] = [];
 
-  for (const id of hiddenIds) {
-    const manifestPath = path.join(appsPath, id, 'app.yaml');
+  for (const e of entries) {
+    if (!e.isDirectory()) continue;
+    const manifestPath = path.join(appsPath, e.name, 'app.yaml');
     try {
       const m = await readManifest(manifestPath);
-      if (m) manifests.push(m);
+      if (!m) continue;
+      // Hidden if either marked in manifest or hidden via user action in DB
+      if (m.hidden || hiddenIds.has(m.id)) manifests.push(m);
     } catch {
-      // ignore
+      // ignore bad/missing manifests in hidden listing
     }
   }
 
+  manifests.sort((a, b) => a.id.localeCompare(b.id));
   return manifests;
 }
