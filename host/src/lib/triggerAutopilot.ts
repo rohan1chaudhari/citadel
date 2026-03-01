@@ -1,17 +1,51 @@
-import { spawn } from 'child_process';
 import { audit } from '@citadel/core';
 import { dbQuery, dbExec } from '@citadel/core';
 import { getSetting, acquireAgentLock, isAgentLocked, getActiveLock, createSession, updateSessionStatus } from '@/lib/scrumBoardSchema';
+import { getRunner, getDefaultRunner, AgentRunner } from '@/lib/agentRunners';
+import type { AgentTask } from '@/lib/agentRunner';
 
 const APP_ID = 'scrum-board';
 
 /**
- * Poll an OpenClaw session and stream its messages to session_logs
+ * Get the configured agent runner from settings.
+ * Falls back to openclaw if not configured or invalid.
+ */
+function getConfiguredRunner(): AgentRunner {
+  const runnerName = getSetting('agent_runner');
+  if (!runnerName) {
+    return getDefaultRunner();
+  }
+  try {
+    return getRunner(runnerName);
+  } catch {
+    // Fallback to default if configured runner is invalid
+    return getDefaultRunner();
+  }
+}
+
+/**
+ * Get runner-specific config from settings.
+ */
+function getRunnerConfig(): Record<string, unknown> {
+  const configJson = getSetting('agent_runner_config');
+  if (!configJson) {
+    return {};
+  }
+  try {
+    return JSON.parse(configJson);
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Poll an agent session and stream its messages to session_logs
  */
 async function streamSessionToLogs(
   sessionId: string,
   cronJobId: string,
-  openclawSessionKey: string
+  agentSessionKey: string,
+  runner: AgentRunner
 ): Promise<void> {
   const pollIntervalMs = 2000;
   const maxWaitMs = 600000; // 10 minutes max
@@ -20,39 +54,12 @@ async function streamSessionToLogs(
   let settledCount = 0;
 
   // eslint-disable-next-line no-console
-  console.log(`[SessionStream] Starting stream for ${sessionId} -> ${openclawSessionKey}`);
+  console.log(`[SessionStream] Starting stream for ${sessionId} -> ${agentSessionKey}`);
 
   while (Date.now() - startTime < maxWaitMs) {
     try {
-      // Query session history from OpenClaw
-      const result = await new Promise<{ ok: boolean; messages?: Array<{ role: string; content?: string; timestamp?: string }>; error?: string }>((resolve) => {
-        const child = spawn('openclaw', ['sessions', 'history', openclawSessionKey, '--json'], {
-          stdio: ['ignore', 'pipe', 'pipe'],
-        });
-        let stdout = '';
-        let stderr = '';
-        child.stdout?.on('data', (d) => (stdout += d));
-        child.stderr?.on('data', (d) => (stderr += d));
-        child.on('close', (code) => {
-          if (code !== 0) {
-            resolve({ ok: false, error: stderr || `exit ${code}` });
-            return;
-          }
-          try {
-            const data = JSON.parse(stdout);
-            resolve({ ok: true, messages: data.messages || [] });
-          } catch {
-            resolve({ ok: false, error: 'parse error' });
-          }
-        });
-      });
-
-      if (!result.ok || !result.messages) {
-        await new Promise((r) => setTimeout(r, pollIntervalMs));
-        continue;
-      }
-
-      const messages = result.messages;
+      // Query session history from the runner
+      const messages = await runner.getSessionHistory(agentSessionKey);
 
       // If we have new messages, write them to session_logs
       if (messages.length > lastMessageCount) {
@@ -87,24 +94,8 @@ async function streamSessionToLogs(
       }
 
       // Also check if the cron job still exists (indicates completion)
-      const cronStatus = await new Promise<{ exists: boolean }>((resolve) => {
-        const child = spawn('openclaw', ['cron', 'list', '--json'], {
-          stdio: ['ignore', 'pipe', 'pipe'],
-        });
-        let stdout = '';
-        child.stdout?.on('data', (d) => (stdout += d));
-        child.on('close', () => {
-          try {
-            const jobs = JSON.parse(stdout);
-            const exists = Array.isArray(jobs) && jobs.some((j: { id?: string }) => j.id === cronJobId);
-            resolve({ exists });
-          } catch {
-            resolve({ exists: true }); // Assume exists on error
-          }
-        });
-      });
-
-      if (!cronStatus.exists && messages.length > 0) {
+      const cronExists = await runner.checkCronJobExists(cronJobId);
+      if (!cronExists && messages.length > 0) {
         // Job completed, finalize
         updateSessionStatus(sessionId, 'completed');
         // eslint-disable-next-line no-console
@@ -161,7 +152,7 @@ export interface TriggerResult {
 
 /**
  * Trigger an autopilot agent run for a selected app.
- * Adds a one-time cron job via OpenClaw CLI.
+ * Uses the configured agent runner (default: openclaw).
  * Only schedules if there are eligible tasks to avoid wasting tokens.
  * 
  * @param skipToggleCheck - If true, bypasses the autopilot_enabled toggle (for manual triggers)
@@ -291,57 +282,47 @@ Execution contract:
 9) Stop.`;
 
   try {
+    // Get the configured runner
+    const runner = getConfiguredRunner();
+    const runnerConfig = getRunnerConfig();
+
+    // Validate runner config before spawning
+    const validation = await runner.validateConfig();
+    if (!validation.valid) {
+      throw new Error(`Agent runner "${runner.name}" is not properly configured: ${validation.error}`);
+    }
+
     // Schedule to run immediately
     const runAt = new Date(Date.now() + 1000).toISOString();
 
-    // Call openclaw cron add with proper flags (session persists for history)
-    const args = [
-      'cron', 'add',
-      '--name', `autopilot-${targetAppId}-${cronJobId}`,
-      '--session', 'isolated',
-      '--at', runAt,
-      '--message', message,
-      '--thinking', 'low',
-      '--timeout-seconds', '600',
-      '--json',
-    ];
+    // Build the agent task
+    const agentTask: AgentTask = {
+      message,
+      appId: targetAppId,
+      appName: targetAppName,
+      cronJobId,
+      sessionId,
+      repoPath,
+      runAt,
+      timeoutSeconds: 600,
+      thinking: 'low',
+    };
 
-    // Execute and capture output
-    const child = spawn('openclaw', args, {
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
-
-    let stdout = '';
-    let stderr = '';
-    child.stdout?.on('data', (d) => (stdout += d));
-    child.stderr?.on('data', (d) => (stderr += d));
-
-    const exitCode = await new Promise<number>((resolve) => child.on('close', resolve));
-
-    // Filter out config warnings from stderr
-    const cleanStderr = stderr
-      .split('\n')
-      .filter((l) => !l.includes('Config was last written'))
-      .join('\n')
-      .trim();
-
-    if (exitCode !== 0) {
-      throw new Error(cleanStderr || `openclaw exited ${exitCode}`);
-    }
-
-    const result = JSON.parse(stdout || '{}');
-    const openclawSessionKey = result.sessionKey || result.session || result.id;
+    // Spawn the agent session using the runner
+    const agentSession = await runner.spawn(agentTask, runnerConfig);
+    const agentSessionKey = agentSession.sessionKey || agentSession.cronJobId;
 
     audit(APP_ID, 'scrum.trigger_agent', {
       appId: targetAppId,
       appName: targetAppName,
-      cronJobId: result.id || cronJobId,
-      openclawSessionKey,
+      cronJobId: agentSession.cronJobId,
+      agentSessionKey,
+      runner: runner.name,
     });
 
     // Start streaming session logs in the background (don't await, let it run)
-    if (openclawSessionKey) {
-      streamSessionToLogs(sessionId, result.id || cronJobId, openclawSessionKey).catch((err) => {
+    if (agentSessionKey) {
+      streamSessionToLogs(sessionId, agentSession.cronJobId, agentSessionKey, runner).catch((err) => {
         // eslint-disable-next-line no-console
         console.error('[SessionStream] Background stream failed:', err);
       });
@@ -349,8 +330,8 @@ Execution contract:
 
     return {
       ok: true,
-      message: `Agent scheduled (${eligibleCount} eligible task${eligibleCount === 1 ? '' : 's'})`,
-      cronJobId: result.id || cronJobId,
+      message: `Agent scheduled via ${runner.name} (${eligibleCount} eligible task${eligibleCount === 1 ? '' : 's'})`,
+      cronJobId: agentSession.cronJobId,
       sessionId,
       runAt,
       eligibleCount,
@@ -364,3 +345,8 @@ Execution contract:
     };
   }
 }
+
+// Re-export runner utilities for use in UI/settings
+export { getRunner, getDefaultRunner, listRunners, validateRunner } from '@/lib/agentRunners';
+export type { AgentRunner } from '@/lib/agentRunners';
+export type { AgentTask, AgentRunnerConfig } from '@/lib/agentRunner';

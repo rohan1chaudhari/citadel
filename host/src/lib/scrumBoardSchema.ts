@@ -172,6 +172,19 @@ export function ensureScrumBoardSchema() {
       ['autopilot_enabled', 'true', new Date().toISOString()]
     );
   }
+
+  // Default agent runner = openclaw
+  const agentRunner = dbQuery<{ count: number }>(
+    APP_ID,
+    `SELECT COUNT(*) as count FROM settings WHERE key = 'agent_runner'`
+  )[0]?.count ?? 0;
+  if (agentRunner === 0) {
+    dbExec(
+      APP_ID,
+      `INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?)`,
+      ['agent_runner', 'openclaw', new Date().toISOString()]
+    );
+  }
 }
 
 export function getOrCreateBoardId(targetAppId: string): number {
