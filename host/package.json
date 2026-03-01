@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "next dev -p 3000",
+    "clean-dev": "bash ./scripts/clean-dev.sh",
     "build": "next build",
     "start": "next start -p 3000",
     "lint": "next lint",
