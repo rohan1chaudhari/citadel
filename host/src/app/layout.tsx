@@ -4,6 +4,7 @@ import './globals.css';
 import { NavigationDrawer } from '@/components/NavigationDrawer';
 import { listApps } from '@/lib/registry';
 import { cleanupOldAuditLogs } from '@/lib/audit';
+import { startBackupScheduler, runBackupIfNeeded } from '@/lib/backup';
 
 export const viewport: Viewport = {
   width: 'device-width',
@@ -18,6 +19,9 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
 
   // Run audit log cleanup on startup (server-side only)
   cleanupOldAuditLogs();
+
+  // Start backup scheduler (runs immediately and every 24h)
+  startBackupScheduler();
 
   return (
     <html lang="en">
