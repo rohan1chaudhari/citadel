@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120">
+  <defs>
+    <linearGradient id="shield" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#818cf8"/>
+      <stop offset="100%" style="stop-color:#a78bfa"/>
+    </linearGradient>
+    <linearGradient id="tower" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#ffffff;stop-opacity:0.95"/>
+      <stop offset="100%" style="stop-color:#c7d2fe;stop-opacity:0.9"/>
+    </linearGradient>
+  </defs>
+  <!-- Shield shape -->
+  <path d="M60 8 L108 28 L108 65 Q108 95 60 115 Q12 95 12 65 L12 28 Z" fill="url(#shield)" stroke="#6366f1" stroke-width="2"/>
+  <!-- Castle/citadel towers -->
+  <rect x="30" y="40" width="12" height="35" rx="1" fill="url(#tower)"/>
+  <rect x="54" y="30" width="12" height="45" rx="1" fill="url(#tower)"/>
+  <rect x="78" y="40" width="12" height="35" rx="1" fill="url(#tower)"/>
+  <!-- Tower tops (crenellations) -->
+  <rect x="28" y="36" width="4" height="6" rx="0.5" fill="url(#tower)"/>
+  <rect x="34" y="36" width="4" height="6" rx="0.5" fill="url(#tower)"/>
+  <rect x="40" y="36" width="4" height="6" rx="0.5" fill="url(#tower)"/>
+  <rect x="52" y="26" width="4" height="6" rx="0.5" fill="url(#tower)"/>
+  <rect x="58" y="26" width="4" height="6" rx="0.5" fill="url(#tower)"/>
+  <rect x="64" y="26" width="4" height="6" rx="0.5" fill="url(#tower)"/>
+  <rect x="76" y="36" width="4" height="6" rx="0.5" fill="url(#tower)"/>
+  <rect x="82" y="36" width="4" height="6" rx="0.5" fill="url(#tower)"/>
+  <rect x="88" y="36" width="4" height="6" rx="0.5" fill="url(#tower)"/>
+  <!-- Gate -->
+  <path d="M55 75 L55 60 Q60 54 65 60 L65 75 Z" fill="#6366f1" opacity="0.6"/>
+  <!-- Connecting wall -->
+  <rect x="42" y="52" width="12" height="8" rx="0.5" fill="url(#tower)" opacity="0.7"/>
+  <rect x="66" y="52" width="12" height="8" rx="0.5" fill="url(#tower)" opacity="0.7"/>
+  <!-- Data dots (representing apps) -->
+  <circle cx="36" cy="55" r="2.5" fill="#fbbf24"/>
+  <circle cx="60" cy="45" r="2.5" fill="#34d399"/>
+  <circle cx="84" cy="55" r="2.5" fill="#f87171"/>
+</svg>

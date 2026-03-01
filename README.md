@@ -1,8 +1,31 @@
-# Citadel
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/public/images/citadel-logo-dark.svg">
+    <img src="docs/public/images/citadel-logo.svg" alt="Citadel" width="120">
+  </picture>
+</p>
 
-**Local-first personal app hub.** One host, isolated apps, your data stays on your machine.
+<h1 align="center">Citadel</h1>
 
-[What is Citadel?](docs/what-is-citadel.md) · [Docs](docs/intro.md) · [Quickstart](docs/how-to/quickstart.md) · [Build an App](docs/how-to/build-an-app.md) · [App Spec](docs/app-spec.md) · [Roadmap](kb/ROADMAP.md)
+<p align="center">
+  <strong>Local-first personal app hub.</strong><br>
+  One host, isolated apps, your data stays on your machine.
+</p>
+
+<p align="center">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="MIT License"></a>
+</p>
+
+<p align="center">
+  <a href="docs/what-is-citadel.md">What is Citadel?</a> ·
+  <a href="docs/intro.md">Docs</a> ·
+  <a href="docs/how-to/quickstart.md">Quickstart</a> ·
+  <a href="docs/how-to/build-an-app.md">Build an App</a> ·
+  <a href="docs/app-spec.md">App Spec</a> ·
+  <a href="kb/ROADMAP.md">Roadmap</a>
+</p>
+
+---
 
 ## Quick start
 
@@ -19,16 +42,20 @@ cd host && npm install && npm run dev
 node scripts/citadel-app.mjs create my-app --template=crud
 ```
 
-Templates: `blank`, `crud`, `ai`, `dashboard`. Full CLI docs: [`docs/cli.md`](docs/cli.md).
+Templates: `blank` · `crud` · `ai` · `dashboard` — [CLI docs](docs/cli.md)
 
 ## How it works
 
-Each app gets its own SQLite database and storage directory. Apps declare permissions in `app.yaml` — the host prompts for consent on first launch. No cross-app data access. Audit everything.
+```
+Browser → Middleware (CSP, rate limit) → App routes → @citadel/core → SQLite (per app)
+```
+
+Each app gets its own database and storage. Apps declare permissions in `app.yaml` — the host enforces them. No cross-app access. Everything is audited.
 
 ```
-host/       → Next.js control plane (routing, permissions, audit)
-apps/       → App packages (manifest + migrations)
+host/       → Next.js control plane
 core/       → @citadel/core (db, storage, audit, permissions)
+apps/       → App packages (manifest + migrations)
 templates/  → Starter templates
 scripts/    → citadel-app CLI
 ```
@@ -39,4 +66,4 @@ Smart Notes · Gym Tracker · Scrum Board · French Translator · Friend Tracker
 
 ## License
 
-[MIT](LICENSE)
+[MIT](LICENSE) — Rohan Chaudhari

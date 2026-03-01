@@ -1,8 +1,29 @@
 # What is Citadel?
 
+<p align="center">
+  <img src="/images/citadel-logo.svg" alt="Citadel" width="100">
+</p>
+
 Citadel is your **personal app server** — a single place on your own computer (or a small server) that runs all your personal apps.
 
 Think of it like having your own private app store, except everything runs on hardware you own and all your data stays with you.
+
+```mermaid
+graph LR
+    You["🧑 You"]
+    subgraph Citadel["🏰 Your Citadel"]
+        Notes["📝 Notes"]
+        Gym["💪 Gym"]
+        Friends["👥 Friends"]
+        Mood["😊 Mood"]
+        More["➕ More..."]
+    end
+    subgraph Your["💾 Your machine"]
+        Data["All your data"]
+    end
+    You -->|"browser or phone"| Citadel
+    Citadel --> Data
+```
 
 ## The problem
 
