@@ -193,8 +193,43 @@ async function copyDir(src, dest) {
   }
 }
 
-// Run migrations for an app
+// Import and use the core migration module
+async function getMigrationModule() {
+  // Use dynamic import to load the compiled core module
+  const corePath = path.join(REPO_ROOT, 'core', 'dist', 'index.js');
+  try {
+    return await import(corePath);
+  } catch {
+    // Fallback: use inline implementation
+    return null;
+  }
+}
+
+// Run migrations for an app using the core module
 async function runMigrations(appId) {
+  const core = await getMigrationModule();
+  
+  if (core && core.runMigrationsForApp) {
+    // Use the core module's migration runner
+    const result = await core.runMigrationsForApp(appId);
+    
+    if (result.failed) {
+      throw new Error(`Migration ${result.failed.file} failed: ${result.failed.error}`);
+    }
+    
+    for (const file of result.skipped) {
+      info(`Migration already applied: ${file}`);
+    }
+    
+    for (const file of result.applied) {
+      success(`Applied migration: ${file}`);
+    }
+    
+    return result;
+  }
+  
+  // Fallback: inline migration runner (simplified version)
+  const { DatabaseSync } = await import('node:sqlite');
   const appDir = path.join(APPS_DIR, appId);
   const migrationsDir = path.join(appDir, 'migrations');
   const appDataDir = path.join(DATA_DIR, 'apps', appId);
@@ -204,7 +239,7 @@ async function runMigrations(appId) {
     await fs.access(migrationsDir);
   } catch {
     info('No migrations to run');
-    return;
+    return { applied: [], skipped: [] };
   }
 
   // Get list of migration files
@@ -215,12 +250,11 @@ async function runMigrations(appId) {
 
   if (migrationFiles.length === 0) {
     info('No migrations to run');
-    return;
+    return { applied: [], skipped: [] };
   }
 
   // Ensure migrations table exists
   const citadelDbPath = path.join(DATA_DIR, 'citadel.sqlite');
-  const { DatabaseSync } = await import('node:sqlite');
   
   // Create app data directory
   await fs.mkdir(appDataDir, { recursive: true });
@@ -242,22 +276,33 @@ async function runMigrations(appId) {
     const appliedRows = appliedStmt.all(appId);
     const applied = new Set(appliedRows.map(r => r.migration_name));
 
+    const result = { applied: [], skipped: [] };
+    
     // Apply pending migrations
     for (const file of migrationFiles) {
       if (applied.has(file)) {
         info(`Migration already applied: ${file}`);
+        result.skipped.push(file);
         continue;
       }
 
       const migrationPath = path.join(migrationsDir, file);
       const sql = await fs.readFile(migrationPath, 'utf8');
 
-      // Apply to app DB
+      // Apply to app DB in a transaction
       const appDbPath = path.join(appDataDir, 'db.sqlite');
       const appDb = new DatabaseSync(appDbPath);
       try {
-        appDb.exec(sql);
+        appDb.exec('BEGIN TRANSACTION');
+        try {
+          appDb.exec(sql);
+          appDb.exec('COMMIT');
+        } catch (e) {
+          appDb.exec('ROLLBACK');
+          throw e;
+        }
         success(`Applied migration: ${file}`);
+        result.applied.push(file);
       } finally {
         appDb.close();
       }
@@ -268,9 +313,434 @@ async function runMigrations(appId) {
       `);
       insertStmt.run(appId, file, new Date().toISOString());
     }
+    
+    return result;
   } finally {
     citadelDb.close();
   }
+}
+
+// MIGRATE COMMAND
+async function migrateCommand(appId, options = {}) {
+  if (options.all) {
+    // Run migrations for all apps
+    log('Running migrations for all apps...', 'blue');
+    const installedApps = await getInstalledAppIds();
+    
+    if (installedApps.length === 0) {
+      log('No installed apps found', 'yellow');
+      return;
+    }
+
+    let totalApplied = 0;
+    let totalFailed = 0;
+    
+    for (const id of installedApps) {
+      log(`\n--- ${id} ---`, 'blue');
+      try {
+        const result = await runMigrations(id);
+        totalApplied += result.applied.length;
+      } catch (err) {
+        log(`Failed: ${err.message}`, 'red');
+        totalFailed++;
+      }
+    }
+    
+    log(`\n${colors.green}Done!${colors.reset} Applied ${totalApplied} migrations across ${installedApps.length} apps.`);
+    if (totalFailed > 0) {
+      log(`${totalFailed} app(s) had failures.`, 'yellow');
+      process.exit(1);
+    }
+    return;
+  }
+
+  if (!appId) {
+    error('Usage: citadel-app migrate <app-id> | citadel-app migrate --all');
+  }
+
+  // Validate app ID
+  const idCheck = validateAppId(appId);
+  if (!idCheck.valid) {
+    error(idCheck.error);
+  }
+
+  // Check if app is installed
+  const appDir = path.join(APPS_DIR, appId);
+  try {
+    await fs.access(appDir);
+  } catch {
+    error(`App "${appId}" is not installed`);
+  }
+
+  log(`Running migrations for: ${appId}`, 'blue');
+
+  try {
+    const result = await runMigrations(appId);
+    
+    if (result.applied.length === 0 && result.skipped.length === 0) {
+      info('No migrations found');
+    } else if (result.applied.length === 0) {
+      info('All migrations already up to date');
+    } else {
+      success(`${result.applied.length} migration(s) applied`);
+    }
+    
+    log(`\nApp URL: http://localhost:3000/apps/${appId}`, 'green');
+  } catch (err) {
+    error(`Migration failed: ${err.message}`);
+  }
+}
+
+// UPDATE COMMAND
+async function updateCommand(appId, options = {}) {
+  if (options.all) {
+    // Update all git-installed apps
+    log('Updating all git-installed apps...', 'blue');
+    const installedApps = await getInstalledAppIds();
+    const gitApps = [];
+
+    for (const id of installedApps) {
+      const appGitDir = path.join(APPS_DIR, id, '.git');
+      try {
+        await fs.access(appGitDir);
+        gitApps.push(id);
+      } catch {
+        // Not a git repo, skip
+      }
+    }
+
+    if (gitApps.length === 0) {
+      log('No git-installed apps found', 'yellow');
+      return;
+    }
+
+    log(`Found ${gitApps.length} git-installed apps: ${gitApps.join(', ')}`, 'cyan');
+
+    for (const id of gitApps) {
+      log(`\n--- Updating ${id} ---`, 'blue');
+      try {
+        await updateSingleApp(id);
+      } catch (err) {
+        log(`Failed to update ${id}: ${err.message}`, 'red');
+      }
+    }
+    return;
+  }
+
+  if (!appId) {
+    error('Usage: citadel-app update <app-id> | citadel-app update --all');
+  }
+
+  await updateSingleApp(appId);
+}
+
+async function updateSingleApp(appId) {
+  // Validate app ID
+  const idCheck = validateAppId(appId);
+  if (!idCheck.valid) {
+    error(idCheck.error);
+  }
+
+  // Check if app is installed
+  const appDir = path.join(APPS_DIR, appId);
+  try {
+    await fs.access(appDir);
+  } catch {
+    error(`App "${appId}" is not installed`);
+  }
+
+  // Check if it's a git repo
+  const gitDir = path.join(appDir, '.git');
+  try {
+    await fs.access(gitDir);
+  } catch {
+    error(`App "${appId}" was not installed from git. Cannot update.`);
+  }
+
+  log(`Updating app: ${appId}`, 'blue');
+
+  // Read current manifest version for comparison
+  const manifestPath = path.join(appDir, 'app.yaml');
+  let currentManifest;
+  try {
+    currentManifest = await readManifest(manifestPath);
+  } catch (err) {
+    error(`Failed to read current manifest: ${err.message}`);
+  }
+  const oldVersion = currentManifest.version;
+  info(`Current version: ${oldVersion}`);
+
+  // Create backup
+  const backupDir = path.join(DATA_DIR, 'backups', `${appId}-${Date.now()}`);
+  info(`Creating backup at: ${backupDir}`);
+  await fs.mkdir(backupDir, { recursive: true });
+
+  // Copy current app to backup (excluding .git for speed)
+  const entries = await fs.readdir(appDir, { withFileTypes: true });
+  for (const entry of entries) {
+    if (entry.name === '.git') continue;
+    const srcPath = path.join(appDir, entry.name);
+    const destPath = path.join(backupDir, entry.name);
+    if (entry.isDirectory()) {
+      await copyDir(srcPath, destPath);
+    } else {
+      await fs.copyFile(srcPath, destPath);
+    }
+  }
+
+  // Run git pull
+  info('Pulling latest changes...');
+  try {
+    await gitPull(appDir);
+  } catch (err) {
+    // Restore from backup on failure
+    log(`Git pull failed: ${err.message}`, 'red');
+    info('Restoring from backup...');
+    await restoreFromBackup(backupDir, appDir);
+    error('Update failed. App restored to previous state.');
+  }
+
+  // Validate updated manifest
+  info('Validating updated manifest...');
+  let newManifest;
+  try {
+    newManifest = await readManifest(manifestPath);
+  } catch (err) {
+    // Restore from backup on failure
+    log(`Invalid manifest: ${err.message}`, 'red');
+    info('Restoring from backup...');
+    await restoreFromBackup(backupDir, appDir);
+    error('Update failed. App restored to previous state.');
+  }
+
+  const validation = validateManifest(newManifest, manifestPath);
+  if (!validation.valid) {
+    log(`Invalid manifest:\n  - ${validation.errors.join('\n  - ')}`, 'red');
+    info('Restoring from backup...');
+    await restoreFromBackup(backupDir, appDir);
+    error('Update failed. App restored to previous state.');
+  }
+
+  // Check app ID hasn't changed
+  if (newManifest.id !== appId) {
+    log(`App ID changed from "${appId}" to "${newManifest.id}" - not allowed`, 'red');
+    info('Restoring from backup...');
+    await restoreFromBackup(backupDir, appDir);
+    error('Update failed. App restored to previous state.');
+  }
+
+  info(`New version: ${newManifest.version}`);
+
+  // Run migrations
+  info('Running migrations...');
+  try {
+    await runMigrations(appId);
+  } catch (err) {
+    // Restore from backup on migration failure
+    log(`Migration failed: ${err.message}`, 'red');
+    info('Restoring from backup...');
+    await restoreFromBackup(backupDir, appDir);
+    error('Update failed. App restored to previous state.');
+  }
+
+  // Success - clean up backup
+  info('Cleaning up backup...');
+  await fs.rm(backupDir, { recursive: true, force: true });
+
+  success(`App "${appId}" updated successfully!`);
+  info(`${oldVersion} → ${newManifest.version}`);
+  log(`\nApp URL: http://localhost:3000/apps/${appId}`, 'green');
+}
+
+// Run git pull in a directory
+async function gitPull(repoDir) {
+  return new Promise((resolve, reject) => {
+    const proc = spawn('git', ['pull'], {
+      cwd: repoDir,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+
+    let stdout = '';
+    let stderr = '';
+
+    proc.stdout.on('data', (data) => { stdout += data; });
+    proc.stderr.on('data', (data) => { stderr += data; });
+
+    proc.on('close', (code) => {
+      if (code === 0) {
+        resolve({ stdout, stderr });
+      } else {
+        reject(new Error(`git pull failed: ${stderr || stdout}`));
+      }
+    });
+  });
+}
+
+// Restore app directory from backup
+async function restoreFromBackup(backupDir, appDir) {
+  // Remove all files except .git
+  const entries = await fs.readdir(appDir, { withFileTypes: true });
+  for (const entry of entries) {
+    if (entry.name === '.git') continue;
+    const fullPath = path.join(appDir, entry.name);
+    await fs.rm(fullPath, { recursive: true, force: true });
+  }
+
+  // Copy backup files back
+  const backupEntries = await fs.readdir(backupDir, { withFileTypes: true });
+  for (const entry of backupEntries) {
+    const srcPath = path.join(backupDir, entry.name);
+    const destPath = path.join(appDir, entry.name);
+    if (entry.isDirectory()) {
+      await copyDir(srcPath, destPath);
+    } else {
+      await fs.copyFile(srcPath, destPath);
+    }
+  }
+}
+
+// UNINSTALL COMMAND
+async function uninstallCommand(appId, options = {}) {
+  if (!appId) {
+    error('Usage: citadel-app uninstall <app-id> [--delete-data]');
+  }
+
+  // Validate app ID
+  const idCheck = validateAppId(appId);
+  if (!idCheck.valid) {
+    error(idCheck.error);
+  }
+
+  // Cannot uninstall protected apps
+  const PROTECTED_APPS = ['citadel', 'scrum-board'];
+  if (PROTECTED_APPS.includes(appId)) {
+    error(`Cannot uninstall protected app: ${appId}`);
+  }
+
+  // Check if app is installed
+  const appDir = path.join(APPS_DIR, appId);
+  try {
+    await fs.access(appDir);
+  } catch {
+    error(`App "${appId}" is not installed`);
+  }
+
+  // Check if app data exists
+  const appDataDir = path.join(DATA_DIR, 'apps', appId);
+  let hasData = false;
+  try {
+    await fs.access(appDataDir);
+    hasData = true;
+  } catch {
+    // No data directory
+  }
+
+  log(`Uninstalling app: ${appId}`, 'blue');
+
+  // Determine if we should delete data
+  let deleteData = options.deleteData || false;
+
+  // Prompt if not using --delete-data flag and data exists
+  if (!deleteData && hasData && !options.force) {
+    // For non-interactive environments, default to keeping data
+    // We'll use a simple approach: check if stdin is TTY
+    if (process.stdin.isTTY) {
+      const answer = await new Promise((resolve) => {
+        process.stdout.write('Delete app data? (y/N) ');
+        process.stdin.once('data', (data) => {
+          const input = data.toString().trim().toLowerCase();
+          resolve(input === 'y' || input === 'yes');
+        });
+      });
+      deleteData = answer;
+    } else {
+      info('App has data. Use --delete-data to remove it, or --force to skip this check.');
+    }
+  }
+
+  // Remove app directory
+  info(`Removing app directory: ${appDir}`);
+  await fs.rm(appDir, { recursive: true, force: true });
+
+  // Remove data if requested
+  if (deleteData && hasData) {
+    info(`Removing app data: ${appDataDir}`);
+    await fs.rm(appDataDir, { recursive: true, force: true });
+  }
+
+  // Clean up migrations record from citadel DB
+  const citadelDbPath = path.join(DATA_DIR, 'citadel.sqlite');
+  try {
+    const { DatabaseSync } = await import('node:sqlite');
+    const citadelDb = new DatabaseSync(citadelDbPath);
+    try {
+      const deleteStmt = citadelDb.prepare('DELETE FROM migrations WHERE app_id = ?');
+      deleteStmt.run(appId);
+    } finally {
+      citadelDb.close();
+    }
+  } catch {
+    // Ignore errors - migrations table may not exist
+  }
+
+  // Success
+  success(`App "${appId}" uninstalled successfully`);
+  if (deleteData) {
+    success('App data deleted');
+  } else if (hasData) {
+    info('App data preserved (use --delete-data to remove)');
+  }
+}
+
+// CREATE COMMAND
+async function createCommand(appId) {
+  if (!appId) {
+    error('Usage: citadel-app create <app-id>');
+  }
+
+  const idCheck = validateAppId(appId);
+  if (!idCheck.valid) {
+    error(idCheck.error);
+  }
+
+  const targetDir = path.join(APPS_DIR, appId);
+  try {
+    await fs.access(targetDir);
+    error(`App directory already exists: ${targetDir}`);
+  } catch {
+    // expected: does not exist
+  }
+
+  log(`Creating app scaffold: ${appId}`, 'blue');
+  await fs.mkdir(path.join(targetDir, 'migrations'), { recursive: true });
+  await fs.mkdir(path.join(targetDir, 'api'), { recursive: true });
+
+  const title = appId
+    .split('-')
+    .filter(Boolean)
+    .map((p) => p[0].toUpperCase() + p.slice(1))
+    .join(' ');
+
+  const appYaml = `id: ${appId}\nname: ${title}\nversion: 0.1.0\nmanifest_version: "1.0"\npermissions:\n  db:\n    read: true\n    write: true\n  storage:\n    read: false\n    write: false\nconnectors: []\n`;
+
+  const migrationSql = `CREATE TABLE IF NOT EXISTS entries (\n  id INTEGER PRIMARY KEY AUTOINCREMENT,\n  title TEXT NOT NULL,\n  created_at TEXT NOT NULL\n);\n`;
+
+  const pageTsx = `import { Shell, Card } from '@/components/Shell';\n\nexport const runtime = 'nodejs';\n\nexport default function ${title.replace(/[^A-Za-z0-9]/g, '') || 'NewApp'}Page() {\n  return (\n    <Shell title=\"${title}\" subtitle=\"Generated by citadel-app create\">\n      <Card>\n        <p>Welcome to ${title}.</p>\n      </Card>\n    </Shell>\n  );\n}\n`;
+
+  const apiRoute = `import { NextResponse } from 'next/server';\n\nexport const runtime = 'nodejs';\n\nexport async function GET() {\n  return NextResponse.json({ ok: true, appId: '${appId}' });\n}\n`;
+
+  const readme = `# ${title}\n\nGenerated with:\n\n\`\`\`bash\ncitadel-app create ${appId}\n\`\`\`\n\n## Files\n- \`app.yaml\` manifest\n- \`migrations/001_initial.sql\` initial DB schema\n- \`page.tsx\` host page scaffold\n- \`api/route.ts\` sample API route\n`;
+
+  await fs.writeFile(path.join(targetDir, 'app.yaml'), appYaml, 'utf8');
+  await fs.writeFile(path.join(targetDir, 'migrations', '001_initial.sql'), migrationSql, 'utf8');
+  await fs.writeFile(path.join(targetDir, 'page.tsx'), pageTsx, 'utf8');
+  await fs.writeFile(path.join(targetDir, 'api', 'route.ts'), apiRoute, 'utf8');
+  await fs.writeFile(path.join(targetDir, 'README.md'), readme, 'utf8');
+
+  success(`Created app scaffold at ${targetDir}`);
+  info('Next steps:');
+  info(`1) Review ${path.join(targetDir, 'app.yaml')}`);
+  info(`2) Start host and open /apps/${appId}`);
 }
 
 // INSTALL COMMAND
@@ -385,6 +855,13 @@ async function main() {
   const command = args[0];
   const arg = args[1];
 
+  // Parse flags
+  const flags = {
+    deleteData: args.includes('--delete-data'),
+    force: args.includes('--force'),
+    all: args.includes('--all'),
+  };
+
   // Ensure apps directory exists
   await fs.mkdir(APPS_DIR, { recursive: true });
   await fs.mkdir(DATA_DIR, { recursive: true });
@@ -394,16 +871,16 @@ async function main() {
       await installCommand(arg);
       break;
     case 'uninstall':
-      log('Uninstall command not yet implemented. Use: citadel-app uninstall <app-id>', 'yellow');
+      await uninstallCommand(arg, flags);
       break;
     case 'update':
-      log('Update command not yet implemented. Use: citadel-app update <app-id>', 'yellow');
-      break;
-    case 'create':
-      log('Create command not yet implemented. Use: citadel-app create <app-id>', 'yellow');
+      await updateCommand(arg, flags);
       break;
     case 'migrate':
-      log('Migrate command not yet implemented. Use: citadel-app migrate <app-id>', 'yellow');
+      await migrateCommand(arg, flags);
+      break;
+    case 'create':
+      await createCommand(arg);
       break;
     case 'help':
     case '--help':
@@ -415,9 +892,16 @@ ${colors.cyan}Citadel App CLI${colors.reset}
 Commands:
   install <git-url|local-path>  Install an app from git or local path
   uninstall <app-id>            Remove an installed app
-  update <app-id>               Update an installed app
-  create <app-id>               Create a new app from template
+  update <app-id>               Update an installed app (git pull)
+  update --all                  Update all git-installed apps
   migrate <app-id>              Run migrations for an app
+  migrate --all                 Run migrations for all apps
+  create <app-id>               Create a new app from template
+
+Options:
+  --delete-data                 Delete app data when uninstalling
+  --force                       Skip confirmation prompts
+  --all                         Update all apps (with update command)
 
 Environment:
   CITADEL_APPS_DIR    Apps directory (default: ../apps)
@@ -426,6 +910,12 @@ Environment:
 Examples:
   citadel-app install https://github.com/user/my-citadel-app.git
   citadel-app install ./path/to/local-app
+  citadel-app uninstall my-app
+  citadel-app uninstall my-app --delete-data
+  citadel-app update my-app
+  citadel-app update --all
+  citadel-app migrate my-app
+  citadel-app migrate --all
       `);
   }
 }
