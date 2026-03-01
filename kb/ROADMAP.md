@@ -352,22 +352,143 @@ Decouple apps from the monorepo so they're independently installable packages.
 Ship something others can clone, self-host, and build on.
 
 ### Documentation
-- [ ] Architecture overview + security model docs
-- [ ] API reference for host primitives (`db`, `storage`, `audit`, `permissions`)
-- [ ] Deployment guide (Docker, bare metal, Raspberry Pi)
-- [ ] Contributing guide
+
+#### P3-01: Architecture and security model document
+**Description:** Write a single `docs/architecture.md` that explains how Citadel works end-to-end: the host runtime model, isolation boundaries, permission enforcement, audit pipeline, and the app lifecycle (install → migrate → serve → uninstall). Include a threat model section that explains what Citadel defends against (cross-app data access, path traversal, SQL injection, XSS) and what it doesn't (OS-level isolation, network-level auth).
+**Acceptance Criteria:**
+- [ ] `docs/architecture.md` published in VitePress sidebar
+- [ ] Covers: host runtime, isolation model (db/storage/network), permission system, audit pipeline, CSP/rate limiting
+- [ ] Threat model section: what's protected, what's not, what requires Tailscale or container isolation
+- [ ] Diagram showing request flow: browser → middleware → API route → core primitives → SQLite
+- [ ] Links to relevant code files for each subsystem
+
+#### P3-02: API reference for host primitives
+**Description:** Write a reference doc covering every function in `@citadel/core` that an app developer would use: `dbQuery`, `dbExec`, `storageWriteBuffer`, `storageReadText`, `audit`, `assertAppId`, `runMigrationsForApp`. Each function gets signature, parameters, return type, example, and error cases. This exists alongside the tutorial — the tutorial teaches, this is the lookup table.
+**Acceptance Criteria:**
+- [ ] `docs/api-reference.md` published in VitePress sidebar
+- [ ] Every exported function from `@citadel/core` documented
+- [ ] Each entry includes: TypeScript signature, parameter descriptions, return type, usage example
+- [ ] Error cases listed (what throws, what returns null)
+- [ ] Cross-linked from the build-an-app tutorial
+
+#### P3-03: Deployment guide
+**Description:** Write a guide covering three deployment scenarios: Docker (primary), bare metal (for advanced users), and Raspberry Pi (popular self-hosting target). Docker is the recommended path. Include Tailscale setup for remote access.
+**Acceptance Criteria:**
+- [ ] `docs/how-to/deploy.md` published in VitePress sidebar
+- [ ] Docker section: `docker-compose up` one-liner, volume mapping for `data/`, env vars, port config
+- [ ] Bare metal section: Node.js version requirement, `npm install`, systemd service file, reverse proxy (Caddy/nginx)
+- [ ] Raspberry Pi section: tested Node.js ARM build, performance notes, recommended Pi model
+- [ ] Tailscale section: how to expose Citadel over tailnet (2-3 commands)
+- [ ] Troubleshooting: common issues (port conflicts, permissions, node:sqlite on older Node)
+
+#### P3-04: Contributing guide
+**Description:** Write `CONTRIBUTING.md` at the repo root. Cover: how to set up the dev environment, how the codebase is organized, how to submit a PR, coding conventions (Tailwind, no external auth, app.yaml manifest), and how to add an app vs modify the platform.
+**Acceptance Criteria:**
+- [ ] `CONTRIBUTING.md` at repo root
+- [ ] Dev setup: clone, `npm install`, `npm run dev`, run tests
+- [ ] Codebase tour: host/ vs core/ vs apps/ vs templates/ vs scripts/
+- [ ] PR process: branch naming, commit style, what to include in description
+- [ ] Coding conventions: Tailwind for styling, TypeScript strict, no external auth dependencies
+- [ ] "Add an app" vs "modify the platform" decision tree
+
+---
 
 ### Deployment & Distribution
-- [ ] Dockerfile + docker-compose for one-command self-hosting
-- [ ] Environment variable configuration (ports, data dir, secrets)
-- [ ] GitHub release workflow with versioned tags
-- [ ] Demo screenshots/video for README
-- [ ] LICENSE file + open-source governance
+
+#### P3-05: Dockerfile and docker-compose
+**Description:** Create a production Dockerfile for the host and a `docker-compose.yml` that runs Citadel with a single command. The Docker image should build the Next.js app, include the `citadel-app` CLI, and mount `data/` as a volume for persistence. Multi-stage build to keep the image small.
+**Acceptance Criteria:**
+- [ ] `Dockerfile` at repo root — multi-stage build (build stage + production stage)
+- [ ] `docker-compose.yml` at repo root with volume for `data/` and configurable port
+- [ ] `docker compose up` starts Citadel on port 3000 (configurable via env)
+- [ ] Image size < 500MB
+- [ ] `data/` directory persists across container restarts
+- [ ] Apps directory is mountable for external app installation
+- [ ] Health check defined in compose file (`/api/health`)
+
+#### P3-06: Environment variable configuration
+**Description:** Consolidate all configurable values behind environment variables with sensible defaults. Document every env var. Existing vars (`CITADEL_APPS_DIR`, `CITADEL_DATA_ROOT`) plus new ones for port, host URL, LLM keys, backup settings.
+**Acceptance Criteria:**
+- [ ] `docs/configuration.md` lists every env var with description, type, and default
+- [ ] `CITADEL_PORT` — server port (default: 3000)
+- [ ] `CITADEL_DATA_ROOT` — data directory (default: `../data`)
+- [ ] `CITADEL_APPS_DIR` — apps directory (default: `../apps`)
+- [ ] `CITADEL_BACKUP_RETENTION` — number of backups to keep (default: 7)
+- [ ] `CITADEL_BACKUP_INTERVAL_HOURS` — hours between backups (default: 24)
+- [ ] `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` — LLM provider keys
+- [ ] `.env.example` file at repo root with all vars commented out
+- [ ] Docker compose references `.env` file
+
+#### P3-07: GitHub release workflow
+**Description:** Add a GitHub Actions workflow that creates a tagged release when a version tag is pushed. The release includes a changelog (auto-generated from commits since last tag), the Docker image pushed to GitHub Container Registry (ghcr.io), and a zip of the source.
+**Acceptance Criteria:**
+- [ ] `.github/workflows/release.yml` triggers on `v*` tag push
+- [ ] Auto-generates changelog from conventional commits since last tag
+- [ ] Builds and pushes Docker image to `ghcr.io/rohan1chaudhari/citadel:<tag>`
+- [ ] Creates GitHub Release with changelog and source archive
+- [ ] Smoke test: build passes before creating release
+- [ ] `package.json` version matches the tag
+
+#### P3-08: README demo content
+**Description:** Add visual content to the README so people can understand Citadel at a glance without cloning it. Include screenshots of the home grid, an app (Smart Notes), the audit viewer, and the permission consent screen. Add an architecture diagram.
+**Acceptance Criteria:**
+- [ ] 3-4 screenshots in `docs/images/` (home grid, app view, audit viewer, permissions)
+- [ ] Screenshots embedded in README under a "Screenshots" section
+- [ ] Architecture diagram (text-based mermaid or image) showing host → apps → SQLite isolation
+- [ ] Short GIF or video link showing `citadel-app create` → app running (optional but nice)
+
+#### P3-09: LICENSE and governance
+**Description:** Add MIT license file and basic governance docs. Citadel is MIT-licensed. Add a `CODE_OF_CONDUCT.md` (Contributor Covenant) and a `SECURITY.md` (how to report vulnerabilities).
+**Acceptance Criteria:**
+- [ ] `LICENSE` file at repo root (MIT, copyright Rohan Chaudhari)
+- [ ] `CODE_OF_CONDUCT.md` at repo root (Contributor Covenant v2.1)
+- [ ] `SECURITY.md` at repo root (email for private vulnerability reports, expected response time)
+- [ ] LICENSE referenced in README footer
+
+---
 
 ### Polish
-- [ ] Error handling and user-facing error pages
-- [ ] First-run setup wizard (create passphrase, choose data dir)
-- [ ] Host upgrade path (host-level migrations between versions)
+
+#### P3-10: Error handling and error pages
+**Description:** Add user-facing error pages for common HTTP errors (404, 500) and an error boundary for React component crashes. API routes should return consistent JSON error format. Currently errors are raw Next.js default pages.
+**Acceptance Criteria:**
+- [ ] Custom `not-found.tsx` at app root — styled 404 page with link to home
+- [ ] Custom `error.tsx` at app root — styled 500 page with "try again" button
+- [ ] API routes return consistent `{ ok: false, error: string, code: number }` format
+- [ ] React error boundary catches component crashes and shows recovery UI
+- [ ] Errors logged via audit with stack trace (in dev mode only)
+
+#### P3-11: First-run setup wizard
+**Description:** When Citadel starts with no `data/` directory (fresh install), show a setup wizard instead of the home grid. The wizard walks through: welcome, data directory confirmation, optional LLM API key entry, and done. Stores a `setup_complete` flag in the host DB.
+**Acceptance Criteria:**
+- [ ] Setup wizard at `/setup` shown on first visit when no `setup_complete` flag exists
+- [ ] Step 1: Welcome — explains what Citadel is
+- [ ] Step 2: Data directory — shows configured path, lets user confirm
+- [ ] Step 3: API keys (optional) — OpenAI and/or Anthropic key input, saved to host settings
+- [ ] Step 4: Done — redirects to home grid
+- [ ] `setup_complete` flag in `citadel` DB prevents wizard from showing again
+- [ ] Skippable via env var `CITADEL_SKIP_SETUP=true` (for Docker/automation)
+
+#### P3-12: Host-level migration system
+**Description:** The host itself needs a migration system (separate from per-app migrations) to handle schema changes to the `citadel` DB across version upgrades. When Citadel starts, it should check and run any pending host migrations before serving requests.
+**Acceptance Criteria:**
+- [ ] `host/migrations/` directory with numbered SQL files for the `citadel` DB
+- [ ] `host_migrations` table in `citadel` DB tracks applied migrations
+- [ ] Migrations run on startup before the Next.js server accepts requests
+- [ ] Existing `citadel` DB tables (hidden_apps, app_permissions, audit_log, migrations) captured in `001_initial.sql`
+- [ ] Future schema changes go in `002_xxx.sql`, `003_xxx.sql`, etc.
+- [ ] Migration errors prevent startup with a clear error message
+
+#### P3-13: Optional auth layer for public exposure
+**Description:** Add an optional authentication layer that activates when `CITADEL_AUTH_ENABLED=true`. Uses passphrase-based login with session cookies. Disabled by default (Tailscale handles auth for local use). This unblocks exposing Citadel over the public internet without Tailscale.
+**Acceptance Criteria:**
+- [ ] `CITADEL_AUTH_ENABLED=true` env var activates auth (default: false)
+- [ ] Login page at `/login` — passphrase input
+- [ ] Passphrase hash (argon2) stored in `citadel` DB on first setup
+- [ ] Session cookie (httpOnly, SameSite=Strict) issued on login
+- [ ] Middleware redirects unauthenticated requests to `/login` (except `/api/health`)
+- [ ] When disabled (default), all requests pass through — zero overhead
+- [ ] Logout button in nav drawer when auth is enabled
 
 ---
 
@@ -376,25 +497,133 @@ Ship something others can clone, self-host, and build on.
 Enable a community ecosystem. Only possible because Phase 2 separated apps.
 
 ### Registry
-- [ ] Public app registry (GitHub-based or hosted) — browse, search, rate
-- [ ] `citadel-app search <query>` — discover apps from CLI
-- [ ] App submission / review process
-- [ ] Showcase gallery of community-built apps
+
+#### P4-01: GitHub-based app registry
+**Description:** Create a public GitHub repo (`citadel-registry`) that serves as the app registry. It's a JSON index file listing available apps with metadata (name, description, repo URL, author, tags, version). The registry is fetched by the CLI and host UI. No custom server needed — GitHub raw content serves the index.
+**Acceptance Criteria:**
+- [ ] `citadel-registry` repo with `registry.json` containing app entries
+- [ ] Each entry: `id`, `name`, `description`, `repo_url`, `author`, `tags`, `version`, `manifest_version`
+- [ ] Submission via PR — add your app's entry to `registry.json`
+- [ ] Validation CI: PR bot checks that `repo_url` is reachable and `app.yaml` exists
+- [ ] README with submission instructions and listing criteria
+
+#### P4-02: `citadel-app search` CLI command
+**Description:** Add a `search` subcommand to the CLI that queries the registry index and displays matching apps. Fetches the registry JSON from GitHub, filters by query string, and displays results in a table.
+**Acceptance Criteria:**
+- [ ] `citadel-app search <query>` fetches registry and filters by name/description/tags
+- [ ] Results displayed as a table: name, description, author, version
+- [ ] `citadel-app search --tag=<tag>` filters by tag
+- [ ] `citadel-app search` (no query) lists all available apps
+- [ ] Registry URL configurable via `CITADEL_REGISTRY_URL` env var
+- [ ] Graceful error if registry is unreachable (offline message, not crash)
+
+#### P4-03: App detail and install from registry
+**Description:** Add a `citadel-app info <app-id>` command that shows full details from the registry, and extend `citadel-app install` to accept a registry app ID (not just a URL). The host UI also gets a "Browse Apps" page that shows the registry with install buttons.
+**Acceptance Criteria:**
+- [ ] `citadel-app info <app-id>` shows: name, description, author, repo URL, version, permissions, README excerpt
+- [ ] `citadel-app install <app-id>` (without URL) looks up the registry and clones the repo
+- [ ] Host UI: `/browse` page fetches registry and displays app cards
+- [ ] Each card has an "Install" button that triggers install via API
+- [ ] Installed apps are marked as such in the browse view
+
+#### P4-04: Showcase gallery on docs site
+**Description:** Add a "Showcase" page to the VitePress docs site that displays community-built apps with screenshots, descriptions, and install commands. Pulls data from the registry JSON.
+**Acceptance Criteria:**
+- [ ] `docs/showcase.md` page in VitePress sidebar
+- [ ] Displays app cards from registry with: name, description, author, screenshot (if provided)
+- [ ] Each card has a copy-pasteable install command
+- [ ] Auto-updated from registry (or manually curated for quality)
+
+---
 
 ### Isolation v2
-- [ ] Optional container-based isolation (Docker per app) for untrusted third-party apps
-- [ ] Resource limits (CPU, memory, storage quotas)
-- [ ] Network policy per app (outbound allowlist)
+
+#### P4-05: Per-app storage quotas
+**Description:** Add configurable storage quotas per app. The host tracks each app's DB file size and storage directory size. When an app exceeds its quota, write operations are blocked. Quotas are configured in the host settings or per-app overrides.
+**Acceptance Criteria:**
+- [ ] Default storage quota: 500MB per app (configurable via `CITADEL_DEFAULT_QUOTA_MB`)
+- [ ] Per-app override in `citadel` DB (`app_quotas` table: app_id, quota_mb)
+- [ ] `storageWriteBuffer` checks quota before writing — returns 507 if exceeded
+- [ ] `dbExec` checks DB file size before mutation — returns 507 if exceeded
+- [ ] Quota usage visible on `/status` health dashboard (used / limit bar)
+- [ ] `citadel-app quota <app-id> [--set=<mb>]` CLI command to view/set quotas
+
+#### P4-06: Container-based isolation for untrusted apps
+**Description:** Add an optional Docker-based isolation mode for apps that run untrusted code. When enabled for an app, the host spawns the app's API routes in a separate Docker container with limited resources. The host proxies requests to the container. Trusted (built-in) apps continue running in-process.
+**Acceptance Criteria:**
+- [ ] `app.yaml` supports `isolation: "container"` field (default: `"process"` for in-process)
+- [ ] Container mode: host builds a Docker image from the app's package
+- [ ] Container has read-only filesystem except for its mounted `data/apps/<appId>/` volume
+- [ ] Resource limits: CPU (0.5 core), memory (256MB), no network by default
+- [ ] Host proxies `/api/apps/<appId>/*` to the container's internal port
+- [ ] `citadel-app start/stop <app-id>` manages the container lifecycle
+- [ ] Falls back to in-process if Docker is not available (with warning)
+
+#### P4-07: Network policy per app
+**Description:** Allow apps to declare specific outbound network access in their manifest. The host enforces this — in container mode via Docker network policy, in process mode via an HTTP proxy that allowlists domains.
+**Acceptance Criteria:**
+- [ ] `app.yaml` `network` field accepts a list of allowed domains: `network: ["api.openai.com", "api.elevenlabs.io"]`
+- [ ] In-process mode: `fetch` wrapper checks against allowlist before request
+- [ ] Container mode: Docker network policy restricts outbound to allowlisted domains
+- [ ] Wildcard support: `*.openai.com` matches subdomains
+- [ ] Blocked requests logged via audit with app_id and target domain
+- [ ] Empty `network: []` or omitted = no outbound access (deny-by-default)
+
+---
 
 ### Cross-App Capabilities
-- [ ] Secure inter-app communication (message bus / intents)
-- [ ] Shared data with explicit user consent
-- [ ] Plugin/extension points (home screen widgets, notification hooks)
+
+#### P4-08: App intents system
+**Description:** Add a lightweight intent system that lets apps declare actions they can handle and lets other apps invoke those actions with user consent. Similar to Android intents. Example: gym-tracker declares it can "log an exercise"; smart-notes can trigger that intent when a note mentions a workout.
+**Acceptance Criteria:**
+- [ ] `app.yaml` supports `intents.provides` (list of action URIs the app handles)
+- [ ] `app.yaml` supports `intents.uses` (list of action URIs the app wants to invoke)
+- [ ] Host intent router at `POST /api/intents/invoke` — takes action URI + payload
+- [ ] User consent prompt before first cross-app intent (stored in permissions table)
+- [ ] Intent resolution: host finds the app that provides the action, forwards the payload
+- [ ] Built-in intents: `citadel.search`, `citadel.share-text`, `citadel.create-note`
+
+#### P4-09: Home screen widgets
+**Description:** Allow apps to register a small widget component that appears on the Citadel home page. Widgets show at-a-glance data (e.g., today's mood score, last workout, unread notes count). Loaded via a standardized widget API.
+**Acceptance Criteria:**
+- [ ] `app.yaml` supports `widget: true` flag
+- [ ] Widget endpoint: `GET /api/apps/<appId>/widget` returns JSON with title + data
+- [ ] Home page renders widgets below the app grid (compact card per app)
+- [ ] Widgets refresh on page load (server-rendered)
+- [ ] Max widget size: 1-2 lines of text or a single number + label
+- [ ] Apps without a widget endpoint are skipped (no error)
+
+---
 
 ### Community
-- [ ] Fork-and-customize workflow (one-click fork → customize → install)
-- [ ] App versioning + changelogs in registry
-- [ ] Community templates and starter kits
+
+#### P4-10: App submission and review process
+**Description:** Define the process for submitting an app to the registry. Authors open a PR to `citadel-registry` adding their app entry. A CI bot validates the manifest, checks the repo is accessible, and runs basic security checks (no `ATTACH` in migrations, manifest_version valid). A maintainer reviews and merges.
+**Acceptance Criteria:**
+- [ ] Submission template in `citadel-registry` repo (PR template with checklist)
+- [ ] CI validation: manifest exists, required fields present, repo reachable, migrations don't use blocked SQL
+- [ ] Review checklist documented: security, quality, description accuracy
+- [ ] Approved apps get a "verified" badge in the registry
+- [ ] Rejection reasons are documented (what gets rejected and why)
+
+#### P4-11: Fork-and-customize workflow
+**Description:** Make it easy for users to fork an existing app, customize it, and install their version. The CLI supports forking: it clones the app repo, changes the app ID in the manifest, and registers it as a new app.
+**Acceptance Criteria:**
+- [ ] `citadel-app fork <source-app-id> <new-app-id>` CLI command
+- [ ] Clones the source app's repo (from registry or local)
+- [ ] Updates `app.yaml` with new app ID, preserves everything else
+- [ ] Creates a new git repo for the fork (or just a directory for local forks)
+- [ ] Runs migrations for the new app ID (fresh DB)
+- [ ] Documentation in `docs/how-to/fork-an-app.md`
+
+#### P4-12: Community app templates
+**Description:** Extend the template system to support community-submitted templates. Templates can be fetched from the registry (or a templates section of it). Users can create apps from community templates via `citadel-app create --template=<name>`.
+**Acceptance Criteria:**
+- [ ] Registry supports a `templates` section in `registry.json`
+- [ ] `citadel-app create --template=<name>` checks local templates first, then registry
+- [ ] Remote templates are downloaded (git clone) to a cache directory
+- [ ] Template validation: must include `app.yaml`, `page.tsx`, `README.md` at minimum
+- [ ] `citadel-app templates` lists all available templates (local + remote)
 
 ---
 
