@@ -46,10 +46,10 @@ export function NavigationDrawer({ apps, currentAppId }: NavigationDrawerProps) 
 
   return (
     <>
-      {/* Hamburger Menu Button */}
+      {/* Hamburger Menu Button - 44x44px touch target for mobile */}
       <button
         onClick={() => setIsOpen(true)}
-        className="fixed top-4 left-4 z-30 p-2 rounded-lg bg-white/80 backdrop-blur-sm border border-zinc-200 shadow-sm hover:bg-white hover:shadow-md transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-zinc-900/15"
+        className="fixed top-3 sm:top-4 left-3 sm:left-4 z-30 min-w-[44px] min-h-[44px] p-2.5 rounded-lg bg-white/80 backdrop-blur-sm border border-zinc-200 shadow-sm hover:bg-white hover:shadow-md transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-zinc-900/15 flex items-center justify-center"
         aria-label="Open navigation menu"
         aria-expanded={isOpen}
       >
@@ -67,9 +67,9 @@ export function NavigationDrawer({ apps, currentAppId }: NavigationDrawerProps) 
         />
       )}
 
-      {/* Drawer */}
+      {/* Drawer - full width on small mobile, fixed width on larger screens */}
       <aside
-        className={`fixed top-0 left-0 h-full w-72 max-w-[85vw] bg-white shadow-2xl z-50 transform transition-transform duration-300 ease-out ${
+        className={`fixed top-0 left-0 h-full w-[85vw] sm:w-72 max-w-[320px] bg-white shadow-2xl z-50 transform transition-transform duration-300 ease-out ${
           isOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
         aria-label="Navigation drawer"
@@ -86,7 +86,7 @@ export function NavigationDrawer({ apps, currentAppId }: NavigationDrawerProps) 
           </div>
           <button
             onClick={() => setIsOpen(false)}
-            className="p-2 rounded-lg hover:bg-zinc-100 transition-colors focus:outline-none focus:ring-2 focus:ring-zinc-900/15"
+            className="min-w-[44px] min-h-[44px] p-2 rounded-lg hover:bg-zinc-100 transition-colors focus:outline-none focus:ring-2 focus:ring-zinc-900/15 flex items-center justify-center"
             aria-label="Close navigation menu"
           >
             <svg className="w-5 h-5 text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -97,11 +97,11 @@ export function NavigationDrawer({ apps, currentAppId }: NavigationDrawerProps) 
 
         {/* App List */}
         <nav className="p-2 overflow-y-auto h-[calc(100%-4rem)]">
-          {/* Home Link */}
+          {/* Home Link - min-h-[44px] for touch target */}
           <Link
             href="/"
             onClick={handleLinkClick}
-            className={`flex items-center gap-3 px-3 py-3 rounded-lg transition-colors ${
+            className={`flex items-center gap-3 px-3 py-2.5 min-h-[44px] rounded-lg transition-colors ${
               !currentAppId
                 ? 'bg-zinc-900 text-white'
                 : 'hover:bg-zinc-100 text-zinc-700'
@@ -135,7 +135,7 @@ export function NavigationDrawer({ apps, currentAppId }: NavigationDrawerProps) 
                 key={app.id}
                 href={`/apps/${app.id}`}
                 onClick={handleLinkClick}
-                className={`flex items-center gap-3 px-3 py-3 rounded-lg transition-colors ${
+                className={`flex items-center gap-3 px-3 py-2.5 min-h-[44px] rounded-lg transition-colors ${
                   currentAppId === app.id
                     ? 'bg-zinc-900 text-white'
                     : 'hover:bg-zinc-100 text-zinc-700'
@@ -184,7 +184,7 @@ export function NavigationDrawer({ apps, currentAppId }: NavigationDrawerProps) 
           <Link
             href="/hidden"
             onClick={handleLinkClick}
-            className={`flex items-center gap-3 px-3 py-3 rounded-lg transition-colors ${
+            className={`flex items-center gap-3 px-3 py-2.5 min-h-[44px] rounded-lg transition-colors ${
               currentAppId === 'hidden'
                 ? 'bg-zinc-900 text-white'
                 : 'hover:bg-zinc-100 text-zinc-700'
@@ -209,7 +209,7 @@ export function NavigationDrawer({ apps, currentAppId }: NavigationDrawerProps) 
           <Link
             href="/status"
             onClick={handleLinkClick}
-            className={`flex items-center gap-3 px-3 py-3 rounded-lg transition-colors ${
+            className={`flex items-center gap-3 px-3 py-2.5 min-h-[44px] rounded-lg transition-colors ${
               currentAppId === 'status'
                 ? 'bg-zinc-900 text-white'
                 : 'hover:bg-zinc-100 text-zinc-700'
