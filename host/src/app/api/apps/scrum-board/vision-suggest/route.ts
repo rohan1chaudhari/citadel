@@ -4,8 +4,11 @@ import { existsSync } from 'fs';
 import { join } from 'path';
 import { exec, spawn } from 'child_process';
 import { promisify } from 'util';
+import { checkAiPermission } from '@/lib/aiPermission';
 
 export const runtime = 'nodejs';
+
+const APP_ID = 'scrum-board';
 
 const execAsync = promisify(exec);
 const KB_DIR = '/home/rohanchaudhari/personal/citadel/kb';
@@ -388,6 +391,10 @@ Constraints:
 }
 
 export async function POST(req: Request) {
+  // Check AI permission first
+  const permissionError = checkAiPermission(APP_ID, '/api/apps/scrum-board/vision-suggest');
+  if (permissionError) return permissionError;
+
   try {
     const body = await req.json().catch(() => ({} as any));
     const appId = String(body?.appId ?? '').trim();

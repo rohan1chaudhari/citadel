@@ -3,6 +3,7 @@ import { dbExec, dbQuery } from '@/lib/db';
 import { storageWriteBuffer } from '@/lib/storage';
 import { audit } from '@/lib/audit';
 import { ensureSmartNotesSchema } from '@/lib/smartNotesSchema';
+import { checkAiPermission } from '@/lib/aiPermission';
 
 export const runtime = 'nodejs';
 
@@ -127,6 +128,10 @@ async function structureVoiceNoteWithLlm(transcript: string) {
 }
 
 export async function POST(req: Request) {
+  // Check AI permission first
+  const permissionError = checkAiPermission(APP_ID, '/api/apps/smart-notes/voice');
+  if (permissionError) return permissionError;
+
   try {
     ensureSchema();
 

@@ -2,9 +2,11 @@ import { NextResponse } from 'next/server';
 import { readFile } from 'fs/promises';
 import { existsSync } from 'fs';
 import { join } from 'path';
+import { checkAiPermission } from '@/lib/aiPermission';
 
 export const runtime = 'nodejs';
 
+const APP_ID = 'scrum-board';
 const KB_DIR = '/home/rohanchaudhari/personal/citadel/kb';
 
 function requireEnv(name: string) {
@@ -136,6 +138,10 @@ ${kbContext ? `App Context (from KB):\n${kbContext}\n\n` : ''}Generate a descrip
 }
 
 export async function POST(req: Request) {
+  // Check AI permission first
+  const permissionError = checkAiPermission(APP_ID, '/api/apps/scrum-board/ai-generate');
+  if (permissionError) return permissionError;
+
   try {
     const body = await req.json().catch(() => ({} as any));
     const title = String(body?.title ?? '').trim();

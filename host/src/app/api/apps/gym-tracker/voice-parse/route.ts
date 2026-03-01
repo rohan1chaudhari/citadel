@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
+import { checkAiPermission } from '@/lib/aiPermission';
 
 export const runtime = 'nodejs';
+
+const APP_ID = 'gym-tracker';
 
 function requireEnv(name: string) {
   const v = process.env[name];
@@ -136,6 +139,10 @@ async function extractWithLlm(transcript: string, context: Record<string, unknow
 }
 
 export async function POST(req: Request) {
+  // Check AI permission first
+  const permissionError = checkAiPermission(APP_ID, '/api/apps/gym-tracker/voice-parse');
+  if (permissionError) return permissionError;
+
   try {
     const form = await req.formData();
     const audio = form.get('audio');

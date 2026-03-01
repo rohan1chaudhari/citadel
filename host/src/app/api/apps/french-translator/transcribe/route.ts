@@ -1,8 +1,15 @@
 import { NextResponse } from 'next/server';
+import { checkAiPermission } from '@/lib/aiPermission';
 
 export const runtime = 'nodejs';
 
+const APP_ID = 'french-translator';
+
 export async function POST(req: Request) {
+  // Check AI permission first
+  const permissionError = checkAiPermission(APP_ID, '/api/apps/french-translator/transcribe');
+  if (permissionError) return permissionError;
+
   try {
     const formData = await req.formData();
     const audioFile = formData.get('audio') as File;

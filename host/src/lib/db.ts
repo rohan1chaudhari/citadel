@@ -5,6 +5,7 @@ import { assertAppId } from '@/lib/appIds';
 import { appDbPath, appDataRoot } from '@/lib/paths';
 import { assertSqlAllowed } from '@/lib/sqlGuardrails';
 import { audit } from '@/lib/audit';
+import { hasDbPermission } from '@/lib/permissions';
 
 const dbs = new Map<string, DatabaseSync>();
 
@@ -28,9 +29,25 @@ function verb(sql: string) {
   return sql.trim().split(/\s+/)[0]?.toLowerCase() ?? 'unknown';
 }
 
+function isWriteOperation(sql: string): boolean {
+  const writeVerbs = ['insert', 'update', 'delete', 'replace', 'create', 'alter', 'drop', 'truncate'];
+  return writeVerbs.includes(verb(sql));
+}
+
 export function dbExec(appId: string, sql: string, params: unknown[] = []) {
   assertAppId(appId);
   assertSqlAllowed(sql);
+  
+  // Check permissions
+  const isWrite = isWriteOperation(sql);
+  const requiredPermission = isWrite ? 'write' : 'read';
+  
+  if (!hasDbPermission(appId, requiredPermission)) {
+    const error = `Permission denied: app '${appId}' does not have db.${requiredPermission} permission`;
+    audit(appId, 'db.exec.denied', { verb: verb(sql), error });
+    throw new Error(error);
+  }
+  
   void ensureDbDir(appId);
   const db = getDb(appId);
   const t0 = Date.now();
@@ -49,6 +66,14 @@ export function dbExec(appId: string, sql: string, params: unknown[] = []) {
 export function dbQuery<T = unknown>(appId: string, sql: string, params: unknown[] = []): T[] {
   assertAppId(appId);
   assertSqlAllowed(sql);
+  
+  // Check permissions
+  if (!hasDbPermission(appId, 'read')) {
+    const error = `Permission denied: app '${appId}' does not have db.read permission`;
+    audit(appId, 'db.query.denied', { verb: verb(sql), error });
+    throw new Error(error);
+  }
+  
   void ensureDbDir(appId);
   const db = getDb(appId);
   const t0 = Date.now();

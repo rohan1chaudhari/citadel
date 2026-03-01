@@ -8,4 +8,5 @@ permissions:
   storage:
     read: false
     write: false
+  ai: true
 connectors: []
