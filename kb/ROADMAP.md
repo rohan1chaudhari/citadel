@@ -440,10 +440,34 @@ Ship something others can clone, self-host, and build on.
 #### P3-09: LICENSE and governance
 **Description:** Add MIT license file and basic governance docs. Citadel is MIT-licensed. Add a `CODE_OF_CONDUCT.md` (Contributor Covenant) and a `SECURITY.md` (how to report vulnerabilities).
 **Acceptance Criteria:**
-- [ ] `LICENSE` file at repo root (MIT, copyright Rohan Chaudhari)
-- [ ] `CODE_OF_CONDUCT.md` at repo root (Contributor Covenant v2.1)
-- [ ] `SECURITY.md` at repo root (email for private vulnerability reports, expected response time)
+- [x] `LICENSE` file at repo root (MIT, copyright Rohan Chaudhari)
+- [x] `CODE_OF_CONDUCT.md` at repo root (Contributor Covenant v2.1)
+- [x] `SECURITY.md` at repo root (email for private vulnerability reports, expected response time)
 - [ ] LICENSE referenced in README footer
+
+---
+
+### App Extraction
+
+#### P3-14: Extract apps into standalone repos
+**Description:** Move all built-in apps out of the Citadel monorepo into their own GitHub repositories. Each app becomes a standalone installable package (manifest + migrations + UI + API routes). The Citadel repo becomes the pure platform — host, core, templates, CLI, docs. Replace the `apps/` directory with a README listing the official apps with `citadel-app install` commands.
+**Acceptance Criteria:**
+- [ ] Each app has its own repo (e.g., `citadel-smart-notes`, `citadel-gym-tracker`, etc.)
+- [ ] Each app repo contains: `app.yaml`, `migrations/`, page components, API routes, README
+- [ ] Apps are installable via `citadel-app install https://github.com/rohan1chaudhari/citadel-smart-notes`
+- [ ] Host UI/API routes for each app moved from `host/src/app/apps/<appId>/` and `host/src/app/api/apps/<appId>/` into the app repo
+- [ ] `apps/` directory in Citadel repo replaced with `apps/README.md` listing official apps
+- [ ] Quickstart docs updated to install apps as a post-setup step
+- [ ] All apps work correctly after extraction (build passes, features functional)
+
+#### P3-15: Dynamic route loading for external apps
+**Description:** Currently app UI pages and API routes are hardcoded in `host/src/app/`. After extraction, the host needs to dynamically discover and serve routes from installed app packages. This may require a build step that symlinks or copies app routes into the Next.js app directory, or a gateway/proxy approach.
+**Acceptance Criteria:**
+- [ ] Installing an app via CLI makes its UI and API routes available without modifying host source code
+- [ ] Uninstalling an app removes its routes
+- [ ] Hot-reload works in dev mode for locally linked apps
+- [ ] No manual file editing required to register a new app's routes
+- [ ] Fallback: if dynamic loading is too complex for Next.js App Router, document the required build step clearly
 
 ---
 
