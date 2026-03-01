@@ -139,7 +139,7 @@ export default async function StatusPage() {
                   </div>
                 </div>
                 
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-right sm:text-left">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-right sm:text-left">
                   <div className="text-right">
                     <div className={`text-xs ${app.dbWarning ? 'text-amber-600 font-medium' : 'text-zinc-500'}`}>
                       DB Size
@@ -159,6 +159,17 @@ export default async function StatusPage() {
                   <div className="text-right">
                     <div className="text-xs text-zinc-500">API Calls (24h)</div>
                     <div className="text-sm font-medium text-zinc-900">{app.auditCount.toLocaleString()}</div>
+                  </div>
+                  
+                  <div className="text-right">
+                    <div className="text-xs text-zinc-500">Actions</div>
+                    <a
+                      href={`/api/apps/citadel/export/${app.id}`}
+                      className="text-sm font-medium text-blue-600 hover:text-blue-800"
+                      title={`Export ${app.name} data as zip`}
+                    >
+                      Export ↓
+                    </a>
                   </div>
                 </div>
               </div>
