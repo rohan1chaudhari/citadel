@@ -6,6 +6,10 @@
   color-scheme: light;
 }
 
+html.dark {
+  color-scheme: dark;
+}
+
 html, body {
   height: 100%;
   max-width: 100%;
@@ -16,7 +20,15 @@ body {
   @apply bg-zinc-50 text-zinc-950 antialiased;
 }
 
+html.dark body {
+  @apply bg-zinc-950 text-zinc-100;
+}
+
 * {
   box-sizing: border-box;
   @apply selection:bg-zinc-900 selection:text-white;
+}
+
+html.dark * {
+  @apply selection:bg-zinc-100 selection:text-zinc-900;
 }

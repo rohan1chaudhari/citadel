@@ -116,7 +116,7 @@ export function HiddenAppGrid({ apps: initialApps }: { apps: App[] }) {
                   </svg>
                 </div>
               </div>
-              <div className="mt-2 text-xs sm:text-sm font-medium text-zinc-700 truncate max-w-full px-1">
+              <div className="mt-2 text-xs sm:text-sm font-medium text-zinc-700 dark:text-zinc-300 truncate max-w-full px-1">
                 {a.name}
               </div>
             </div>
@@ -135,7 +135,7 @@ export function HiddenAppGrid({ apps: initialApps }: { apps: App[] }) {
           
           {/* Menu */}
           <div 
-            className={`fixed z-50 bg-white rounded-lg shadow-xl border border-zinc-200 py-1 min-w-[140px] ${
+            className={`fixed z-50 bg-white dark:bg-zinc-900 rounded-lg shadow-xl border border-zinc-200 dark:border-zinc-800 py-1 min-w-[140px] ${
               contextMenu.x === 0 && contextMenu.y === 0 
                 ? 'top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2' 
                 : ''
@@ -149,7 +149,7 @@ export function HiddenAppGrid({ apps: initialApps }: { apps: App[] }) {
             <button
               onClick={() => unhideApp(contextMenu.appId)}
               disabled={unhiding === contextMenu.appId}
-              className="w-full px-4 py-2 text-left text-sm text-zinc-700 hover:bg-zinc-100 flex items-center gap-2 transition-colors"
+              className="w-full px-4 py-2 text-left text-sm text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 flex items-center gap-2 transition-colors"
             >
               {unhiding === contextMenu.appId ? (
                 <span>⋯</span>

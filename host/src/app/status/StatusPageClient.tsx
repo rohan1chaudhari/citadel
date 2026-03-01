@@ -158,8 +158,8 @@ export default function StatusPageClient({ apps, backups, latestBackup }: Status
             <div
               className={`p-4 rounded-lg border ${
                 importStatus.type === 'success'
-                  ? 'bg-green-50 border-green-200 text-green-800'
-                  : 'bg-red-50 border-red-200 text-red-800'
+                  ? 'bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-800 text-green-800 dark:text-green-200'
+                  : 'bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-800 text-red-800 dark:text-red-200'
               }`}
             >
               <p className="text-sm font-medium">
@@ -177,8 +177,8 @@ export default function StatusPageClient({ apps, backups, latestBackup }: Status
           {/* App Health Dashboard */}
           <Card>
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-sm font-semibold text-zinc-900">App Health Dashboard</h2>
-              <span className="text-xs text-zinc-500">
+              <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">App Health Dashboard</h2>
+              <span className="text-xs text-zinc-500 dark:text-zinc-400">
                 {apps.length} app{apps.length !== 1 ? 's' : ''} installed
               </span>
             </div>
@@ -187,14 +187,14 @@ export default function StatusPageClient({ apps, backups, latestBackup }: Status
               {apps.map((app) => (
                 <div
                   key={app.id}
-                  className="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-lg border border-zinc-200 bg-white"
+                  className="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900"
                 >
                   <div className="mb-3 sm:mb-0">
                     <div className="flex items-center gap-2">
-                      <span className="text-sm font-semibold text-zinc-900">{app.name}</span>
-                      <span className="text-xs text-zinc-500 font-mono">{app.id}</span>
+                      <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">{app.name}</span>
+                      <span className="text-xs text-zinc-500 dark:text-zinc-400 font-mono">{app.id}</span>
                     </div>
-                    <div className="text-xs text-zinc-500 mt-1">
+                    <div className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
                       Last activity: {formatTimeAgo(app.lastActivity)}
                     </div>
                   </div>
@@ -203,41 +203,41 @@ export default function StatusPageClient({ apps, backups, latestBackup }: Status
                     <div className="text-right">
                       <div
                         className={`text-xs ${
-                          app.dbWarning ? 'text-amber-600 font-medium' : 'text-zinc-500'
+                          app.dbWarning ? 'text-amber-600 dark:text-amber-400 font-medium' : 'text-zinc-500 dark:text-zinc-400'
                         }`}
                       >
                         DB Size
                         {app.dbWarning && ' ⚠️'}
                       </div>
-                      <div className="text-sm font-medium text-zinc-900">{formatBytes(app.dbSize)}</div>
+                      <div className="text-sm font-medium text-zinc-900 dark:text-zinc-100">{formatBytes(app.dbSize)}</div>
                     </div>
 
                     <div className="text-right">
                       <div
                         className={`text-xs ${
-                          app.storageWarning ? 'text-amber-600 font-medium' : 'text-zinc-500'
+                          app.storageWarning ? 'text-amber-600 dark:text-amber-400 font-medium' : 'text-zinc-500 dark:text-zinc-400'
                         }`}
                       >
                         Storage
                         {app.storageWarning && ' ⚠️'}
                       </div>
-                      <div className="text-sm font-medium text-zinc-900">
+                      <div className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
                         {formatBytes(app.storageSize)}
                       </div>
                     </div>
 
                     <div className="text-right">
-                      <div className="text-xs text-zinc-500">API Calls (24h)</div>
-                      <div className="text-sm font-medium text-zinc-900">
+                      <div className="text-xs text-zinc-500 dark:text-zinc-400">API Calls (24h)</div>
+                      <div className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
                         {app.auditCount.toLocaleString()}
                       </div>
                     </div>
 
                     <div className="text-right">
-                      <div className="text-xs text-zinc-500">Export</div>
+                      <div className="text-xs text-zinc-500 dark:text-zinc-400">Export</div>
                       <a
                         href={`/api/apps/citadel/export/${app.id}`}
-                        className="text-sm font-medium text-blue-600 hover:text-blue-800"
+                        className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
                         title={`Export ${app.name} data as zip`}
                       >
                         Download ↓
@@ -245,11 +245,11 @@ export default function StatusPageClient({ apps, backups, latestBackup }: Status
                     </div>
 
                     <div className="text-right">
-                      <div className="text-xs text-zinc-500">Import</div>
+                      <div className="text-xs text-zinc-500 dark:text-zinc-400">Import</div>
                       <button
                         onClick={() => handleImportClick(app.id)}
                         disabled={importingApp === app.id}
-                        className="text-sm font-medium text-blue-600 hover:text-blue-800 disabled:text-zinc-400 disabled:cursor-not-allowed"
+                        className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 disabled:text-zinc-400 dark:disabled:text-zinc-600 disabled:cursor-not-allowed"
                         title={`Import data to ${app.name} from zip`}
                       >
                         {importingApp === app.id ? 'Importing...' : 'Upload ↑'}
@@ -268,8 +268,8 @@ export default function StatusPageClient({ apps, backups, latestBackup }: Status
             </div>
 
             {apps.some((a) => a.dbWarning || a.storageWarning) && (
-              <div className="mt-4 p-3 rounded-lg bg-amber-50 border border-amber-200">
-                <p className="text-xs text-amber-800">
+              <div className="mt-4 p-3 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800">
+                <p className="text-xs text-amber-800 dark:text-amber-200">
                   <span className="font-medium">⚠️ Storage warnings:</span> Apps marked with ⚠️ have
                   exceeded recommended size limits (DB &gt; {formatBytes(WARNING_DB_SIZE)} or Storage
                   &gt; {formatBytes(WARNING_STORAGE_SIZE)}).
@@ -281,24 +281,24 @@ export default function StatusPageClient({ apps, backups, latestBackup }: Status
           {/* Backup Status */}
           <Card>
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-sm font-semibold text-zinc-900">Backup Status</h2>
-              <span className="text-xs text-zinc-500">
+              <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Backup Status</h2>
+              <span className="text-xs text-zinc-500 dark:text-zinc-400">
                 {backups.length} backup{backups.length !== 1 ? 's' : ''} stored
               </span>
             </div>
 
             {latestBackup ? (
               <div className="grid gap-3">
-                <div className="flex items-center justify-between p-4 rounded-lg border border-zinc-200 bg-white">
+                <div className="flex items-center justify-between p-4 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900">
                   <div>
-                    <div className="text-sm font-medium text-zinc-900">Latest Backup</div>
-                    <div className="text-xs text-zinc-500 mt-1">
+                    <div className="text-sm font-medium text-zinc-900 dark:text-zinc-100">Latest Backup</div>
+                    <div className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
                       {formatBackupTime(latestBackup.timestamp)}
                     </div>
                   </div>
                   <div className="text-right">
-                    <div className="text-xs text-zinc-500">Size</div>
-                    <div className="text-sm font-medium text-zinc-900">
+                    <div className="text-xs text-zinc-500 dark:text-zinc-400">Size</div>
+                    <div className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
                       {formatBytes(latestBackup.size)}
                     </div>
                   </div>
@@ -306,11 +306,11 @@ export default function StatusPageClient({ apps, backups, latestBackup }: Status
 
                 {backups.length > 1 && (
                   <details className="group">
-                    <summary className="flex items-center justify-between p-3 rounded-lg border border-zinc-200 bg-zinc-50 cursor-pointer hover:bg-zinc-100 transition-colors">
-                      <span className="text-xs font-medium text-zinc-700">
+                    <summary className="flex items-center justify-between p-3 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/50 cursor-pointer hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors">
+                      <span className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
                         Show all {backups.length} backups
                       </span>
-                      <span className="text-xs text-zinc-400 group-open:rotate-180 transition-transform">
+                      <span className="text-xs text-zinc-400 dark:text-zinc-500 group-open:rotate-180 transition-transform">
                         ▼
                       </span>
                     </summary>
@@ -318,26 +318,26 @@ export default function StatusPageClient({ apps, backups, latestBackup }: Status
                       {backups.slice(1).map((backup) => (
                         <div
                           key={backup.filename}
-                          className="flex items-center justify-between p-3 rounded-lg border border-zinc-200 bg-white text-sm"
+                          className="flex items-center justify-between p-3 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-sm"
                         >
-                          <span className="text-zinc-600 font-mono text-xs">
+                          <span className="text-zinc-600 dark:text-zinc-400 font-mono text-xs">
                             {backup.filename}
                           </span>
-                          <span className="text-zinc-500">{formatBytes(backup.size)}</span>
+                          <span className="text-zinc-500 dark:text-zinc-400">{formatBytes(backup.size)}</span>
                         </div>
                       ))}
                     </div>
                   </details>
                 )}
 
-                <p className="text-xs text-zinc-500">
+                <p className="text-xs text-zinc-500 dark:text-zinc-400">
                   Backups run automatically on startup and every 24 hours.
                   The last 7 backups are retained.
                 </p>
               </div>
             ) : (
-              <div className="p-4 rounded-lg border border-zinc-200 bg-zinc-50">
-                <p className="text-sm text-zinc-600">
+              <div className="p-4 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/50">
+                <p className="text-sm text-zinc-600 dark:text-zinc-400">
                   No backups yet. A backup will be created on the next host startup.
                 </p>
               </div>
@@ -345,7 +345,7 @@ export default function StatusPageClient({ apps, backups, latestBackup }: Status
           </Card>
 
           <Card>
-            <h2 className="text-sm font-semibold text-zinc-900 mb-4">API Health Checks</h2>
+            <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 mb-4">API Health Checks</h2>
             <div className="grid gap-2">
               {apps.map((app) => (
                 <a
@@ -353,17 +353,17 @@ export default function StatusPageClient({ apps, backups, latestBackup }: Status
                   href={`/api/apps/${app.id}/health`}
                   target="_blank"
                   rel="noreferrer"
-                  className="flex items-center justify-between p-3 rounded-lg border border-zinc-200 hover:bg-zinc-50 transition-colors"
+                  className="flex items-center justify-between p-3 rounded-lg border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
                 >
-                  <span className="text-sm font-medium text-zinc-900">{app.name}</span>
-                  <span className="text-xs text-zinc-500">/api/apps/{app.id}/health →</span>
+                  <span className="text-sm font-medium text-zinc-900 dark:text-zinc-100">{app.name}</span>
+                  <span className="text-xs text-zinc-500 dark:text-zinc-400">/api/apps/{app.id}/health →</span>
                 </a>
               ))}
             </div>
           </Card>
 
           <Card>
-            <h2 className="text-sm font-semibold text-zinc-900 mb-4">Diagnostics</h2>
+            <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 mb-4">Diagnostics</h2>
             <div className="flex flex-wrap gap-3">
               <LinkA href="/api/health" target="_blank" rel="noreferrer">
                 Host Health
@@ -379,14 +379,14 @@ export default function StatusPageClient({ apps, backups, latestBackup }: Status
       {/* Confirmation Dialog */}
       {showConfirm && pendingImport && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
-            <h3 className="text-lg font-semibold text-zinc-900 mb-2">Confirm Import</h3>
-            <p className="text-sm text-zinc-600 mb-4">
+          <div className="bg-white dark:bg-zinc-900 rounded-lg shadow-xl max-w-md w-full p-6">
+            <h3 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100 mb-2">Confirm Import</h3>
+            <p className="text-sm text-zinc-600 dark:text-zinc-400 mb-4">
               You are about to import data from <strong>{pendingImport.file.name}</strong> into{' '}
               <strong>{apps.find((a) => a.id === pendingImport.appId)?.name}</strong>.
             </p>
-            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4">
-              <p className="text-xs text-amber-800">
+            <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg p-3 mb-4">
+              <p className="text-xs text-amber-800 dark:text-amber-200">
                 <span className="font-medium">⚠️ Warning:</span> This will overwrite all existing
                 data for this app. A backup will be created automatically before importing.
               </p>
@@ -394,7 +394,7 @@ export default function StatusPageClient({ apps, backups, latestBackup }: Status
             <div className="flex gap-3 justify-end">
               <button
                 onClick={handleCancelImport}
-                className="px-4 py-2 text-sm font-medium text-zinc-700 bg-zinc-100 hover:bg-zinc-200 rounded-lg transition-colors"
+                className="px-4 py-2 text-sm font-medium text-zinc-700 dark:text-zinc-300 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 rounded-lg transition-colors"
               >
                 Cancel
               </button>

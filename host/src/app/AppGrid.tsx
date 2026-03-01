@@ -110,7 +110,7 @@ export function AppGrid({ apps: initialApps }: { apps: App[] }) {
                   draggable={false}
                 />
               </div>
-              <div className="mt-2 text-xs sm:text-sm font-medium text-zinc-900 group-hover:text-zinc-700 truncate max-w-full px-1">
+              <div className="mt-2 text-xs sm:text-sm font-medium text-zinc-900 dark:text-zinc-100 group-hover:text-zinc-700 dark:group-hover:text-zinc-300 truncate max-w-full px-1">
                 {a.name}
               </div>
             </div>
@@ -123,10 +123,10 @@ export function AppGrid({ apps: initialApps }: { apps: App[] }) {
             key={`empty-${i}`}
             className="flex flex-col items-center text-center opacity-30"
           >
-            <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl border-2 border-dashed border-zinc-300 flex items-center justify-center">
-              <span className="text-2xl text-zinc-300">+</span>
+            <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl border-2 border-dashed border-zinc-300 dark:border-zinc-700 flex items-center justify-center">
+              <span className="text-2xl text-zinc-300 dark:text-zinc-600">+</span>
             </div>
-            <div className="mt-2 text-xs text-zinc-400">Slot {apps.length + i + 1}</div>
+            <div className="mt-2 text-xs text-zinc-400 dark:text-zinc-500">Slot {apps.length + i + 1}</div>
           </div>
         ))}
       </div>
@@ -141,22 +141,22 @@ export function AppGrid({ apps: initialApps }: { apps: App[] }) {
           />
           
           {/* Menu */}
-          <div 
-            className={`fixed z-50 bg-white rounded-lg shadow-xl border border-zinc-200 py-1 min-w-[140px] ${
-              contextMenu.x === 0 && contextMenu.y === 0 
-                ? 'top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2' 
+          <div
+            className={`fixed z-50 bg-white dark:bg-zinc-900 rounded-lg shadow-xl border border-zinc-200 dark:border-zinc-800 py-1 min-w-[140px] ${
+              contextMenu.x === 0 && contextMenu.y === 0
+                ? 'top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2'
                 : ''
             }`}
             style={
-              contextMenu.x !== 0 || contextMenu.y !== 0 
-                ? { top: contextMenu.y, left: contextMenu.x } 
+              contextMenu.x !== 0 || contextMenu.y !== 0
+                ? { top: contextMenu.y, left: contextMenu.x }
                 : undefined
             }
           >
             <button
               onClick={() => hideApp(contextMenu.appId)}
               disabled={hiding === contextMenu.appId}
-              className="w-full px-4 py-2 text-left text-sm text-zinc-700 hover:bg-zinc-100 flex items-center gap-2 transition-colors"
+              className="w-full px-4 py-2 text-left text-sm text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 flex items-center gap-2 transition-colors"
             >
               {hiding === contextMenu.appId ? (
                 <span>⋯</span>
@@ -177,7 +177,7 @@ export function AppGrid({ apps: initialApps }: { apps: App[] }) {
       <div className="mt-6 flex justify-center">
         <a
           href="/hidden"
-          className="text-sm text-zinc-500 hover:text-zinc-700 flex items-center gap-1"
+          className="text-sm text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300 flex items-center gap-1"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />

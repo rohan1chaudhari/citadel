@@ -5,6 +5,7 @@ import { NavigationDrawer } from '@/components/NavigationDrawer';
 import { listApps } from '@/lib/registry';
 import { cleanupOldAuditLogs } from '@/lib/audit';
 import { startBackupScheduler, runBackupIfNeeded } from '@/lib/backup';
+import { ThemeProvider } from '@/lib/theme';
 
 export const viewport: Viewport = {
   width: 'device-width',
@@ -43,21 +44,58 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   startBackupScheduler();
 
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
         <link rel="manifest" href="/manifest.json" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
         <meta name="apple-mobile-web-app-title" content="Citadel" />
+        <ThemeScript />
       </head>
       <body className="min-h-screen overflow-x-hidden">
-        <NavigationDrawer apps={apps} />
-        <div className="mx-auto w-full max-w-3xl overflow-x-hidden px-3 sm:px-4 md:px-6 pt-[max(env(safe-area-inset-top),0.75rem)] sm:pt-4 md:pt-6 pb-[calc(env(safe-area-inset-bottom)+1rem)] sm:pb-6 md:py-8">
-          {children}
-        </div>
+        <ThemeProvider>
+          <NavigationDrawer apps={apps} />
+          <div className="mx-auto w-full max-w-3xl overflow-x-hidden px-3 sm:px-4 md:px-6 pt-[max(env(safe-area-inset-top),0.75rem)] sm:pt-4 md:pt-6 pb-[calc(env(safe-area-inset-bottom)+1rem)] sm:pb-6 md:py-8">
+            {children}
+          </div>
+        </ThemeProvider>
         <ServiceWorkerRegistration />
       </body>
     </html>
+  );
+}
+
+// Theme initialization script - runs before React hydration to prevent flash
+function ThemeScript() {
+  const themeScript = `
+    (function() {
+      function getTheme() {
+        try {
+          var stored = localStorage.getItem('citadel-theme');
+          if (stored === 'dark' || stored === 'light') return stored;
+        } catch (e) {}
+        return 'system';
+      }
+      
+      function getSystemIsDark() {
+        return window.matchMedia('(prefers-color-scheme: dark)').matches;
+      }
+      
+      var theme = getTheme();
+      var isDark = theme === 'dark' || (theme === 'system' && getSystemIsDark());
+      
+      if (isDark) {
+        document.documentElement.classList.add('dark');
+      }
+    })();
+  `;
+
+  return (
+    <script
+      dangerouslySetInnerHTML={{
+        __html: themeScript
+      }}
+    />
   );
 }
 

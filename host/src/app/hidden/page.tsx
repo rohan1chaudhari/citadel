@@ -12,8 +12,8 @@ export default async function HiddenPage() {
       {hiddenApps.length === 0 ? (
         <Card className="text-center py-12">
           <div className="text-4xl mb-4">👀</div>
-          <h2 className="text-lg font-semibold text-zinc-900 mb-2">No hidden apps</h2>
-          <p className="text-zinc-600 mb-6">
+          <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100 mb-2">No hidden apps</h2>
+          <p className="text-zinc-600 dark:text-zinc-400 mb-6">
             You haven't hidden any apps yet. Apps you hide will appear here.
           </p>
           <LinkA href="/">Back to Home</LinkA>
