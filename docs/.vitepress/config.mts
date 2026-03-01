@@ -40,6 +40,7 @@ export default withMermaid(
         {
           text: 'Reference',
           items: [
+            { text: 'Architecture', link: '/architecture' },
             { text: 'App spec', link: '/app-spec' },
             { text: 'CLI', link: '/cli' },
             { text: 'Agent runner guide', link: '/agent-runner-guide' },

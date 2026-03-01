@@ -101,12 +101,21 @@ export default function SessionStreamPage({ params }: { params: Promise<{ sessio
     });
 
     es.addEventListener('error', (e) => {
-      console.error('SSE error:', e);
-      setError('Connection error');
+      // EventSource emits an "error" event on disconnect/retry and on normal close.
+      // Only show UI error when connection is still expected to be open.
+      const readyState = eventSourceRef.current?.readyState;
+      if (!isEnded && readyState !== EventSource.CLOSED) {
+        console.error('SSE error:', e);
+        setError('Connection interrupted. Retrying...');
+      }
       setIsConnected(false);
     });
 
     es.onerror = () => {
+      const readyState = eventSourceRef.current?.readyState;
+      if (!isEnded && readyState !== EventSource.CLOSED) {
+        setError('Connection interrupted. Retrying...');
+      }
       setIsConnected(false);
     };
 
