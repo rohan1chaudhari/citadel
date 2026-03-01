@@ -81,8 +81,8 @@ export function AppGrid({ apps: initialApps }: { apps: App[] }) {
 
   return (
     <>
-      {/* Icon grid - responsive: 1 col mobile, 2 cols tablet, 3 cols desktop */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5 md:gap-6">
+      {/* Icon grid - 3 columns on mobile to avoid wasted space */}
+      <div className="grid grid-cols-3 gap-3 sm:gap-5 md:gap-6">
         {apps.map((a) => (
           <div 
             key={a.id} 
@@ -101,7 +101,7 @@ export function AppGrid({ apps: initialApps }: { apps: App[] }) {
               className="flex flex-col items-center text-center cursor-pointer"
               onClick={(e) => handleAppClick(e, a.id)}
             >
-              <div className="relative w-20 h-20 sm:w-24 sm:h-24 rounded-2xl overflow-hidden shadow-md group-hover:shadow-xl transition-all duration-200 group-hover:scale-105">
+              <div className="relative w-16 h-16 sm:w-24 sm:h-24 rounded-2xl overflow-hidden shadow-md group-hover:shadow-xl transition-all duration-200 group-hover:scale-105">
                 <Image
                   src={`/app-logos/${a.id}-logo.png`}
                   alt={`${a.name}`}
@@ -123,7 +123,7 @@ export function AppGrid({ apps: initialApps }: { apps: App[] }) {
             key={`empty-${i}`}
             className="flex flex-col items-center text-center opacity-30"
           >
-            <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl border-2 border-dashed border-zinc-300 dark:border-zinc-700 flex items-center justify-center">
+            <div className="w-16 h-16 sm:w-24 sm:h-24 rounded-2xl border-2 border-dashed border-zinc-300 dark:border-zinc-700 flex items-center justify-center">
               <span className="text-2xl text-zinc-300 dark:text-zinc-600">+</span>
             </div>
             <div className="mt-2 text-xs text-zinc-400 dark:text-zinc-500">Slot {apps.length + i + 1}</div>
