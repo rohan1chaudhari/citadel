@@ -1,0 +1,262 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://citadel.dev/schema/app-v0.json",
+  "title": "Citadel App Manifest Schema v0",
+  "description": "Schema for Citadel app packages - defines metadata, runtime entrypoint, health checks, and API endpoints",
+  "type": "object",
+  "required": ["id", "name", "version", "entry", "health", "permissions"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*[a-z0-9]$",
+      "minLength": 1,
+      "maxLength": 64,
+      "description": "Unique app identifier (lowercase alphanumeric with hyphens)"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Human-readable app name"
+    },
+    "description": {
+      "type": "string",
+      "description": "Short description of the app's purpose"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+.*$",
+      "description": "Semantic version (e.g., 1.0.0)"
+    },
+    "manifest_version": {
+      "type": "string",
+      "enum": ["0.1.0", "1.0"],
+      "default": "0.1.0",
+      "description": "Manifest format version"
+    },
+    "author": {
+      "type": "string",
+      "description": "Author or organization name"
+    },
+    "homepage": {
+      "type": "string",
+      "format": "uri",
+      "description": "URL to project homepage"
+    },
+    "icon": {
+      "type": "string",
+      "description": "Path to app icon relative to package root"
+    },
+    "entry": {
+      "type": "object",
+      "description": "Runtime entrypoint configuration",
+      "required": ["type"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["nextjs", "docker", "binary", "node", "python", "custom"],
+          "description": "Runtime type for the app"
+        },
+        "command": {
+          "type": "string",
+          "description": "Command to start the app (for binary/node/python/custom types)"
+        },
+        "port": {
+          "type": "number",
+          "minimum": 1,
+          "maximum": 65535,
+          "description": "Port the app listens on (for docker/binary/custom types)"
+        },
+        "image": {
+          "type": "string",
+          "description": "Docker image reference (for docker type)"
+        },
+        "build": {
+          "type": "string",
+          "description": "Path to Dockerfile or build context (for docker type)"
+        },
+        "env": {
+          "type": "object",
+          "additionalProperties": { "type": "string" },
+          "description": "Environment variables to set when running the app"
+        },
+        "workdir": {
+          "type": "string",
+          "description": "Working directory for the app process"
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "type": { "enum": ["binary", "node", "python", "custom"] } } },
+          "then": { "required": ["command"] }
+        },
+        {
+          "if": { "properties": { "type": { "const": "docker" } } },
+          "then": { "required": ["image"] }
+        }
+      ]
+    },
+    "health": {
+      "type": "object",
+      "description": "Health check configuration (REQUIRED)",
+      "required": ["endpoint"],
+      "properties": {
+        "endpoint": {
+          "type": "string",
+          "pattern": "^/healthz$",
+          "description": "Health check endpoint - MUST be /healthz"
+        },
+        "interval": {
+          "type": "number",
+          "default": 30,
+          "minimum": 5,
+          "description": "Health check interval in seconds"
+        },
+        "timeout": {
+          "type": "number",
+          "default": 5,
+          "minimum": 1,
+          "description": "Health check timeout in seconds"
+        },
+        "initialDelay": {
+          "type": "number",
+          "default": 5,
+          "minimum": 0,
+          "description": "Initial delay before first health check in seconds"
+        }
+      }
+    },
+    "endpoints": {
+      "type": "object",
+      "description": "Optional API endpoints exposed by the app",
+      "properties": {
+        "meta": {
+          "type": "object",
+          "description": "App metadata endpoint",
+          "properties": {
+            "path": {
+              "type": "string",
+              "pattern": "^/meta$",
+              "description": "Meta endpoint path - MUST be /meta"
+            },
+            "methods": {
+              "type": "array",
+              "items": { "type": "string", "enum": ["GET"] },
+              "default": ["GET"]
+            }
+          }
+        },
+        "events": {
+          "type": "object",
+          "description": "Event stream endpoint",
+          "properties": {
+            "path": {
+              "type": "string",
+              "pattern": "^/events$",
+              "description": "Events endpoint path - MUST be /events"
+            },
+            "methods": {
+              "type": "array",
+              "items": { "type": "string", "enum": ["GET", "POST"] },
+              "default": ["GET", "POST"]
+            }
+          }
+        },
+        "agent": {
+          "type": "object",
+          "description": "Agent callback endpoint",
+          "properties": {
+            "callback": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string",
+                  "pattern": "^/agent/callback$",
+                  "description": "Agent callback path - MUST be /agent/callback"
+                },
+                "methods": {
+                  "type": "array",
+                  "items": { "type": "string", "enum": ["POST"] },
+                  "default": ["POST"]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "permissions": {
+      "type": "object",
+      "description": "Required permissions for the app",
+      "properties": {
+        "db": {
+          "type": "object",
+          "properties": {
+            "read": { "type": "boolean" },
+            "write": { "type": "boolean" }
+          }
+        },
+        "storage": {
+          "type": "object",
+          "properties": {
+            "read": { "type": "boolean" },
+            "write": { "type": "boolean" }
+          }
+        },
+        "ai": {
+          "type": "boolean",
+          "description": "Allow AI API access"
+        },
+        "network": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9.*-]+$"
+          },
+          "description": "Allowed external domains"
+        },
+        "agent": {
+          "type": "object",
+          "properties": {
+            "run": { "type": "boolean", "description": "Can trigger agent runs" },
+            "callback": { "type": "boolean", "description": "Can receive agent callbacks" }
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Required host features or other apps"
+    },
+    "hidden": {
+      "type": "boolean",
+      "description": "Hide from home grid"
+    }
+  },
+  "examples": [
+    {
+      "id": "my-standalone-app",
+      "name": "My Standalone App",
+      "version": "1.0.0",
+      "manifest_version": "0.1.0",
+      "entry": {
+        "type": "docker",
+        "image": "myapp:latest",
+        "port": 8080
+      },
+      "health": {
+        "endpoint": "/healthz",
+        "interval": 30
+      },
+      "endpoints": {
+        "meta": { "path": "/meta" },
+        "events": { "path": "/events" },
+        "agent": { "callback": { "path": "/agent/callback" } }
+      },
+      "permissions": {
+        "db": { "read": true, "write": true },
+        "storage": { "read": true, "write": true }
+      }
+    }
+  ]
+}

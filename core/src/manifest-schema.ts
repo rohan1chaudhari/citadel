@@ -39,6 +39,90 @@ export type PermissionScopes = {
   ai?: boolean;
   /** Allowed external domains for network calls. Supports wildcards like *.example.com */
   network?: string[];
+  /** Agent runtime permissions */
+  agent?: {
+    /** Can trigger agent runs */
+    run?: boolean;
+    /** Can receive agent callbacks */
+    callback?: boolean;
+  };
+};
+
+// ============================================================================
+// App Contract v0 - Standalone/Containerized App Types
+// ============================================================================
+
+/**
+ * Runtime entrypoint types for standalone apps
+ */
+export type EntryType = 'nextjs' | 'docker' | 'binary' | 'node' | 'python' | 'custom';
+
+/**
+ * Runtime entrypoint configuration (App Contract v0)
+ * Defines how the host should run/launch the app
+ */
+export type EntryConfig = {
+  /** Runtime type */
+  type: EntryType;
+  /** 
+   * Command to start the app (required for binary, node, python, custom)
+   * Example: "node server.js" or "./my-app"
+   */
+  command?: string;
+  /** 
+   * Port the app listens on (for docker, binary, custom types)
+   * The host will proxy requests to this port
+   */
+  port?: number;
+  /** Docker image reference (for docker type) */
+  image?: string;
+  /** Path to Dockerfile or build context (for docker type) */
+  build?: string;
+  /** Environment variables to set when running the app */
+  env?: Record<string, string>;
+  /** Working directory for the app process */
+  workdir?: string;
+};
+
+/**
+ * Health check configuration (App Contract v0)
+ * REQUIRED: All standalone apps must expose GET /healthz
+ */
+export type HealthConfig = {
+  /** 
+   * Health check endpoint - MUST be /healthz
+   * The host will call GET /healthz to check app health
+   */
+  endpoint: '/healthz';
+  /** Health check interval in seconds (default: 30) */
+  interval?: number;
+  /** Health check timeout in seconds (default: 5) */
+  timeout?: number;
+  /** Initial delay before first health check in seconds (default: 5) */
+  initialDelay?: number;
+};
+
+/**
+ * Optional endpoint configuration (App Contract v0)
+ */
+export type EndpointConfig = {
+  /** App metadata endpoint - GET /meta */
+  meta?: {
+    path: '/meta';
+    methods?: ['GET'];
+  };
+  /** Event stream endpoint - GET/POST /events */
+  events?: {
+    path: '/events';
+    methods?: ['GET', 'POST'];
+  };
+  /** Agent callback endpoint */
+  agent?: {
+    callback?: {
+      path: '/agent/callback';
+      methods?: ['POST'];
+    };
+  };
 };
 
 /**
@@ -107,6 +191,27 @@ export type AppManifest = {
 };
 
 /**
+ * App Manifest v0 (App Contract v0)
+ * Extended manifest for standalone/containerized apps
+ * Includes entrypoint, health check, and endpoint configuration
+ */
+export type AppManifestV0 = AppManifest & {
+  /** Manifest version for v0 contract */
+  manifest_version: '0.1.0';
+  /** Runtime entrypoint configuration (REQUIRED) */
+  entry: EntryConfig;
+  /** Health check configuration (REQUIRED) */
+  health: HealthConfig;
+  /** Optional API endpoints */
+  endpoints?: EndpointConfig;
+};
+
+/**
+ * Union type for all manifest versions
+ */
+export type AnyAppManifest = AppManifest | AppManifestV0;
+
+/**
  * Validation error structure
  */
 export type ManifestValidationError = {
@@ -139,6 +244,12 @@ export const MANIFEST_CONSTRAINTS = {
   DEFAULT_VERSION: '1.0',
   /** Required fields in manifest */
   REQUIRED_FIELDS: ['id', 'name', 'version', 'permissions'] as const,
+  /** Required fields for v0 contract (standalone apps) */
+  REQUIRED_FIELDS_V0: ['id', 'name', 'version', 'entry', 'health', 'permissions'] as const,
+  /** Supported manifest versions */
+  SUPPORTED_VERSIONS: ['1.0', '0.1.0'] as const,
+  /** Supported entry types */
+  ENTRY_TYPES: ['nextjs', 'docker', 'binary', 'node', 'python', 'custom'] as const,
 } as const;
 
 /**
@@ -291,4 +402,160 @@ export function isAppManifest(value: unknown): value is AppManifest {
   if (!idCheck.valid) return false;
   
   return true;
+}
+
+/**
+ * Type guard for checking if a manifest is v0 format (standalone/containerized)
+ * @param value - The value to check
+ * @returns Type predicate for AppManifestV0
+ */
+export function isAppManifestV0(value: unknown): value is AppManifestV0 {
+  if (!isAppManifest(value)) return false;
+  
+  const obj = value as Record<string, unknown>;
+  
+  // Check manifest version indicates v0
+  if (obj.manifest_version !== '0.1.0') return false;
+  
+  // Check v0 required fields
+  if (!obj.entry || typeof obj.entry !== 'object') return false;
+  if (!obj.health || typeof obj.health !== 'object') return false;
+  
+  const entry = obj.entry as Record<string, unknown>;
+  const health = obj.health as Record<string, unknown>;
+  
+  // Validate entry.type exists
+  if (typeof entry.type !== 'string') return false;
+  
+  // Validate health.endpoint is /healthz
+  if (health.endpoint !== '/healthz') return false;
+  
+  return true;
+}
+
+/**
+ * Validate entry configuration for v0 manifests
+ * @param entry - The entry config to validate
+ * @returns Validation result
+ */
+export function validateEntryConfig(entry: unknown): { valid: true } | { valid: false; error: string } {
+  if (!entry || typeof entry !== 'object') {
+    return { valid: false, error: 'Entry must be an object' };
+  }
+  
+  const e = entry as Record<string, unknown>;
+  
+  if (typeof e.type !== 'string') {
+    return { valid: false, error: 'Entry type is required' };
+  }
+  
+  const validTypes = MANIFEST_CONSTRAINTS.ENTRY_TYPES;
+  if (!validTypes.includes(e.type as typeof validTypes[number])) {
+    return { valid: false, error: `Invalid entry type: ${e.type}. Valid types: ${validTypes.join(', ')}` };
+  }
+  
+  // Check required fields for specific types
+  if (['binary', 'node', 'python', 'custom'].includes(e.type) && !e.command) {
+    return { valid: false, error: `Entry type "${e.type}" requires a "command" field` };
+  }
+  
+  if (e.type === 'docker' && !e.image) {
+    return { valid: false, error: 'Entry type "docker" requires an "image" field' };
+  }
+  
+  return { valid: true };
+}
+
+/**
+ * Validate health configuration for v0 manifests
+ * @param health - The health config to validate
+ * @returns Validation result
+ */
+export function validateHealthConfig(health: unknown): { valid: true } | { valid: false; error: string } {
+  if (!health || typeof health !== 'object') {
+    return { valid: false, error: 'Health must be an object' };
+  }
+  
+  const h = health as Record<string, unknown>;
+  
+  if (h.endpoint !== '/healthz') {
+    return { valid: false, error: 'Health endpoint must be "/healthz"' };
+  }
+  
+  // Validate numeric fields if present
+  if (h.interval !== undefined && (typeof h.interval !== 'number' || h.interval < 5)) {
+    return { valid: false, error: 'Health interval must be at least 5 seconds' };
+  }
+  
+  if (h.timeout !== undefined && (typeof h.timeout !== 'number' || h.timeout < 1)) {
+    return { valid: false, error: 'Health timeout must be at least 1 second' };
+  }
+  
+  if (h.initialDelay !== undefined && (typeof h.initialDelay !== 'number' || h.initialDelay < 0)) {
+    return { valid: false, error: 'Health initialDelay must be non-negative' };
+  }
+  
+  return { valid: true };
+}
+
+/**
+ * Comprehensive manifest validation
+ * Validates both standard and v0 contract manifests
+ * @param manifest - The manifest to validate
+ * @returns Validation result with errors if invalid
+ */
+export function validateManifest(manifest: unknown): ManifestValidationResult {
+  if (!manifest || typeof manifest !== 'object') {
+    return { valid: false, errors: [{ field: 'root', message: 'Manifest must be an object' }] };
+  }
+  
+  const errors: ManifestValidationError[] = [];
+  const obj = manifest as Record<string, unknown>;
+  
+  // Determine manifest version
+  const manifestVersion = (obj.manifest_version as string) || MANIFEST_CONSTRAINTS.DEFAULT_VERSION;
+  const isV0 = manifestVersion === '0.1.0';
+  
+  // Get required fields based on version
+  const requiredFields = isV0 
+    ? MANIFEST_CONSTRAINTS.REQUIRED_FIELDS_V0 
+    : MANIFEST_CONSTRAINTS.REQUIRED_FIELDS;
+  
+  // Check required fields
+  for (const field of requiredFields) {
+    if (!(field in obj) || obj[field] === undefined || obj[field] === null) {
+      errors.push({ field, message: `Missing required field: ${field}` });
+    }
+  }
+  
+  // Validate app ID
+  if (typeof obj.id === 'string') {
+    const idCheck = validateAppId(obj.id);
+    if (!idCheck.valid) {
+      errors.push({ field: 'id', message: idCheck.error });
+    }
+  }
+  
+  // Validate v0-specific fields
+  if (isV0) {
+    if (obj.entry) {
+      const entryCheck = validateEntryConfig(obj.entry);
+      if (!entryCheck.valid) {
+        errors.push({ field: 'entry', message: entryCheck.error });
+      }
+    }
+    
+    if (obj.health) {
+      const healthCheck = validateHealthConfig(obj.health);
+      if (!healthCheck.valid) {
+        errors.push({ field: 'health', message: healthCheck.error });
+      }
+    }
+  }
+  
+  if (errors.length > 0) {
+    return { valid: false, errors };
+  }
+  
+  return { valid: true, manifest: manifest as AppManifest };
 }

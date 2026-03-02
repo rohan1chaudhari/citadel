@@ -4,14 +4,15 @@ import yaml from 'yaml';
 import { appsDir, repoRoot } from './paths.js';
 import { dbExec, dbQuery } from './db.js';
 import type { PermissionScopes } from './permissions.js';
-import type { AppManifest, ManifestValidationError } from './manifest-schema.js';
+import type { AppManifest, AppManifestV0, ManifestValidationError, EntryConfig, HealthConfig, EndpointConfig } from './manifest-schema.js';
 
 export type { PermissionScopes };
-export type { AppManifest };
+export type { AppManifest, AppManifestV0, EntryConfig, HealthConfig, EndpointConfig };
 
 // Manifest schema validation
 const REQUIRED_FIELDS = ['id', 'name', 'version', 'permissions'] as const;
-const SUPPORTED_MANIFEST_VERSIONS = ['1.0'] as const;
+const REQUIRED_FIELDS_V0 = ['id', 'name', 'version', 'entry', 'health', 'permissions'] as const;
+const SUPPORTED_MANIFEST_VERSIONS = ['1.0', '0.1.0'] as const;
 
 function validateManifestVersion(version: unknown, filePath: string): { valid: true } | { valid: false; error: string } {
   // Default to "1.0" if not specified (backward compatibility)
@@ -44,9 +45,14 @@ function validateManifest(manifest: unknown, filePath: string): { valid: true } 
   }
 
   const obj = manifest as Record<string, unknown>;
+  
+  // Determine manifest version
+  const manifestVersion = (obj.manifest_version as string) ?? '1.0';
+  const isV0 = manifestVersion === '0.1.0';
 
-  // Check required fields
-  for (const field of REQUIRED_FIELDS) {
+  // Check required fields based on version
+  const requiredFields = isV0 ? REQUIRED_FIELDS_V0 : REQUIRED_FIELDS;
+  for (const field of requiredFields) {
     if (!(field in obj) || obj[field] === undefined || obj[field] === null) {
       errors.push({ field, message: `Missing required field: ${field}` });
     }
@@ -83,6 +89,45 @@ function validateManifest(manifest: unknown, filePath: string): { valid: true } 
 
   if ('manifest_version' in obj && obj.manifest_version !== undefined && typeof obj.manifest_version !== 'string') {
     errors.push({ field: 'manifest_version', message: 'Field "manifest_version" must be a string' });
+  }
+  
+  // Validate v0-specific fields
+  if (isV0) {
+    // Validate entry field
+    if ('entry' in obj && obj.entry !== undefined) {
+      if (typeof obj.entry !== 'object' || obj.entry === null) {
+        errors.push({ field: 'entry', message: 'Field "entry" must be an object' });
+      } else {
+        const entry = obj.entry as Record<string, unknown>;
+        if (typeof entry.type !== 'string') {
+          errors.push({ field: 'entry.type', message: 'Entry type is required' });
+        } else {
+          const validTypes = ['nextjs', 'docker', 'binary', 'node', 'python', 'custom'];
+          if (!validTypes.includes(entry.type)) {
+            errors.push({ field: 'entry.type', message: `Invalid entry type: ${entry.type}` });
+          }
+          // Check type-specific required fields
+          if (['binary', 'node', 'python', 'custom'].includes(entry.type) && !entry.command) {
+            errors.push({ field: 'entry.command', message: `Entry type "${entry.type}" requires a "command" field` });
+          }
+          if (entry.type === 'docker' && !entry.image) {
+            errors.push({ field: 'entry.image', message: 'Entry type "docker" requires an "image" field' });
+          }
+        }
+      }
+    }
+    
+    // Validate health field
+    if ('health' in obj && obj.health !== undefined) {
+      if (typeof obj.health !== 'object' || obj.health === null) {
+        errors.push({ field: 'health', message: 'Field "health" must be an object' });
+      } else {
+        const health = obj.health as Record<string, unknown>;
+        if (health.endpoint !== '/healthz') {
+          errors.push({ field: 'health.endpoint', message: 'Health endpoint must be "/healthz"' });
+        }
+      }
+    }
   }
 
   if (errors.length > 0) {
@@ -126,6 +171,7 @@ async function readManifest(manifestPath: string): Promise<AppManifest | null> {
   }
 
   const obj = parsed as AppManifest;
+  const isV0 = obj.manifest_version === '0.1.0';
 
   // Additional validation: id and name must be non-empty
   if (!obj.id.trim()) {
@@ -135,7 +181,8 @@ async function readManifest(manifestPath: string): Promise<AppManifest | null> {
     throw new Error(`Invalid manifest: ${manifestPath}\n  - name: Cannot be empty`);
   }
 
-  return {
+  // Base manifest fields
+  const baseManifest = {
     id: obj.id,
     name: obj.name,
     description: obj.description,
@@ -143,7 +190,24 @@ async function readManifest(manifestPath: string): Promise<AppManifest | null> {
     manifest_version: obj.manifest_version ?? '1.0',
     permissions: obj.permissions,
     hidden: obj.hidden,
+    author: obj.author,
+    homepage: obj.homepage,
+    icon: obj.icon,
+    dependencies: obj.dependencies,
   };
+
+  // For v0 manifests, include entry, health, and endpoints
+  if (isV0) {
+    const v0Obj = obj as AppManifestV0;
+    return {
+      ...baseManifest,
+      entry: v0Obj.entry,
+      health: v0Obj.health,
+      endpoints: v0Obj.endpoints,
+    } as AppManifestV0;
+  }
+
+  return baseManifest;
 }
 
 export async function getAppManifest(appId: string): Promise<AppManifest | null> {
@@ -239,4 +303,71 @@ export async function listHiddenApps(): Promise<AppManifest[]> {
 
   manifests.sort((a, b) => a.id.localeCompare(b.id));
   return manifests;
+}
+
+// ============================================================================
+// App Contract v0 Helpers
+// ============================================================================
+
+/**
+ * Check if a manifest follows the v0 contract (standalone/containerized app)
+ * @param manifest - The manifest to check
+ * @returns true if the manifest is a v0 contract
+ */
+export function isV0Manifest(manifest: AppManifest): manifest is AppManifestV0 {
+  return manifest.manifest_version === '0.1.0' && 'entry' in manifest && 'health' in manifest;
+}
+
+/**
+ * Get the entry configuration for a v0 manifest
+ * @param manifest - The app manifest
+ * @returns EntryConfig or null if not a v0 manifest
+ */
+export function getEntryConfig(manifest: AppManifest): EntryConfig | null {
+  if (!isV0Manifest(manifest)) return null;
+  return manifest.entry;
+}
+
+/**
+ * Get the health configuration for a v0 manifest
+ * @param manifest - The app manifest
+ * @returns HealthConfig or null if not a v0 manifest
+ */
+export function getHealthConfig(manifest: AppManifest): HealthConfig | null {
+  if (!isV0Manifest(manifest)) return null;
+  return manifest.health;
+}
+
+/**
+ * Get the optional endpoints configuration for a v0 manifest
+ * @param manifest - The app manifest
+ * @returns EndpointConfig or null if not a v0 manifest or no endpoints defined
+ */
+export function getEndpointConfig(manifest: AppManifest): EndpointConfig | null {
+  if (!isV0Manifest(manifest)) return null;
+  return manifest.endpoints ?? null;
+}
+
+/**
+ * Check if a v0 app has a specific optional endpoint
+ * @param manifest - The app manifest
+ * @param endpoint - The endpoint to check (meta, events, agent/callback)
+ * @returns true if the endpoint is defined
+ */
+export function hasEndpoint(
+  manifest: AppManifest,
+  endpoint: 'meta' | 'events' | 'agent/callback'
+): boolean {
+  if (!isV0Manifest(manifest) || !manifest.endpoints) return false;
+  
+  switch (endpoint) {
+    case 'meta':
+      return !!manifest.endpoints.meta;
+    case 'events':
+      return !!manifest.endpoints.events;
+    case 'agent/callback':
+      return !!manifest.endpoints.agent?.callback;
+    default:
+      return false;
+  }
 }
