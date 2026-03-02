@@ -796,7 +796,7 @@ If the build succeeds, your app is ready!
 | `storageReadText(appId, path)` | Read a text file from app storage | `@citadel/core` |
 | `storageWriteText(appId, path, content)` | Write a text file to app storage | `@citadel/core` |
 
-See [Runtime API](../RUNTIME.md) for complete documentation.
+See [API Reference](../api-reference.md) for complete documentation of all `@citadel/core` primitives, including signatures, parameters, return types, and error cases.
 
 ### UI Components
 
