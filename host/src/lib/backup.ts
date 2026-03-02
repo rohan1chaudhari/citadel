@@ -7,8 +7,11 @@ import { dataRoot } from '@citadel/core';
 import { audit } from '@citadel/core';
 
 const execAsync = promisify(exec);
-const RETENTION_COUNT = 7;
-const BACKUP_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+// Environment variables with defaults
+const RETENTION_COUNT = parseInt(process.env.CITADEL_BACKUP_RETENTION || '7', 10);
+const BACKUP_INTERVAL_HOURS = parseInt(process.env.CITADEL_BACKUP_INTERVAL_HOURS || '24', 10);
+const BACKUP_INTERVAL_MS = BACKUP_INTERVAL_HOURS * 60 * 60 * 1000;
 
 export interface BackupInfo {
   filename: string;
@@ -241,7 +244,7 @@ export function startBackupScheduler(): void {
     return;
   }
 
-  console.log('[backup] Starting scheduler (interval: 24h)');
+  console.log(`[backup] Starting scheduler (interval: ${BACKUP_INTERVAL_HOURS}h)`);
   
   // Run immediately on startup
   runBackupJob();
@@ -276,12 +279,12 @@ export async function runBackupIfNeeded(): Promise<boolean> {
   const now = Date.now();
   const hoursSinceLastBackup = (now - lastBackupTime) / (60 * 60 * 1000);
   
-  if (hoursSinceLastBackup >= 24) {
+  if (hoursSinceLastBackup >= BACKUP_INTERVAL_HOURS) {
     console.log(`[backup] Last backup was ${hoursSinceLastBackup.toFixed(1)} hours ago, creating new one`);
     await runBackupJob();
     return true;
   }
   
-  console.log(`[backup] Last backup was ${hoursSinceLastBackup.toFixed(1)} hours ago, skipping`);
+  console.log(`[backup] Last backup was ${hoursSinceLastBackup.toFixed(1)} hours ago (interval: ${BACKUP_INTERVAL_HOURS}h), skipping`);
   return false;
 }

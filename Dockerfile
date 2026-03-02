@@ -61,6 +61,8 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
 ENV NODE_ENV=production
 ENV CITADEL_DATA_ROOT=/app/data
 ENV CITADEL_APPS_DIR=/app/apps
+ENV CITADEL_BACKUP_RETENTION=7
+ENV CITADEL_BACKUP_INTERVAL_HOURS=24
 ENV PORT=3000
 
 # Start the server
