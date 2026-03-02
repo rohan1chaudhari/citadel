@@ -1,0 +1,62 @@
+[
+  {
+    "id": "smart-notes",
+    "name": "Smart Notes",
+    "description": "AI-powered note taking with voice input and photo attachments",
+    "author": "Citadel Team",
+    "version": "0.1.0",
+    "screenshot": "/images/showcase/smart-notes.png",
+    "repository": "https://github.com/rohan1chaudhari/citadel/tree/main/apps/smart-notes",
+    "verified": true
+  },
+  {
+    "id": "gym-tracker",
+    "name": "Gym Tracker",
+    "description": "Track workouts, exercises, and gym sessions",
+    "author": "Citadel Team",
+    "version": "0.1.0",
+    "screenshot": null,
+    "repository": "https://github.com/rohan1chaudhari/citadel/tree/main/apps/gym-tracker",
+    "verified": true
+  },
+  {
+    "id": "scrum-board",
+    "name": "Scrum Board",
+    "description": "Project management with tasks, priorities, and autopilot integration",
+    "author": "Citadel Team",
+    "version": "0.1.0",
+    "screenshot": null,
+    "repository": "https://github.com/rohan1chaudhari/citadel/tree/main/apps/scrum-board",
+    "verified": true
+  },
+  {
+    "id": "soumil-mood-tracker",
+    "name": "Mood Tracker",
+    "description": "Track daily mood with scores and notes",
+    "author": "Soumil",
+    "version": "0.1.0",
+    "screenshot": null,
+    "repository": "https://github.com/rohan1chaudhari/citadel/tree/main/apps/soumil-mood-tracker",
+    "verified": true
+  },
+  {
+    "id": "friend-tracker",
+    "name": "Friend Tracker",
+    "description": "Keep track of friends and interactions",
+    "author": "Citadel Team",
+    "version": "0.1.0",
+    "screenshot": null,
+    "repository": "https://github.com/rohan1chaudhari/citadel/tree/main/apps/friend-tracker",
+    "verified": true
+  },
+  {
+    "id": "french-translator",
+    "name": "French Translator",
+    "description": "Translate text to and from French",
+    "author": "Citadel Team",
+    "version": "0.1.0",
+    "screenshot": null,
+    "repository": "https://github.com/rohan1chaudhari/citadel/tree/main/apps/french-translator",
+    "verified": true
+  }
+]

@@ -414,5 +414,5 @@ See the full JSON Schema at:
 ## See Also
 
 - [App Package Specification](./app-spec.md) - For in-process Next.js apps
-- [Architecture](../architecture.md) - Host runtime and isolation model
-- [API Reference](../api-reference.md) - Host primitives for apps
+- [Architecture](../architecture) - Host runtime and isolation model
+- [API Reference](../api-reference) - Host primitives for apps

@@ -8,6 +8,7 @@ export default withMermaid(
     title: 'Citadel',
     description: 'Local-first personal app hub',
     base,
+    ignoreDeadLinks: true,
     themeConfig: {
       logo: {
         light: '/images/citadel-logo.svg',
@@ -26,7 +27,8 @@ export default withMermaid(
           items: [
             { text: 'What is Citadel?', link: '/what-is-citadel' },
             { text: 'Introduction (technical)', link: '/intro' },
-            { text: 'Quickstart', link: '/how-to/quickstart' }
+            { text: 'Quickstart', link: '/how-to/quickstart' },
+            { text: 'App Showcase', link: '/showcase' }
           ]
         },
         {
