@@ -66,20 +66,23 @@ Add complexity only when proven necessary (mobile bridge, runtime adapters, ecos
 
 ## Product direction
 
-### Near-term
-- Finish external-only architecture
-- Harden reliability (startup, restart, cache stability)
-- Improve extension DX (scaffold/install/dev workflows)
-- Ship release-ready docs + CI smoke checks
+### Near-term (Phase 3 — open source ready)
+- Extract apps into standalone repos (apps are not part of the platform)
+- Docker + deployment story for self-hosters
+- Harden reliability (graceful startup/shutdown, DB health checks)
+- Ship release-ready docs, CI, and first tagged release
 
-### Mid-term
-- Mobile bridge for native capabilities (notifications, camera, mic, gallery)
-- Better permission UX and policy controls
-- Runtime abstraction maturity for agent-driven apps
+### Mid-term (Phase 4 — app ecosystem)
+- GitHub-based app registry (search, install, publish)
+- Cross-app workflows (trigger → condition → action chains)
+- Container-based isolation for untrusted community apps
+- Push notifications via service worker
+- Home screen widgets for at-a-glance app data
 
 ### Long-term
 - Healthy extension ecosystem (first-party + community apps)
 - App portability between self-hosted environments
+- Runtime abstraction: apps in any stack behind a stable contract (not just Next.js)
 - Opinionated but optional deployment modes (single machine, homelab, lightweight VPS)
 
 ---

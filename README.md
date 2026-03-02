@@ -9,7 +9,8 @@
 
 <p align="center">
   <strong>Local-first personal app hub.</strong><br>
-  One host, isolated apps, your data stays on your machine.
+  One host, isolated apps, your data stays on your machine.<br>
+  Describe a feature, an AI agent builds and ships it in seconds.
 </p>
 
 <p align="center">

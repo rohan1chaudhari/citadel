@@ -384,12 +384,12 @@ Ship something others can clone, self-host, and build on.
 #### P3-04: Contributing guide
 **Description:** Write `CONTRIBUTING.md` at the repo root. Cover: how to set up the dev environment, how the codebase is organized, how to submit a PR, coding conventions (Tailwind, no external auth, app.yaml manifest), and how to add an app vs modify the platform.
 **Acceptance Criteria:**
-- [ ] `CONTRIBUTING.md` at repo root
-- [ ] Dev setup: clone, `npm install`, `npm run dev`, run tests
-- [ ] Codebase tour: host/ vs core/ vs apps/ vs templates/ vs scripts/
-- [ ] PR process: branch naming, commit style, what to include in description
-- [ ] Coding conventions: Tailwind for styling, TypeScript strict, no external auth dependencies
-- [ ] "Add an app" vs "modify the platform" decision tree
+- [x] `CONTRIBUTING.md` at repo root
+- [x] Dev setup: clone, `npm install`, `npm run dev`, run tests
+- [x] Codebase tour: host/ vs core/ vs apps/ vs templates/ vs scripts/
+- [x] PR process: branch naming, commit style, what to include in description
+- [x] Coding conventions: Tailwind for styling, TypeScript strict, no external auth dependencies
+- [x] "Add an app" vs "modify the platform" decision tree
 
 ---
 
@@ -443,7 +443,7 @@ Ship something others can clone, self-host, and build on.
 - [x] `LICENSE` file at repo root (MIT, copyright Rohan Chaudhari)
 - [x] `CODE_OF_CONDUCT.md` at repo root (Contributor Covenant v2.1)
 - [x] `SECURITY.md` at repo root (email for private vulnerability reports, expected response time)
-- [ ] LICENSE referenced in README footer
+- [x] LICENSE referenced in README footer
 
 ---
 
@@ -513,6 +513,20 @@ Ship something others can clone, self-host, and build on.
 - [ ] Middleware redirects unauthenticated requests to `/login` (except `/api/health`)
 - [ ] When disabled (default), all requests pass through — zero overhead
 - [ ] Logout button in nav drawer when auth is enabled
+
+#### P3-16: Reliability hardening
+**Description:** Harden the host startup and shutdown lifecycle. Verify all app DBs are accessible on startup. Close SQLite connections and flush audit logs on graceful shutdown (SIGTERM/SIGINT). Invalidate the app registry cache after install/uninstall operations so stale data doesn't persist.
+**Acceptance Criteria:**
+- [ ] Startup: health check verifies all registered app DBs are readable before accepting requests
+- [ ] Startup: clear error message if an app DB is missing or corrupted (with app ID)
+- [ ] Shutdown: SIGTERM/SIGINT handler closes all open SQLite connections
+- [ ] Shutdown: pending audit log writes are flushed before exit
+- [ ] Registry cache invalidated after `citadel-app install` / `uninstall` / `update`
+- [ ] Startup time logged (time from process start to "ready" state)
+
+---
+
+> **Suggested Phase 3 ordering:** App extraction (P3-14/15) first — it's the highest-risk architectural change and other tasks build on it. Then host migrations (P3-12), Docker/deployment (P3-05/06), polish (P3-10/11/16), auth (P3-13), and docs/CI last (P3-01–04, P3-07/08) since docs should reflect the post-extraction architecture.
 
 ---
 
@@ -648,6 +662,30 @@ Enable a community ecosystem. Only possible because Phase 2 separated apps.
 - [ ] Remote templates are downloaded (git clone) to a cache directory
 - [ ] Template validation: must include `app.yaml`, `page.tsx`, `README.md` at minimum
 - [ ] `citadel-app templates` lists all available templates (local + remote)
+
+---
+
+### Automation & Intelligence
+
+#### P4-13: Cross-app workflow automation
+**Description:** Add a lightweight "if-this-then-that" automation system. Users define rules: a trigger (event from one app), an optional condition, and an action (intent on another app). Example: "when gym-tracker logs a session, create a smart-notes entry with a summary." Rules are stored in the host DB and evaluated when audit events fire. This fulfills the VISION goal of "compose workflows from modular apps."
+**Acceptance Criteria:**
+- [ ] `workflows` table in `citadel` DB: id, name, trigger_app, trigger_event, condition (JSON), action_app, action_intent, action_payload_template
+- [ ] Host evaluates workflows when matching audit events fire
+- [ ] Actions invoke the target app's intent endpoint (builds on P4-08)
+- [ ] UI at `/workflows` to create, edit, enable/disable, and delete rules
+- [ ] Workflow execution logged via audit (trigger, evaluation result, action taken)
+- [ ] Max 3 chained actions per trigger to prevent infinite loops
+
+#### P4-14: Push notifications via service worker
+**Description:** Add opt-in push notification support using the PWA service worker. Apps can send notifications through a host API. The user approves notification permission per app (extends the existing permission system). Useful for reminders (friend-tracker), timers (gym-tracker), etc.
+**Acceptance Criteria:**
+- [ ] `app.yaml` supports `notifications: true` permission
+- [ ] `POST /api/apps/{appId}/notify` sends a push notification (title, body, url)
+- [ ] Service worker handles push events and displays notifications
+- [ ] Notification permission prompted on first use, stored in `app_permissions`
+- [ ] User can mute/unmute notifications per app in host settings
+- [ ] Works on Android Chrome and desktop browsers (iOS Safari support best-effort)
 
 ---
 

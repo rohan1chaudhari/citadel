@@ -103,6 +103,22 @@ graph LR
 - **CLI** — `citadel-app create/install/update/dev/migrate` for app lifecycle
 - **Autopilot** — AI agent that picks up scrum-board tasks and implements them autonomously
 
+## Autopilot — AI-driven development
+
+Citadel includes a built-in scrum board and an autopilot system that lets you describe features in plain language and have them built automatically.
+
+```
+You: "Add a voice recording button to Smart Notes"
+  → Autopilot picks up the task
+  → Writes the code (UI + API + migration if needed)
+  → Deploys it to your running instance
+  → You see the feature on your phone in seconds
+```
+
+The autopilot uses a pluggable agent runner — you can use OpenClaw, Claude Code, or a custom script. It reads the scrum board, picks up tasks marked as ready, and implements them against the app's codebase.
+
+This is what makes Citadel a **living platform** — your apps aren't frozen after install. They evolve as fast as you can describe what you want.
+
 ## Quick start
 
 See [Quickstart](/how-to/quickstart) to run the host and install your first app.

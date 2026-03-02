@@ -25,6 +25,16 @@ graph LR
     Citadel --> Data
 ```
 
+## Build features on the fly
+
+This is what makes Citadel different from other self-hosted platforms.
+
+Want voice input in your notes app? Describe it. An AI agent picks up the task, writes the code, and deploys it — you see the feature in your app in seconds, right on your phone.
+
+Citadel includes a built-in scrum board and an **autopilot** system. You write a task like "add a voice recording button to Smart Notes." The autopilot picks it up, implements it using the app's codebase, and ships it. You come back to a working feature.
+
+Your apps aren't static. They evolve as fast as you can describe what you want.
+
 ## The problem
 
 Today, your personal data is scattered across dozens of services:
