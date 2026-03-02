@@ -1,0 +1,62 @@
+[
+  {
+    "id": "smart-notes",
+    "name": "Smart Notes",
+    "description": "AI-powered note taking with voice input and photo attachments",
+    "repo_url": "https://github.com/rohan1chaudhari/citadel-smart-notes",
+    "author": "Citadel Team",
+    "tags": ["notes", "ai", "productivity"],
+    "version": "0.1.0",
+    "manifest_version": "1.0"
+  },
+  {
+    "id": "gym-tracker",
+    "name": "Gym Tracker",
+    "description": "Track workouts, exercises, and gym sessions",
+    "repo_url": "https://github.com/rohan1chaudhari/citadel-gym-tracker",
+    "author": "Citadel Team",
+    "tags": ["fitness", "health", "tracking"],
+    "version": "0.1.0",
+    "manifest_version": "1.0"
+  },
+  {
+    "id": "scrum-board",
+    "name": "Scrum Board",
+    "description": "Project management with tasks, priorities, and autopilot integration",
+    "repo_url": "https://github.com/rohan1chaudhari/citadel-scrum-board",
+    "author": "Citadel Team",
+    "tags": ["project-management", "automation", "productivity"],
+    "version": "0.1.0",
+    "manifest_version": "1.0"
+  },
+  {
+    "id": "mood-tracker",
+    "name": "Mood Tracker",
+    "description": "Track daily mood with scores and notes",
+    "repo_url": "https://github.com/rohan1chaudhari/citadel-mood-tracker",
+    "author": "Citadel Community",
+    "tags": ["health", "wellness", "tracking"],
+    "version": "0.1.0",
+    "manifest_version": "1.0"
+  },
+  {
+    "id": "friend-tracker",
+    "name": "Friend Tracker",
+    "description": "Keep track of friends and interactions",
+    "repo_url": "https://github.com/rohan1chaudhari/citadel-friend-tracker",
+    "author": "Citadel Team",
+    "tags": ["social", "tracking", "personal"],
+    "version": "0.1.0",
+    "manifest_version": "1.0"
+  },
+  {
+    "id": "french-translator",
+    "name": "French Translator",
+    "description": "Real-time French to English voice translation",
+    "repo_url": "https://github.com/rohan1chaudhari/citadel-french-translator",
+    "author": "Citadel Team",
+    "tags": ["translation", "language", "voice"],
+    "version": "0.1.0",
+    "manifest_version": "1.0"
+  }
+]
