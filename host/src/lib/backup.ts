@@ -10,7 +10,7 @@ const execAsync = promisify(exec);
 
 // Environment variables with defaults
 const RETENTION_COUNT = parseInt(process.env.CITADEL_BACKUP_RETENTION || '7', 10);
-const BACKUP_INTERVAL_HOURS = parseInt(process.env.CITADEL_BACKUP_INTERVAL_HOURS || '24', 10);
+const BACKUP_INTERVAL_HOURS = parseInt(process.env.CITADEL_BACKUP_INTERVAL_HOURS || '4', 10);
 const BACKUP_INTERVAL_MS = BACKUP_INTERVAL_HOURS * 60 * 60 * 1000;
 
 export interface BackupInfo {

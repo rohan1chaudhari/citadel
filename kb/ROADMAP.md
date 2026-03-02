@@ -105,9 +105,9 @@ Make the host runtime solid, secure, and observable.
 - [x] App's cached DB connection is invalidated after import
 
 #### P1-10: Scheduled local backups
-**Description:** On host startup and then every 24 hours, snapshot all app data directories into a timestamped zip under `data/backups/`. Keep the last 7 backups, delete older ones.
+**Description:** On host startup and then periodically, snapshot all app data directories into a timestamped zip under `data/backups/`. Keep the last 7 backups, delete older ones.
 **Acceptance Criteria:**
-- [x] Backup runs on host startup and every 24h (setInterval or cron-like)
+- [x] Backup runs on host startup and on interval (default: 4h, configurable via `CITADEL_BACKUP_INTERVAL_HOURS`)
 - [x] Creates `data/backups/citadel-backup-{ISO-timestamp}.zip`
 - [x] Includes all `data/apps/*/` directories
 - [x] Retains last 7 backups, deletes oldest when limit exceeded
@@ -187,7 +187,7 @@ Make the host runtime solid, secure, and observable.
 **Acceptance Criteria:**
 - [x] Test: app A cannot read app B's database
 - [x] Test: storage path traversal (`../`) is blocked
-- [x] Test: SQL guardrails block `ATTACH`, `DETACH`, `PRAGMA`, `VACUUM`, multi-statement
+- [x] Test: SQL guardrails block `ATTACH`, `DETACH`, `PRAGMA`, `VACUUM`, `DROP`, `TRUNCATE`, multi-statement, and `DELETE` without `WHERE`
 - [x] Test: `assertAppId` rejects invalid app IDs
 - [x] Test: audit events are emitted for DB and storage operations
 - [x] Tests run via `npm test` in `host/`
@@ -356,30 +356,30 @@ Ship something others can clone, self-host, and build on.
 #### P3-01: Architecture and security model document
 **Description:** Write a single `docs/architecture.md` that explains how Citadel works end-to-end: the host runtime model, isolation boundaries, permission enforcement, audit pipeline, and the app lifecycle (install → migrate → serve → uninstall). Include a threat model section that explains what Citadel defends against (cross-app data access, path traversal, SQL injection, XSS) and what it doesn't (OS-level isolation, network-level auth).
 **Acceptance Criteria:**
-- [ ] `docs/architecture.md` published in VitePress sidebar
-- [ ] Covers: host runtime, isolation model (db/storage/network), permission system, audit pipeline, CSP/rate limiting
-- [ ] Threat model section: what's protected, what's not, what requires Tailscale or container isolation
-- [ ] Diagram showing request flow: browser → middleware → API route → core primitives → SQLite
-- [ ] Links to relevant code files for each subsystem
+- [x] `docs/architecture.md` published in VitePress sidebar
+- [x] Covers: host runtime, isolation model (db/storage/network), permission system, audit pipeline, CSP/rate limiting
+- [x] Threat model section: what's protected, what's not, what requires Tailscale or container isolation
+- [x] Diagram showing request flow: browser → middleware → API route → core primitives → SQLite
+- [x] Links to relevant code files for each subsystem
 
 #### P3-02: API reference for host primitives
 **Description:** Write a reference doc covering every function in `@citadel/core` that an app developer would use: `dbQuery`, `dbExec`, `storageWriteBuffer`, `storageReadText`, `audit`, `assertAppId`, `runMigrationsForApp`. Each function gets signature, parameters, return type, example, and error cases. This exists alongside the tutorial — the tutorial teaches, this is the lookup table.
 **Acceptance Criteria:**
-- [ ] `docs/api-reference.md` published in VitePress sidebar
-- [ ] Every exported function from `@citadel/core` documented
-- [ ] Each entry includes: TypeScript signature, parameter descriptions, return type, usage example
-- [ ] Error cases listed (what throws, what returns null)
-- [ ] Cross-linked from the build-an-app tutorial
+- [x] `docs/api-reference.md` published in VitePress sidebar
+- [x] Every exported function from `@citadel/core` documented
+- [x] Each entry includes: TypeScript signature, parameter descriptions, return type, usage example
+- [x] Error cases listed (what throws, what returns null)
+- [x] Cross-linked from the build-an-app tutorial
 
 #### P3-03: Deployment guide
 **Description:** Write a guide covering three deployment scenarios: Docker (primary), bare metal (for advanced users), and Raspberry Pi (popular self-hosting target). Docker is the recommended path. Include Tailscale setup for remote access.
 **Acceptance Criteria:**
-- [ ] `docs/how-to/deploy.md` published in VitePress sidebar
-- [ ] Docker section: `docker-compose up` one-liner, volume mapping for `data/`, env vars, port config
-- [ ] Bare metal section: Node.js version requirement, `npm install`, systemd service file, reverse proxy (Caddy/nginx)
-- [ ] Raspberry Pi section: tested Node.js ARM build, performance notes, recommended Pi model
-- [ ] Tailscale section: how to expose Citadel over tailnet (2-3 commands)
-- [ ] Troubleshooting: common issues (port conflicts, permissions, node:sqlite on older Node)
+- [x] `docs/how-to/deploy.md` published in VitePress sidebar
+- [x] Docker section: `docker-compose up` one-liner, volume mapping for `data/`, env vars, port config
+- [x] Bare metal section: Node.js version requirement, `npm install`, systemd service file, reverse proxy (Caddy/nginx)
+- [x] Raspberry Pi section: tested Node.js ARM build, performance notes, recommended Pi model
+- [x] Tailscale section: how to expose Citadel over tailnet (2-3 commands)
+- [x] Troubleshooting: common issues (port conflicts, permissions, node:sqlite on older Node)
 
 #### P3-04: Contributing guide
 **Description:** Write `CONTRIBUTING.md` at the repo root. Cover: how to set up the dev environment, how the codebase is organized, how to submit a PR, coding conventions (Tailwind, no external auth, app.yaml manifest), and how to add an app vs modify the platform.
@@ -398,43 +398,43 @@ Ship something others can clone, self-host, and build on.
 #### P3-05: Dockerfile and docker-compose
 **Description:** Create a production Dockerfile for the host and a `docker-compose.yml` that runs Citadel with a single command. The Docker image should build the Next.js app, include the `citadel-app` CLI, and mount `data/` as a volume for persistence. Multi-stage build to keep the image small.
 **Acceptance Criteria:**
-- [ ] `Dockerfile` at repo root — multi-stage build (build stage + production stage)
-- [ ] `docker-compose.yml` at repo root with volume for `data/` and configurable port
-- [ ] `docker compose up` starts Citadel on port 3000 (configurable via env)
+- [x] `Dockerfile` at repo root — multi-stage build (build stage + production stage)
+- [x] `docker-compose.yml` at repo root with volume for `data/` and configurable port
+- [x] `docker compose up` starts Citadel on port 3000 (configurable via env)
 - [ ] Image size < 500MB
-- [ ] `data/` directory persists across container restarts
-- [ ] Apps directory is mountable for external app installation
-- [ ] Health check defined in compose file (`/api/health`)
+- [x] `data/` directory persists across container restarts
+- [x] Apps directory is mountable for external app installation
+- [x] Health check defined in compose file (`/api/health`)
 
 #### P3-06: Environment variable configuration
 **Description:** Consolidate all configurable values behind environment variables with sensible defaults. Document every env var. Existing vars (`CITADEL_APPS_DIR`, `CITADEL_DATA_ROOT`) plus new ones for port, host URL, LLM keys, backup settings.
 **Acceptance Criteria:**
-- [ ] `docs/configuration.md` lists every env var with description, type, and default
-- [ ] `CITADEL_PORT` — server port (default: 3000)
-- [ ] `CITADEL_DATA_ROOT` — data directory (default: `../data`)
-- [ ] `CITADEL_APPS_DIR` — apps directory (default: `../apps`)
-- [ ] `CITADEL_BACKUP_RETENTION` — number of backups to keep (default: 7)
-- [ ] `CITADEL_BACKUP_INTERVAL_HOURS` — hours between backups (default: 24)
-- [ ] `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` — LLM provider keys
-- [ ] `.env.example` file at repo root with all vars commented out
-- [ ] Docker compose references `.env` file
+- [x] `docs/configuration.md` lists every env var with description, type, and default
+- [x] `CITADEL_PORT` — server port (default: 3000)
+- [x] `CITADEL_DATA_ROOT` — data directory (default: `../data`)
+- [x] `CITADEL_APPS_DIR` — apps directory (default: `../apps`)
+- [x] `CITADEL_BACKUP_RETENTION` — number of backups to keep (default: 7)
+- [x] `CITADEL_BACKUP_INTERVAL_HOURS` — hours between backups (default: 4)
+- [x] `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` — LLM provider keys
+- [x] `.env.example` file at repo root with all vars commented out
+- [x] Docker compose references `.env` file
 
 #### P3-07: GitHub release workflow
 **Description:** Add a GitHub Actions workflow that creates a tagged release when a version tag is pushed. The release includes a changelog (auto-generated from commits since last tag), the Docker image pushed to GitHub Container Registry (ghcr.io), and a zip of the source.
 **Acceptance Criteria:**
-- [ ] `.github/workflows/release.yml` triggers on `v*` tag push
-- [ ] Auto-generates changelog from conventional commits since last tag
-- [ ] Builds and pushes Docker image to `ghcr.io/rohan1chaudhari/citadel:<tag>`
-- [ ] Creates GitHub Release with changelog and source archive
-- [ ] Smoke test: build passes before creating release
-- [ ] `package.json` version matches the tag
+- [x] `.github/workflows/release.yml` triggers on `v*` tag push
+- [x] Auto-generates changelog from conventional commits since last tag
+- [x] Builds and pushes Docker image to `ghcr.io/rohan1chaudhari/citadel:<tag>`
+- [x] Creates GitHub Release with changelog and source archive
+- [x] Smoke test: build passes before creating release
+- [x] `package.json` version matches the tag
 
 #### P3-08: README demo content
 **Description:** Add visual content to the README so people can understand Citadel at a glance without cloning it. Include screenshots of the home grid, an app (Smart Notes), the audit viewer, and the permission consent screen. Add an architecture diagram.
 **Acceptance Criteria:**
-- [ ] 3-4 screenshots in `docs/images/` (home grid, app view, audit viewer, permissions)
-- [ ] Screenshots embedded in README under a "Screenshots" section
-- [ ] Architecture diagram (text-based mermaid or image) showing host → apps → SQLite isolation
+- [x] 3-4 screenshots in `docs/images/` (home grid, app view, audit viewer, permissions)
+- [x] Screenshots embedded in README under a "Screenshots" section
+- [x] Architecture diagram (text-based mermaid or image) showing host → apps → SQLite isolation
 - [ ] Short GIF or video link showing `citadel-app create` → app running (optional but nice)
 
 #### P3-09: LICENSE and governance
@@ -476,50 +476,50 @@ Ship something others can clone, self-host, and build on.
 #### P3-10: Error handling and error pages
 **Description:** Add user-facing error pages for common HTTP errors (404, 500) and an error boundary for React component crashes. API routes should return consistent JSON error format. Currently errors are raw Next.js default pages.
 **Acceptance Criteria:**
-- [ ] Custom `not-found.tsx` at app root — styled 404 page with link to home
-- [ ] Custom `error.tsx` at app root — styled 500 page with "try again" button
-- [ ] API routes return consistent `{ ok: false, error: string, code: number }` format
-- [ ] React error boundary catches component crashes and shows recovery UI
-- [ ] Errors logged via audit with stack trace (in dev mode only)
+- [x] Custom `not-found.tsx` at app root — styled 404 page with link to home
+- [x] Custom `error.tsx` at app root — styled 500 page with "try again" button
+- [x] API routes return consistent `{ ok: false, error: string, code: number }` format
+- [x] React error boundary catches component crashes and shows recovery UI
+- [x] Errors logged via audit with stack trace (in dev mode only)
 
 #### P3-11: First-run setup wizard
 **Description:** When Citadel starts with no `data/` directory (fresh install), show a setup wizard instead of the home grid. The wizard walks through: welcome, data directory confirmation, optional LLM API key entry, and done. Stores a `setup_complete` flag in the host DB.
 **Acceptance Criteria:**
-- [ ] Setup wizard at `/setup` shown on first visit when no `setup_complete` flag exists
-- [ ] Step 1: Welcome — explains what Citadel is
-- [ ] Step 2: Data directory — shows configured path, lets user confirm
-- [ ] Step 3: API keys (optional) — OpenAI and/or Anthropic key input, saved to host settings
-- [ ] Step 4: Done — redirects to home grid
-- [ ] `setup_complete` flag in `citadel` DB prevents wizard from showing again
-- [ ] Skippable via env var `CITADEL_SKIP_SETUP=true` (for Docker/automation)
+- [x] Setup wizard at `/setup` shown on first visit when no `setup_complete` flag exists
+- [x] Step 1: Welcome — explains what Citadel is
+- [x] Step 2: Data directory — shows configured path, lets user confirm
+- [x] Step 3: API keys (optional) — OpenAI and/or Anthropic key input, saved to host settings
+- [x] Step 4: Done — redirects to home grid
+- [x] `setup_complete` flag in `citadel` DB prevents wizard from showing again
+- [x] Skippable via env var `CITADEL_SKIP_SETUP=true` (for Docker/automation)
 
 #### P3-12: Host-level migration system
 **Description:** The host itself needs a migration system (separate from per-app migrations) to handle schema changes to the `citadel` DB across version upgrades. When Citadel starts, it should check and run any pending host migrations before serving requests.
 **Acceptance Criteria:**
-- [ ] `host/migrations/` directory with numbered SQL files for the `citadel` DB
-- [ ] `host_migrations` table in `citadel` DB tracks applied migrations
-- [ ] Migrations run on startup before the Next.js server accepts requests
-- [ ] Existing `citadel` DB tables (hidden_apps, app_permissions, audit_log, migrations) captured in `001_initial.sql`
-- [ ] Future schema changes go in `002_xxx.sql`, `003_xxx.sql`, etc.
+- [x] `host/migrations/` directory with numbered SQL files for the `citadel` DB
+- [x] `host_migrations` table in `citadel` DB tracks applied migrations
+- [ ] Migrations run on startup before the Next.js server accepts requests — `runHostMigrations` exists in `core/src/hostMigrations.ts` but is never called from `host/src`
+- [x] Existing `citadel` DB tables (hidden_apps, app_permissions, audit_log, migrations) captured in `001_initial.sql`
+- [x] Future schema changes go in `002_xxx.sql`, `003_xxx.sql`, etc.
 - [ ] Migration errors prevent startup with a clear error message
 
 #### P3-13: Optional auth layer for public exposure
 **Description:** Add an optional authentication layer that activates when `CITADEL_AUTH_ENABLED=true`. Uses passphrase-based login with session cookies. Disabled by default (Tailscale handles auth for local use). This unblocks exposing Citadel over the public internet without Tailscale.
 **Acceptance Criteria:**
-- [ ] `CITADEL_AUTH_ENABLED=true` env var activates auth (default: false)
-- [ ] Login page at `/login` — passphrase input
-- [ ] Passphrase hash (argon2) stored in `citadel` DB on first setup
-- [ ] Session cookie (httpOnly, SameSite=Strict) issued on login
-- [ ] Middleware redirects unauthenticated requests to `/login` (except `/api/health`)
-- [ ] When disabled (default), all requests pass through — zero overhead
-- [ ] Logout button in nav drawer when auth is enabled
+- [x] `CITADEL_AUTH_ENABLED=true` env var activates auth (default: false)
+- [x] Login page at `/login` — passphrase input
+- [x] Passphrase hash (argon2) stored in `citadel` DB on first setup
+- [x] Session cookie (httpOnly, SameSite=Strict) issued on login
+- [x] Middleware redirects unauthenticated requests to `/login` (except `/api/health`)
+- [x] When disabled (default), all requests pass through — zero overhead
+- [x] Logout button in nav drawer when auth is enabled
 
 #### P3-16: Reliability hardening
 **Description:** Harden the host startup and shutdown lifecycle. Verify all app DBs are accessible on startup. Close SQLite connections and flush audit logs on graceful shutdown (SIGTERM/SIGINT). Invalidate the app registry cache after install/uninstall operations so stale data doesn't persist.
 **Acceptance Criteria:**
-- [ ] Startup: health check verifies all registered app DBs are readable before accepting requests
+- [ ] Startup: health check verifies all registered app DBs are readable before accepting requests — `/api/health` returns ok without checking DBs
 - [ ] Startup: clear error message if an app DB is missing or corrupted (with app ID)
-- [ ] Shutdown: SIGTERM/SIGINT handler closes all open SQLite connections
+- [ ] Shutdown: SIGTERM/SIGINT handler closes all open SQLite connections — only backup scheduler and stuckTaskWatcher have handlers, not the DB layer
 - [ ] Shutdown: pending audit log writes are flushed before exit
 - [ ] Registry cache invalidated after `citadel-app install` / `uninstall` / `update`
 - [ ] Startup time logged (time from process start to "ready" state)
