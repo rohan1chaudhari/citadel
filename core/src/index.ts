@@ -160,3 +160,51 @@ export {
   type IntentInvokeRequest,
   type IntentInvokeResult,
 } from './intents.js';
+
+// Lifecycle (startup/shutdown management)
+export {
+  recordStartupStart,
+  getStartupDurationMs,
+  logStartupComplete,
+  verifyAppDatabases,
+  performStartupHealthCheck,
+  registerDbConnection,
+  gracefulShutdown,
+  installShutdownHandlers,
+  invalidateRegistryCache,
+  getHostStatus,
+} from './lifecycle.js';
+
+// Workflows (cross-app automation)
+export {
+  createWorkflow,
+  getWorkflow,
+  listWorkflows,
+  updateWorkflow,
+  deleteWorkflow,
+  toggleWorkflow,
+  evaluateWorkflows,
+  getWorkflowExecutions,
+  getAllWorkflowExecutions,
+  getWorkflowStats,
+  type Workflow,
+  type WorkflowTrigger,
+  type WorkflowCondition,
+  type WorkflowAction,
+  type WorkflowExecution,
+  type WorkflowActionResult,
+} from './workflows.js';
+
+// Data Protection (safeguards against accidental deletion)
+export {
+  protectDatabase,
+  unprotectDatabase,
+  isDatabaseProtected,
+  protectAllDatabases,
+  validateDeletion,
+  hasRecentBackup,
+  detectMassDataLoss,
+  isImmutableSupported,
+  type ProtectionOptions,
+  type DeletionValidation,
+} from './data-protection.js';

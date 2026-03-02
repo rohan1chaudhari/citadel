@@ -5,9 +5,14 @@ import { NavigationDrawer } from '@/components/NavigationDrawer';
 import { listApps, isSetupComplete } from '@citadel/core';
 import { cleanupOldAuditLogs } from '@citadel/core';
 import { runAllMigrations, runHostMigrations } from '@citadel/core';
+import { recordStartupStart, installShutdownHandlers, performStartupHealthCheck, logStartupComplete } from '@citadel/core';
+import { protectAllDatabases, detectMassDataLoss } from '@citadel/core';
 import { startBackupScheduler } from '@/lib/backup';
 import { startStuckTaskWatcher } from '@/lib/stuckTaskWatcher';
 import { ThemeProvider } from '@/lib/theme';
+
+// Record startup start time as early as possible
+recordStartupStart();
 
 export const viewport: Viewport = {
   width: 'device-width',
@@ -58,8 +63,42 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   const apps = setupComplete ? await listApps(false) : [];
 
   if (setupComplete) {
+    // Install shutdown handlers for graceful shutdown (SIGTERM/SIGINT)
+    installShutdownHandlers();
+    
+    // Perform startup health checks
+    try {
+      await performStartupHealthCheck();
+    } catch (err: any) {
+      console.error('[lifecycle] FATAL: Startup health check failed:', err?.message ?? err);
+      throw new Error(`Startup health check failed - cannot start server: ${err?.message ?? err}`);
+    }
+
+    // Detect potential mass data loss from previous incidents
+    const massLossCheck = await detectMassDataLoss();
+    if (massLossCheck.detected) {
+      console.error('[data-protection] WARNING: Potential data loss detected:', massLossCheck.details);
+      console.error('[data-protection] Affected apps:', massLossCheck.affectedApps?.join(', '));
+      console.error('[data-protection] Check backups before proceeding');
+      // Don't block startup, but log prominently
+    }
+
     // Run migrations for all apps on startup (app-level migrations)
     runAllMigrations().catch(err => console.error('Migration error:', err));
+
+    // Protect all databases from accidental deletion (Linux/macOS only)
+    protectAllDatabases().then(result => {
+      if (result.unsupported) {
+        console.log('[data-protection] File immutability not supported on this platform');
+      } else {
+        console.log(`[data-protection] Protected ${result.protected.length} database(s)`);
+        if (result.failed.length > 0) {
+          console.warn('[data-protection] Failed to protect:', result.failed.join(', '));
+        }
+      }
+    }).catch(err => {
+      console.error('[data-protection] Failed to protect databases:', err);
+    });
 
     // Run audit log cleanup on startup (server-side only)
     cleanupOldAuditLogs();
@@ -69,6 +108,9 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
 
     // Sweep stale in_progress tasks (runs immediately and every 10m)
     startStuckTaskWatcher();
+    
+    // Log startup complete
+    logStartupComplete();
   }
 
   return (
