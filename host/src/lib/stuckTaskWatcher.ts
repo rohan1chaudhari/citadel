@@ -69,9 +69,12 @@ export async function runStuckTaskSweep(): Promise<void> {
     for (const task of stale) {
       const doneSignal = sessionLooksCompleted(task.session_id) || hasAutopilotDoneMarker(task.id);
       const nextStatus = doneSignal ? 'done' : 'todo';
+      const wasAutopilot = task.claimed_by === 'autopilot';
       const comment = doneSignal
-        ? '[AUTO_UNSTICK] Stale in_progress task auto-resolved to done (completion signal detected).'
-        : '[AUTO_UNSTICK] Stale in_progress task moved back to todo (no completion signal detected).';
+        ? `[AUTO_UNSTICK] Stale in_progress task auto-resolved to done${wasAutopilot ? ' (autopilot)' : ''} (completion signal detected).`
+        : `[AUTO_UNSTICK] Stale in_progress task moved back to todo${wasAutopilot ? ' (autopilot)' : ''} (no completion signal, >20m stale).`;
+
+      console.log(`[stuck-task-watcher] unsticking #${task.id} "${task.title}" → ${nextStatus}${wasAutopilot ? ' (was autopilot)' : ''}`);
 
       dbExec(
         APP_ID,
@@ -97,11 +100,14 @@ export async function runStuckTaskSweep(): Promise<void> {
         from: 'in_progress',
         to: nextStatus,
         sessionId: task.session_id,
+        wasAutopilot,
       });
-    }
 
-    // If a stale task had the active lock, release it.
-    releaseAgentLock();
+      // Release agent lock if this task held it
+      if (wasAutopilot && task.session_id) {
+        releaseAgentLock();
+      }
+    }
   } catch (error) {
     console.error('[stuck-task-watcher] sweep failed:', error);
     audit(APP_ID, 'scrum.tasks.auto_unstick_failed', { error: String(error) });
@@ -113,7 +119,7 @@ export async function runStuckTaskSweep(): Promise<void> {
 export function startStuckTaskWatcher(): void {
   if (watcherInterval) return;
 
-  console.log('[stuck-task-watcher] starting (interval: 10m, stale after: 45m)');
+  console.log('[stuck-task-watcher] starting (interval: 10m, stale after: 20m)');
 
   runStuckTaskSweep();
   watcherInterval = setInterval(runStuckTaskSweep, WATCH_INTERVAL_MS);
