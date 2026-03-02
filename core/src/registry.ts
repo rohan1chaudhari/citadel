@@ -87,6 +87,10 @@ function validateManifest(manifest: unknown, filePath: string): { valid: true } 
     errors.push({ field: 'hidden', message: 'Field "hidden" must be a boolean' });
   }
 
+  if ('widget' in obj && obj.widget !== undefined && typeof obj.widget !== 'boolean') {
+    errors.push({ field: 'widget', message: 'Field "widget" must be a boolean' });
+  }
+
   if ('manifest_version' in obj && obj.manifest_version !== undefined && typeof obj.manifest_version !== 'string') {
     errors.push({ field: 'manifest_version', message: 'Field "manifest_version" must be a string' });
   }

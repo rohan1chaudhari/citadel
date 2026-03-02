@@ -54,6 +54,7 @@ export {
   validateManifest,
   type DbPermissions,
   type StoragePermissions,
+  type IntentConfig,
   // Note: PermissionScopes is exported from permissions.js above
   type AppManifest as AppManifestSchema,
   type AppManifestV0,
@@ -65,7 +66,7 @@ export {
   type ManifestValidationResult,
 } from './manifest-schema.js';
 
-// Migrations
+// Migrations (app-level)
 export {
   runMigrationsForApp,
   runAllMigrations,
@@ -74,3 +75,88 @@ export {
   type MigrationResult,
   type RollbackResult,
 } from './migrations.js';
+
+// Host Migrations (host-level)
+export {
+  runHostMigrations,
+  getHostMigrationStatus,
+  areHostMigrationsCurrent,
+  type HostMigrationResult,
+} from './hostMigrations.js';
+
+// Host Settings
+export {
+  getSetting,
+  setSetting,
+  isSetupComplete,
+  completeSetup,
+  getAllSettings,
+  saveApiKeys,
+  type HostSettings,
+} from './settings.js';
+
+// Quotas
+export {
+  getQuota,
+  setQuota,
+  removeQuota,
+  getAllQuotas,
+  getAppStorageUsage,
+  checkQuota,
+  checkWriteQuota,
+  formatBytes,
+  getQuotaStatus,
+} from './quota.js';
+
+// Auth
+export {
+  isAuthEnabled,
+  getPassphraseHash,
+  isAuthConfigured,
+  hashPassphrase,
+  verifyPassphrase,
+  setPassphrase,
+  generateSessionToken,
+  createSession,
+  validateSession,
+  destroySession,
+  getSessionCookie,
+  getClearSessionCookie,
+  extractSessionToken,
+  isAuthenticated,
+  getAuthStatus,
+  type AuthSession,
+} from './auth.js';
+
+// Network Policy
+export {
+  extractHostname,
+  matchesDomainPattern,
+  getNetworkAllowlist,
+  checkNetworkPolicy,
+  logBlockedRequest,
+  appFetch,
+  isHostnameAllowed,
+  type NetworkPolicyResult,
+} from './network-policy.js';
+
+// Intents
+export {
+  hasIntentConsent,
+  grantIntentConsent,
+  revokeIntentConsent,
+  getAppIntentConsents,
+  getAllIntentConsents,
+  findIntentProvider,
+  getAppProvidedIntents,
+  getAppUsedIntents,
+  canInvokeIntent,
+  registerBuiltinIntent,
+  isBuiltinIntent,
+  registerDefaultBuiltinIntents,
+  invokeIntent,
+  getIntentCapabilities,
+  type IntentConsent,
+  type IntentInvokeRequest,
+  type IntentInvokeResult,
+} from './intents.js';

@@ -10,4 +10,7 @@ permissions:
     read: true
     write: true
   ai: true
+  network:
+    - api.openai.com
+    - api.anthropic.com
 connectors: []

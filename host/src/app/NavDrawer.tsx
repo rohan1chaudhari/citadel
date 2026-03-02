@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 
 interface App {
   id: string;
@@ -15,10 +15,17 @@ interface NavDrawerProps {
   hiddenApps?: string[];
 }
 
+interface AuthStatus {
+  enabled: boolean;
+  authenticated: boolean;
+}
+
 export function NavDrawer({ apps, hiddenApps = [] }: NavDrawerProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const [authStatus, setAuthStatus] = useState<AuthStatus | null>(null);
   const pathname = usePathname();
+  const router = useRouter();
 
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth < 768);
@@ -27,12 +34,40 @@ export function NavDrawer({ apps, hiddenApps = [] }: NavDrawerProps) {
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
+  // Fetch auth status
+  useEffect(() => {
+    fetch('/api/auth/status')
+      .then(res => res.json())
+      .then(data => {
+        if (data.ok) {
+          setAuthStatus({
+            enabled: data.enabled,
+            authenticated: data.authenticated,
+          });
+        }
+      })
+      .catch(() => {
+        // Auth endpoint may not exist in older versions
+        setAuthStatus({ enabled: false, authenticated: true });
+      });
+  }, []);
+
   // Close drawer when route changes
   useEffect(() => {
     setIsOpen(false);
   }, [pathname]);
 
   const visibleApps = apps.filter(app => !hiddenApps.includes(app.id));
+
+  const handleLogout = async () => {
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' });
+      router.push('/login');
+      router.refresh();
+    } catch (error) {
+      console.error('Logout failed:', error);
+    }
+  };
 
   return (
     <>
@@ -146,6 +181,19 @@ export function NavDrawer({ apps, hiddenApps = [] }: NavDrawerProps) {
               </svg>
               <span className="font-medium">System Status</span>
             </Link>
+            
+            {/* Logout button - only shown when auth is enabled */}
+            {authStatus?.enabled && authStatus?.authenticated && (
+              <button
+                onClick={handleLogout}
+                className="w-full flex items-center gap-3 px-4 py-2 rounded-lg text-zinc-500 hover:bg-zinc-50 transition mt-2"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                </svg>
+                <span className="font-medium">Logout</span>
+              </button>
+            )}
           </div>
         </div>
       </aside>

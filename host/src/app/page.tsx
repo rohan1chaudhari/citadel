@@ -1,11 +1,18 @@
 import { Card, LinkA, Shell } from '@/components/Shell';
-import { listApps } from '@citadel/core';
+import { listApps, isSetupComplete } from '@citadel/core';
 import { AppGrid } from './AppGrid';
+import { WidgetSection } from './WidgetSection';
 import { GlobalSearch } from './GlobalSearch';
+import { redirect } from 'next/navigation';
 
 export const runtime = 'nodejs';
 
 export default async function HomePage() {
+  // Redirect to setup if not completed
+  if (!isSetupComplete()) {
+    redirect('/setup');
+  }
+
   const apps = await listApps(false); // exclude hidden apps
 
   return (
@@ -15,6 +22,8 @@ export default async function HomePage() {
       </div>
 
       <AppGrid apps={apps} />
+
+      <WidgetSection apps={apps} />
 
       <Card className="mt-8">
         <div className="flex flex-wrap items-center justify-between gap-3">

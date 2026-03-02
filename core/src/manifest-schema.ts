@@ -28,6 +28,16 @@ export type StoragePermissions = {
 };
 
 /**
+ * Intent definition - actions an app can handle or wants to invoke
+ */
+export type IntentConfig = {
+  /** List of action URIs this app provides (e.g., ["gym.log-exercise", "notes.create"]) */
+  provides?: string[];
+  /** List of action URIs this app wants to invoke (e.g., ["citadel.search", "citadel.share-text"]) */
+  uses?: string[];
+};
+
+/**
  * Full permission scopes an app can request
  */
 export type PermissionScopes = {
@@ -46,6 +56,8 @@ export type PermissionScopes = {
     /** Can receive agent callbacks */
     callback?: boolean;
   };
+  /** Intent permissions for cross-app communication */
+  intents?: IntentConfig;
 };
 
 // ============================================================================
@@ -188,6 +200,18 @@ export type AppManifest = {
    * Defaults to "1.0" if not specified
    */
   manifest_version?: string;
+
+  /**
+   * Intent system configuration
+   * Allows apps to declare actions they handle and actions they want to invoke
+   */
+  intents?: IntentConfig;
+
+  /**
+   * If true, app provides a widget for the home screen
+   * Widget data is fetched from GET /api/apps/<appId>/widget
+   */
+  widget?: boolean;
 };
 
 /**
@@ -324,7 +348,39 @@ export const MANIFEST_JSON_SCHEMA = {
           },
           description: 'Allowed external domains',
         },
+        intents: {
+          type: 'object',
+          properties: {
+            provides: {
+              type: 'array',
+              items: { type: 'string' },
+              description: 'Action URIs this app provides',
+            },
+            uses: {
+              type: 'array',
+              items: { type: 'string' },
+              description: 'Action URIs this app wants to invoke',
+            },
+          },
+          description: 'Intent permissions for cross-app communication',
+        },
       },
+    },
+    intents: {
+      type: 'object',
+      properties: {
+        provides: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Action URIs this app provides (e.g., ["gym.log-exercise"])',
+        },
+        uses: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Action URIs this app wants to invoke (e.g., ["citadel.search"])',
+        },
+      },
+      description: 'Intent system configuration for cross-app communication',
     },
     dependencies: {
       type: 'array',

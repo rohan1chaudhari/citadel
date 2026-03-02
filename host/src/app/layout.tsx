@@ -2,10 +2,10 @@ import type { ReactNode } from 'react';
 import type { Viewport } from 'next';
 import './globals.css';
 import { NavigationDrawer } from '@/components/NavigationDrawer';
-import { listApps } from '@citadel/core';
+import { listApps, isSetupComplete } from '@citadel/core';
 import { cleanupOldAuditLogs } from '@citadel/core';
-import { runAllMigrations } from '@citadel/core';
-import { startBackupScheduler, runBackupIfNeeded } from '@/lib/backup';
+import { runAllMigrations, runHostMigrations } from '@citadel/core';
+import { startBackupScheduler } from '@/lib/backup';
 import { startStuckTaskWatcher } from '@/lib/stuckTaskWatcher';
 import { ThemeProvider } from '@/lib/theme';
 
@@ -37,19 +37,39 @@ export const metadata = {
 };
 
 export default async function RootLayout({ children }: { children: ReactNode }) {
-  const apps = await listApps(false);
+  const setupComplete = isSetupComplete();
+  
+  // Run host-level migrations FIRST before anything else
+  // This must succeed before the server can accept requests
+  if (setupComplete) {
+    try {
+      const hostMigrationResult = await runHostMigrations();
+      if (hostMigrationResult.applied.length > 0) {
+        console.log('[host-migrations] Applied:', hostMigrationResult.applied.join(', '));
+      }
+    } catch (err: any) {
+      // Migration errors prevent startup - this is critical for data integrity
+      console.error('[host-migrations] FATAL: Host migration failed:', err?.message ?? err);
+      throw new Error(`Host migration failed - cannot start server: ${err?.message ?? err}`);
+    }
+  }
+  
+  // Only load apps and run startup tasks if setup is complete
+  const apps = setupComplete ? await listApps(false) : [];
 
-  // Run migrations for all apps on startup
-  runAllMigrations().catch(err => console.error('Migration error:', err));
+  if (setupComplete) {
+    // Run migrations for all apps on startup (app-level migrations)
+    runAllMigrations().catch(err => console.error('Migration error:', err));
 
-  // Run audit log cleanup on startup (server-side only)
-  cleanupOldAuditLogs();
+    // Run audit log cleanup on startup (server-side only)
+    cleanupOldAuditLogs();
 
-  // Start backup scheduler (runs immediately and every 24h)
-  startBackupScheduler();
+    // Start backup scheduler (runs immediately and every 24h)
+    startBackupScheduler();
 
-  // Sweep stale in_progress tasks (runs immediately and every 10m)
-  startStuckTaskWatcher();
+    // Sweep stale in_progress tasks (runs immediately and every 10m)
+    startStuckTaskWatcher();
+  }
 
   return (
     <html lang="en" suppressHydrationWarning>
@@ -62,8 +82,8 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
       </head>
       <body className="min-h-screen overflow-x-hidden">
         <ThemeProvider>
-          <NavigationDrawer apps={apps} />
-          <div className="mx-auto w-full max-w-3xl overflow-x-hidden px-3 sm:px-4 md:px-6 pt-[max(env(safe-area-inset-top),0.75rem)] sm:pt-4 md:pt-6 pb-[calc(env(safe-area-inset-bottom)+1rem)] sm:pb-6 md:py-8">
+          {setupComplete && <NavigationDrawer apps={apps} />}
+          <div className={`mx-auto w-full max-w-3xl overflow-x-hidden px-3 sm:px-4 md:px-6 pt-[max(env(safe-area-inset-top),0.75rem)] sm:pt-4 md:pt-6 pb-[calc(env(safe-area-inset-bottom)+1rem)] sm:pb-6 md:py-8 ${!setupComplete ? 'max-w-none p-0' : ''}`}>
             {children}
           </div>
         </ThemeProvider>

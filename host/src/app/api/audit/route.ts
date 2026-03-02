@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { DatabaseSync } from 'node:sqlite';
 import fs from 'node:fs';
 import path from 'node:path';
+import { errorResponse } from '@/lib/apiResponse';
 
 export const runtime = 'nodejs';
 
@@ -104,10 +105,7 @@ export async function GET(request: NextRequest) {
     });
   } catch (error) {
     console.error('Audit log fetch error:', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch audit logs' },
-      { status: 500 }
-    );
+    return errorResponse('Failed to fetch audit logs', 500);
   }
 }
 

@@ -10,32 +10,37 @@ env:
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
-  # Verify version matches tag before proceeding
-  verify-version:
+  validate-and-release:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+      
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: Verify package.json version matches tag
+      - name: Extract version from tag
+        id: version
         run: |
-          TAG_VERSION=${GITHUB_REF_NAME#v}
+          TAG=${GITHUB_REF#refs/tags/}
+          VERSION=${TAG#v}
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Extracted version: $VERSION from tag: $TAG"
+
+      - name: Validate package.json version matches tag
+        run: |
           PKG_VERSION=$(node -p "require('./package.json').version")
-          if [ "$TAG_VERSION" != "$PKG_VERSION" ]; then
-            echo "Error: Tag version ($TAG_VERSION) does not match package.json version ($PKG_VERSION)"
+          if [ "$PKG_VERSION" != "${{ steps.version.outputs.version }}" ]; then
+            echo "❌ Version mismatch: package.json is $PKG_VERSION, tag is ${{ steps.version.outputs.version }}"
             exit 1
           fi
-          echo "✓ Version match confirmed: $TAG_VERSION"
+          echo "✅ Package.json version ($PKG_VERSION) matches tag"
 
-  # Smoke test: build passes before creating release
-  smoke-test:
-    runs-on: ubuntu-latest
-    needs: verify-version
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
+      - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -44,60 +49,111 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Install workspace dependencies
+      - name: Build packages (smoke test)
         run: |
-          cd core && npm ci && cd ..
-          cd host && npm ci && cd ..
+          cd core && npm run build && cd ..
+          cd host && npm run build && cd ..
+          echo "✅ Build passed"
 
-      - name: Build core package
-        run: npm run build --workspace=core
+      - name: Run tests
+        run: cd host && npm test
 
-      - name: Build host package
-        run: npm run build --workspace=host
-
-      - name: Verify build artifacts
+      - name: Generate changelog
+        id: changelog
         run: |
-          test -d core/dist || (echo "Core dist missing" && exit 1)
-          test -d host/.next || (echo "Host .next missing" && exit 1)
-          echo "✓ Smoke test passed - builds successful"
+          # Get the previous tag
+          PREV_TAG=$(git describe --tags --abbrev=0 ${{ steps.version.outputs.tag }}^ 2>/dev/null || echo "")
+          
+          if [ -z "$PREV_TAG" ]; then
+            echo "No previous tag found, using all commits"
+            COMMIT_RANGE=""
+          else
+            echo "Previous tag: $PREV_TAG"
+            COMMIT_RANGE="${PREV_TAG}..${{ steps.version.outputs.tag }}"
+          fi
+          
+          # Generate changelog from conventional commits
+          {
+            echo "CHANGELOG<<EOF"
+            echo "## What's Changed"
+            echo ""
+            
+            # Features
+            if [ -z "$COMMIT_RANGE" ]; then
+              FEATURES=$(git log --pretty=format:"%s" | grep -E "^feat(\(.+\))?:" || true)
+            else
+              FEATURES=$(git log $COMMIT_RANGE --pretty=format:"%s" | grep -E "^feat(\(.+\))?:" || true)
+            fi
+            if [ -n "$FEATURES" ]; then
+              echo "### ✨ Features"
+              echo "$FEATURES" | sed 's/^feat(\([^)]*\))\?:/* **\1:** /; s/^feat\!*:/\* /'
+              echo ""
+            fi
+            
+            # Fixes
+            if [ -z "$COMMIT_RANGE" ]; then
+              FIXES=$(git log --pretty=format:"%s" | grep -E "^fix(\(.+\))?:" || true)
+            else
+              FIXES=$(git log $COMMIT_RANGE --pretty=format:"%s" | grep -E "^fix(\(.+\))?:" || true)
+            fi
+            if [ -n "$FIXES" ]; then
+              echo "### 🐛 Bug Fixes"
+              echo "$FIXES" | sed 's/^fix(\([^)]*\))\?:/* **\1:** /; s/^fix\!*:/\* /'
+              echo ""
+            fi
+            
+            # Documentation
+            if [ -z "$COMMIT_RANGE" ]; then
+              DOCS=$(git log --pretty=format:"%s" | grep -E "^docs(\(.+\))?:" || true)
+            else
+              DOCS=$(git log $COMMIT_RANGE --pretty=format:"%s" | grep -E "^docs(\(.+\))?:" || true)
+            fi
+            if [ -n "$DOCS" ]; then
+              echo "### 📚 Documentation"
+              echo "$DOCS" | sed 's/^docs(\([^)]*\))\?:/* **\1:** /; s/^docs\!*:/\* /'
+              echo ""
+            fi
+            
+            # Other changes
+            if [ -z "$COMMIT_RANGE" ]; then
+              OTHERS=$(git log --pretty=format:"%s" | grep -vE "^(feat|fix|docs|chore|autopilot)(\(.+\))?:" | grep -vE "^Merge" | head -20 || true)
+            else
+              OTHERS=$(git log $COMMIT_RANGE --pretty=format:"%s" | grep -vE "^(feat|fix|docs|chore|autopilot)(\(.+\))?:" | grep -vE "^Merge" | head -20 || true)
+            fi
+            if [ -n "$OTHERS" ]; then
+              echo "### 📝 Other Changes"
+              echo "$OTHERS" | sed 's/^/* /'
+              echo ""
+            fi
+            
+            echo "---"
+            echo ""
+            echo "**Full Changelog**: https://github.com/${{ github.repository }}/compare/${PREV_TAG:-${{ steps.version.outputs.tag }}~1}...${{ steps.version.outputs.tag }}"
+            echo "EOF"
+          } >> $GITHUB_OUTPUT
 
-  # Build and push Docker image
-  build-and-push-image:
-    runs-on: ubuntu-latest
-    needs: [verify-version, smoke-test]
-    permissions:
-      contents: read
-      packages: write
-      attestations: write
-      id-token: write
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Docker Buildx
+      - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Log in to Container Registry
+      - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract metadata
+      - name: Extract Docker metadata
         id: meta
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
+            type=semver,pattern={{version}},value=${{ steps.version.outputs.tag }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ steps.version.outputs.tag }}
+            type=semver,pattern={{major}},value=${{ steps.version.outputs.tag }}
 
       - name: Build and push Docker image
-        id: push
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v5
         with:
           context: .
           push: true
@@ -105,143 +161,32 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-
-      - name: Generate artifact attestation
-        uses: actions/attest-build-provenance@v1
-        with:
-          subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          subject-digest: ${{ steps.push.outputs.digest }}
-          push-to-registry: true
-
-  # Generate changelog and create release
-  create-release:
-    runs-on: ubuntu-latest
-    needs: [verify-version, smoke-test, build-and-push-image]
-    permissions:
-      contents: write
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0  # Full history for changelog generation
-
-      - name: Generate changelog
-        id: changelog
-        run: |
-          # Get the current tag
-          CURRENT_TAG=${GITHUB_REF_NAME}
-          
-          # Get the previous tag (if any)
-          PREVIOUS_TAG=$(git describe --tags --abbrev=0 --exclude="$CURRENT_TAG" 2>/dev/null || echo "")
-          
-          if [ -z "$PREVIOUS_TAG" ]; then
-            # First release - include all commits
-            COMMIT_RANGE="HEAD"
-            echo "First release - including all commits"
-          else
-            COMMIT_RANGE="${PREVIOUS_TAG}..HEAD"
-            echo "Previous tag: $PREVIOUS_TAG"
-          fi
-          
-          echo "Current tag: $CURRENT_TAG"
-          echo "Commit range: $COMMIT_RANGE"
-          
-          # Generate changelog from conventional commits
-          CHANGELOG="## What's Changed"
-          
-          # Features
-          FEATURES=$(git log "$COMMIT_RANGE" --pretty=format:"- %s (%h)" --grep="^feat" 2>/dev/null || true)
-          if [ -n "$FEATURES" ]; then
-            CHANGELOG="$CHANGELOG
-
-### ✨ Features
-$FEATURES"
-          fi
-          
-          # Fixes
-          FIXES=$(git log "$COMMIT_RANGE" --pretty=format:"- %s (%h)" --grep="^fix" 2>/dev/null || true)
-          if [ -n "$FIXES" ]; then
-            CHANGELOG="$CHANGELOG
-
-### 🐛 Bug Fixes
-$FIXES"
-          fi
-          
-          # Documentation
-          DOCS=$(git log "$COMMIT_RANGE" --pretty=format:"- %s (%h)" --grep="^docs" 2>/dev/null || true)
-          if [ -n "$DOCS" ]; then
-            CHANGELOG="$CHANGELOG
-
-### 📚 Documentation
-$DOCS"
-          fi
-          
-          # Other changes (excluding merge commits)
-          OTHER=$(git log "$COMMIT_RANGE" --pretty=format:"- %s (%h)" --grep="^feat\|^fix\|^docs" --invert-grep --no-merges 2>/dev/null || true)
-          if [ -n "$OTHER" ]; then
-            CHANGELOG="$CHANGELOG
-
-### 🔧 Other Changes
-$OTHER"
-          fi
-          
-          # Add Docker image info
-          CHANGELOG="$CHANGELOG
-
-### 🐳 Docker Image
-\`\`\`
-docker pull ghcr.io/${{ github.repository }}:${CURRENT_TAG}
-\`\`\`"
-          
-          # Add full changelog link
-          if [ -n "$PREVIOUS_TAG" ]; then
-            CHANGELOG="$CHANGELOG
-
-**Full Changelog**: https://github.com/${{ github.repository }}/compare/${PREVIOUS_TAG}...${CURRENT_TAG}"
-          fi
-          
-          # Output the changelog
-          echo "changelog<<EOF" >> $GITHUB_OUTPUT
-          echo "$CHANGELOG" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+          platforms: linux/amd64,linux/arm64
 
       - name: Create source archive
         run: |
-          # Create source zip excluding unnecessary files
-          git archive --format=zip --prefix=citadel-${GITHUB_REF_NAME}/ \
-            --output=citadel-${GITHUB_REF_NAME}-source.zip \
-            HEAD
-          echo "Created source archive: citadel-${GITHUB_REF_NAME}-source.zip"
+          tar czf "citadel-${{ steps.version.outputs.tag }}.tar.gz" \
+            --exclude='.git' \
+            --exclude='node_modules' \
+            --exclude='*/node_modules' \
+            --exclude='.next' \
+            --exclude='*/.next' \
+            --exclude='*.tar.gz' \
+            .
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
         with:
-          name: Release ${{ github.ref_name }}
-          body: ${{ steps.changelog.outputs.changelog }}
+          name: Release ${{ steps.version.outputs.tag }}
+          body: ${{ steps.changelog.outputs.CHANGELOG }}
           files: |
-            citadel-${{ github.ref_name }}-source.zip
+            citadel-${{ steps.version.outputs.tag }}.tar.gz
           fail_on_unmatched_files: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  # Summary
-  release-summary:
-    runs-on: ubuntu-latest
-    needs: [verify-version, smoke-test, build-and-push-image, create-release]
-    if: always()
-    steps:
-      - name: Release Summary
+      - name: Output release summary
         run: |
-          echo "## Release Summary for ${{ github.ref_name }}"
-          echo ""
-          echo "| Job | Status |"
-          echo "|-----|--------|"
-          echo "| Verify Version | ${{ needs.verify-version.result }} |"
-          echo "| Smoke Test | ${{ needs.smoke-test.result }} |"
-          echo "| Build & Push Image | ${{ needs.build-and-push-image.result }} |"
-          echo "| Create Release | ${{ needs.create-release.result }} |"
-          echo ""
-          echo "### Docker Image"
-          echo "\`\`\`"
-          echo "docker pull ghcr.io/${{ github.repository }}:${{ github.ref_name }}"
-          echo "\`\`\`"
+          echo "✅ Release ${{ steps.version.outputs.tag }} created successfully!"
+          echo "📦 Docker image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.tag }}"
+          echo "📝 Changelog generated from conventional commits"

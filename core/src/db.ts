@@ -6,6 +6,7 @@ import { appDbPath, appDataRoot } from './paths.js';
 import { assertSqlAllowed } from './sqlGuardrails.js';
 import { audit } from './audit.js';
 import { hasDbPermission } from './permissions.js';
+import { checkWriteQuota, formatBytes, getAppStorageUsage } from './quota.js';
 
 const dbs = new Map<string, DatabaseSync>();
 
@@ -34,6 +35,28 @@ function isWriteOperation(sql: string): boolean {
   return writeVerbs.includes(verb(sql));
 }
 
+function checkDbQuotaBeforeWrite(appId: string, operation: string, sql: string) {
+  // For DB operations, we check if the DB file has room to grow
+  // SQLite DBs can grow significantly during writes due to WAL, journal, etc.
+  // We use a conservative estimate: ensure at least 10MB headroom for growth
+  const HEADROOM_BYTES = 10 * 1024 * 1024; // 10MB
+  
+  const quotaCheck = checkWriteQuota(appId, HEADROOM_BYTES);
+  
+  if (!quotaCheck.allowed) {
+    const error = `Storage quota exceeded for app '${appId}': DB cannot grow. Used ${formatBytes(quotaCheck.usedBytes)} of ${formatBytes(quotaCheck.quotaBytes)}`;
+    audit(appId, `db.${operation}.quota_exceeded`, { 
+      verb: verb(sql),
+      used: quotaCheck.usedBytes,
+      quota: quotaCheck.quotaBytes
+    });
+    const err = new Error(error);
+    (err as any).code = 'QUOTA_EXCEEDED';
+    (err as any).statusCode = 507; // Insufficient Storage
+    throw err;
+  }
+}
+
 export function dbExec(appId: string, sql: string, params: unknown[] = []) {
   assertAppId(appId);
   assertSqlAllowed(sql);
@@ -46,6 +69,11 @@ export function dbExec(appId: string, sql: string, params: unknown[] = []) {
     const error = `Permission denied: app '${appId}' does not have db.${requiredPermission} permission`;
     audit(appId, 'db.exec.denied', { verb: verb(sql), error });
     throw new Error(error);
+  }
+  
+  // Check quota before write operations
+  if (isWrite) {
+    checkDbQuotaBeforeWrite(appId, 'exec', sql);
   }
   
   void ensureDbDir(appId);

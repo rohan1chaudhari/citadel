@@ -44,6 +44,7 @@ const colors = {
   blue: '\x1b[34m',
   cyan: '\x1b[36m',
   bold: '\x1b[1m',
+  dim: '\x1b[2m',
 };
 
 function log(msg, color = 'reset') {
@@ -61,6 +62,36 @@ function success(msg) {
 
 function info(msg) {
   log(`  ${msg}`, 'cyan');
+}
+
+function warn(msg) {
+  log(`⚠ ${msg}`, 'yellow');
+}
+
+// Sync app routes using the sync script
+async function syncAppRoutes(appId = null) {
+  const syncScript = path.join(SCRIPT_DIR, 'sync-app-routes.mjs');
+  const args = appId ? [appId] : [];
+  
+  return new Promise((resolve, reject) => {
+    const proc = spawn('node', [syncScript, ...args], {
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+
+    let stdout = '';
+    let stderr = '';
+
+    proc.stdout.on('data', (data) => { stdout += data; });
+    proc.stderr.on('data', (data) => { stderr += data; });
+
+    proc.on('close', (code) => {
+      if (code === 0) {
+        resolve({ stdout, stderr });
+      } else {
+        reject(new Error(`sync-app-routes failed: ${stderr || stdout}`));
+      }
+    });
+  });
 }
 
 // App ID validation
@@ -711,6 +742,15 @@ async function updateSingleApp(appId) {
     error('Update failed. App restored to previous state.');
   }
 
+  // Sync routes (for external-style apps that include page.tsx/api)
+  info('Syncing routes...');
+  try {
+    await syncAppRoutes(appId);
+  } catch (err) {
+    // Non-fatal - app may still work with hardcoded routes
+    info(`Route sync note: ${err.message}`);
+  }
+
   // Success - clean up backup
   info('Cleaning up backup...');
   await fs.rm(backupDir, { recursive: true, force: true });
@@ -851,6 +891,23 @@ async function uninstallCommand(appId, options = {}) {
     // Ignore errors - migrations table may not exist
   }
 
+  // Clean up synced routes (remove symlinks from host)
+  info('Cleaning up synced routes...');
+  const hostAppDir = path.join(REPO_ROOT, 'host', 'src', 'app', 'apps', appId);
+  const hostApiDir = path.join(REPO_ROOT, 'host', 'src', 'app', 'api', 'apps', appId);
+  
+  for (const dir of [hostAppDir, hostApiDir]) {
+    try {
+      const stat = await fs.lstat(dir);
+      if (stat.isSymbolicLink()) {
+        await fs.unlink(dir);
+        info(`Removed symlink: ${dir}`);
+      }
+    } catch {
+      // Not a symlink or doesn't exist - ignore
+    }
+  }
+
   // Success
   success(`App "${appId}" uninstalled successfully`);
   if (deleteData) {
@@ -861,7 +918,11 @@ async function uninstallCommand(appId, options = {}) {
 }
 
 // Templates for app scaffolding
-const TEMPLATES = {
+// Cache directory for remote templates
+const TEMPLATE_CACHE_DIR = path.join(DATA_DIR, 'template-cache');
+
+// Local built-in templates (minimal versions - full templates live in templates/ dir)
+const LOCAL_TEMPLATES = {
   blank: {
     name: 'Blank',
     description: 'Minimal app with basic structure',
@@ -895,6 +956,18 @@ export async function GET() {
 }`,
   },
   crud: {
+    name: 'CRUD',
+    description: 'Full CRUD app with list, create, edit, and delete',
+  },
+  ai: {
+    name: 'AI',
+    description: 'App with AI API integration',
+  },
+  dashboard: {
+    name: 'Dashboard',
+    description: 'Read-only data display with charts placeholder',
+  },
+};
     name: 'CRUD',
     description: 'Full CRUD app with list, create, edit, and delete',
     migration: `CREATE TABLE IF NOT EXISTS items (
@@ -1040,15 +1113,211 @@ function listTemplates() {
   }
 }
 
-// CREATE COMMAND
+// Fetch templates from registry
+async function fetchRegistryTemplates() {
+  try {
+    const response = await fetch(REGISTRY_URL);
+    if (!response.ok) {
+      return { ok: false, error: `Registry returned ${response.status}` };
+    }
+    const registry = await response.json();
+    return { 
+      ok: true, 
+      templates: registry.templates || [],
+      registryUrl: REGISTRY_URL 
+    };
+  } catch (err) {
+    if (err.message.includes('fetch failed') || err.message.includes('ENOTFOUND') || err.message.includes('ECONNREFUSED')) {
+      return { ok: false, error: 'offline' };
+    }
+    return { ok: false, error: err.message };
+  }
+}
+
+// Validate template structure
+async function validateTemplate(templateDir) {
+  const requiredFiles = ['app.yaml', 'page.tsx', 'README.md'];
+  const missing = [];
+  
+  for (const file of requiredFiles) {
+    const filePath = path.join(templateDir, file);
+    try {
+      await fs.access(filePath);
+    } catch {
+      missing.push(file);
+    }
+  }
+  
+  if (missing.length > 0) {
+    return { valid: false, missing };
+  }
+  
+  // Validate app.yaml can be parsed
+  try {
+    const manifestPath = path.join(templateDir, 'app.yaml');
+    const manifest = await readManifest(manifestPath);
+    return { valid: true, manifest };
+  } catch (err) {
+    return { valid: false, error: `Invalid app.yaml: ${err.message}` };
+  }
+}
+
+// Download and cache a remote template
+async function downloadTemplate(templateInfo) {
+  if (!templateInfo.repo_url) {
+    throw new Error('Template has no repository URL');
+  }
+  
+  const templateName = templateInfo.id;
+  const cacheDir = path.join(TEMPLATE_CACHE_DIR, templateName);
+  
+  // Ensure cache directory exists
+  await fs.mkdir(TEMPLATE_CACHE_DIR, { recursive: true });
+  
+  // Check if already cached
+  try {
+    await fs.access(path.join(cacheDir, 'app.yaml'));
+    info(`Using cached template: ${templateName}`);
+    return cacheDir;
+  } catch {
+    // Not cached, need to download
+  }
+  
+  log(`Downloading template: ${templateName}...`, 'blue');
+  info(`Repository: ${templateInfo.repo_url}`);
+  
+  // Clone to temp directory first
+  const tempDir = path.join(DATA_DIR, 'temp', `template-${templateName}-${Date.now()}`);
+  await fs.mkdir(tempDir, { recursive: true });
+  
+  try {
+    await gitClone(templateInfo.repo_url, tempDir);
+    
+    // Validate the template
+    const validation = await validateTemplate(tempDir);
+    if (!validation.valid) {
+      if (validation.missing) {
+        throw new Error(`Template validation failed. Missing required files: ${validation.missing.join(', ')}`);
+      }
+      throw new Error(`Template validation failed: ${validation.error}`);
+    }
+    
+    // Move to cache
+    await fs.mkdir(cacheDir, { recursive: true });
+    await copyDir(tempDir, cacheDir);
+    
+    success(`Template downloaded and cached: ${templateName}`);
+    return cacheDir;
+  } finally {
+    // Clean up temp directory
+    try {
+      await fs.rm(tempDir, { recursive: true, force: true });
+    } catch {
+      // Ignore cleanup errors
+    }
+  }
+}
+
+// TEMPLATES COMMAND - List all available templates
+async function templatesCommand() {
+  log('Available Templates', 'blue');
+  log('');
+  
+  // Show local templates
+  log(`${colors.cyan}${colors.bold}Built-in Templates:${colors.reset}`);
+  for (const [key, tmpl] of Object.entries(LOCAL_TEMPLATES)) {
+    info(`  ${colors.green}${key.padEnd(12)}${colors.reset} ${tmpl.description}`);
+  }
+  
+  // Show templates from registry
+  log('');
+  log(`${colors.cyan}Fetching remote templates...${colors.reset}`);
+  
+  const result = await fetchRegistryTemplates();
+  if (!result.ok) {
+    if (result.error === 'offline') {
+      log('  (Registry unavailable - offline)', 'yellow');
+    } else {
+      log(`  (Registry error: ${result.error})`, 'yellow');
+    }
+  } else if (result.templates.length === 0) {
+    log('  (No community templates in registry)', 'dim');
+  } else {
+    log('');
+    log(`${colors.cyan}${colors.bold}Community Templates:${colors.reset}`);
+    for (const tmpl of result.templates) {
+      const installed = await isTemplateCached(tmpl.id);
+      const status = installed ? `${colors.green}[cached]${colors.reset}` : '';
+      info(`  ${colors.green}${tmpl.id.padEnd(12)}${colors.reset} ${tmpl.description || 'No description'} ${status}`);
+      if (tmpl.author) {
+        info(`              ${colors.dim}by ${tmpl.author}${colors.reset}`);
+      }
+    }
+  }
+  
+  log('');
+  info('Use a template:');
+  info('  citadel-app create <app-id> --template=<name>');
+  log('');
+  info('Local templates are built-in. Community templates are downloaded');
+  info('from the registry and cached for offline use.');
+}
+
+// Check if template is cached
+async function isTemplateCached(templateName) {
+  const cacheDir = path.join(TEMPLATE_CACHE_DIR, templateName);
+  try {
+    await fs.access(path.join(cacheDir, 'app.yaml'));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// Get template directory (local or remote)
+async function getTemplateDirectory(templateName) {
+  // First check if it's a local built-in template
+  if (LOCAL_TEMPLATES[templateName]) {
+    const localDir = path.join(REPO_ROOT, 'templates', templateName);
+    try {
+      await fs.access(path.join(localDir, 'app.yaml'));
+      return { type: 'local', dir: localDir };
+    } catch {
+      // Local template defined but files not found
+    }
+  }
+  
+  // Check if it's a cached remote template
+  const cacheDir = path.join(TEMPLATE_CACHE_DIR, templateName);
+  try {
+    await fs.access(path.join(cacheDir, 'app.yaml'));
+    return { type: 'cached', dir: cacheDir };
+  } catch {
+    // Not cached
+  }
+  
+  // Try to fetch from registry
+  const result = await fetchRegistryTemplates();
+  if (result.ok) {
+    const remoteTemplate = result.templates.find(t => t.id === templateName);
+    if (remoteTemplate) {
+      const downloadedDir = await downloadTemplate(remoteTemplate);
+      return { type: 'remote', dir: downloadedDir };
+    }
+  }
+  
+  return null;
+}
+
+// CREATE COMMAND - Updated to support remote templates
 async function createCommand(appId, options = {}) {
   if (options.listTemplates) {
-    listTemplates();
+    await templatesCommand();
     return;
   }
 
   if (!appId) {
-    error('Usage: citadel-app create <app-id> [--template=<name>] [--list-templates]');
+    error('Usage: citadel-app create <app-id> [--template=<name>]');
   }
 
   const idCheck = validateAppId(appId);
@@ -1058,10 +1327,17 @@ async function createCommand(appId, options = {}) {
 
   // Validate template
   const templateName = options.template || 'blank';
-  const template = TEMPLATES[templateName];
-  if (!template) {
-    error(`Unknown template: "${templateName}". Use --list-templates to see available templates.`);
+  
+  log(`Creating app scaffold: ${appId} (template: ${templateName})`, 'blue');
+  
+  // Get template directory (local, cached, or remote)
+  const templateInfo = await getTemplateDirectory(templateName);
+  
+  if (!templateInfo) {
+    error(`Unknown template: "${templateName}". Run 'citadel-app templates' to see available templates.`);
   }
+  
+  info(`Using ${templateInfo.type} template: ${templateName}`);
 
   const targetDir = path.join(APPS_DIR, appId);
   const hostAppDir = path.join(REPO_ROOT, 'host', 'src', 'app', 'apps', appId);
@@ -1083,8 +1359,6 @@ async function createCommand(appId, options = {}) {
     // expected: does not exist
   }
 
-  log(`Creating app scaffold: ${appId} (template: ${templateName})`, 'blue');
-
   // Create directories
   await fs.mkdir(path.join(targetDir, 'migrations'), { recursive: true });
   await fs.mkdir(hostAppDir, { recursive: true });
@@ -1098,19 +1372,16 @@ async function createCommand(appId, options = {}) {
 
   const componentName = title.replace(/[^A-Za-z0-9]/g, '') || 'NewApp';
 
-  const appYaml = `id: ${appId}
-name: ${title}
-version: 0.1.0
-manifest_version: "1.0"
-permissions:
-  db:
-    read: true
-    write: true
-  storage:
-    read: false
-    write: false
-connectors: []
-`;
+  // Copy template files
+  const templateDir = templateInfo.dir;
+  
+  // Read and update app.yaml
+  const templateManifest = await readManifest(path.join(templateDir, 'app.yaml'));
+  templateManifest.id = appId;
+  templateManifest.name = title;
+  templateManifest.version = '0.1.0';
+  
+  const appYaml = yaml.stringify(templateManifest);
 
   const readme = `# ${title}
 
@@ -1135,14 +1406,75 @@ citadel-app create ${appId} --template=${templateName}
 5. Start the host and visit http://localhost:3000/apps/${appId}
 `;
 
-  // Write app files
+  // Copy files from template
   await fs.writeFile(path.join(targetDir, 'app.yaml'), appYaml, 'utf8');
-  await fs.writeFile(path.join(targetDir, 'migrations', '001_initial.sql'), template.migration, 'utf8');
   await fs.writeFile(path.join(targetDir, 'README.md'), readme, 'utf8');
+  
+  // Copy migrations if they exist
+  const templateMigrationsDir = path.join(templateDir, 'migrations');
+  try {
+    await fs.access(templateMigrationsDir);
+    const migrationFiles = await fs.readdir(templateMigrationsDir);
+    for (const file of migrationFiles) {
+      if (file.endsWith('.sql')) {
+        const srcPath = path.join(templateMigrationsDir, file);
+        const destPath = path.join(targetDir, 'migrations', file);
+        await fs.copyFile(srcPath, destPath);
+      }
+    }
+  } catch {
+    // No migrations directory, create a default one
+    const defaultMigration = `CREATE TABLE IF NOT EXISTS entries (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  title TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);`;
+    await fs.writeFile(path.join(targetDir, 'migrations', '001_initial.sql'), defaultMigration, 'utf8');
+  }
 
-  // Write host files
-  await fs.writeFile(path.join(hostAppDir, 'page.tsx'), template.pageComponent(appId, title, componentName), 'utf8');
-  await fs.writeFile(path.join(hostApiDir, 'route.ts'), template.apiRoute(appId), 'utf8');
+  // Copy and transform page.tsx
+  let pageContent = await fs.readFile(path.join(templateDir, 'page.tsx'), 'utf8');
+  pageContent = pageContent
+    .replace(/\{\{app_id\}\}/g, appId)
+    .replace(/\{\{app_name\}\}/g, title)
+    .replace(/\{\{AppName\}\}/g, componentName);
+  await fs.writeFile(path.join(hostAppDir, 'page.tsx'), pageContent, 'utf8');
+
+  // Copy API routes if they exist
+  const templateApiDir = path.join(templateDir, 'api');
+  try {
+    await fs.access(templateApiDir);
+    
+    async function copyApiDir(src, dest) {
+      await fs.mkdir(dest, { recursive: true });
+      const entries = await fs.readdir(src, { withFileTypes: true });
+      for (const entry of entries) {
+        const srcPath = path.join(src, entry.name);
+        const destPath = path.join(dest, entry.name);
+        if (entry.isDirectory()) {
+          await copyApiDir(srcPath, destPath);
+        } else {
+          let content = await fs.readFile(srcPath, 'utf8');
+          content = content
+            .replace(/\{\{app_id\}\}/g, appId)
+            .replace(/\{\{APP_ID\}\}/g, `'${appId}'`);
+          await fs.writeFile(destPath, content, 'utf8');
+        }
+      }
+    }
+    
+    await copyApiDir(templateApiDir, hostApiDir);
+  } catch {
+    // No API routes, create a default one
+    const apiRoute = `import { NextResponse } from 'next/server';
+
+export const runtime = 'nodejs';
+
+export async function GET() {
+  return NextResponse.json({ ok: true, appId: '${appId}' });
+}`;
+    await fs.writeFile(path.join(hostApiDir, 'route.ts'), apiRoute, 'utf8');
+  }
 
   success(`Created app scaffold at ${targetDir}`);
   info('Files created:');
@@ -1152,10 +1484,21 @@ citadel-app create ${appId} --template=${templateName}
   info(`  - ${path.join(hostApiDir, 'route.ts')}`);
   info(`  - ${path.join(targetDir, 'README.md')}`);
   info('');
+  
+  // Sync routes (for any external-style routing)
+  info('Syncing routes...');
+  try {
+    await syncAppRoutes(appId);
+  } catch (err) {
+    // Non-fatal - app still works with hardcoded routes
+    info(`Route sync note: ${err.message}`);
+  }
+  
   info('Next steps:');
   info('1) Review the generated files');
   info(`2) Run: npm run citadel-app migrate ${appId}`);
   info(`3) Start host and open /apps/${appId}`);
+}
 }
 
 // DEV COMMAND
@@ -1265,7 +1608,42 @@ async function devCommand(appPath, options = {}) {
 // INSTALL COMMAND
 async function installCommand(source) {
   if (!source) {
-    error('Usage: citadel-app install <git-url|local-path>');
+    error('Usage: citadel-app install <git-url|local-path|app-id>');
+  }
+
+  // Check if source is an app ID (simple alphanumeric with hyphens, no slashes or dots)
+  const isAppId = /^[a-z][a-z0-9-]*$/.test(source) && !source.includes('/') && !source.includes('.');
+  
+  if (isAppId && !source.startsWith('http') && !source.startsWith('git@')) {
+    // Try to look up in registry
+    log(`Looking up "${source}" in registry...`, 'blue');
+    
+    let registry;
+    try {
+      const response = await fetch(REGISTRY_URL);
+      if (!response.ok) {
+        throw new Error(`Registry returned ${response.status}: ${response.statusText}`);
+      }
+      registry = await response.json();
+    } catch (err) {
+      if (err.message.includes('fetch failed') || err.message.includes('ENOTFOUND') || err.message.includes('ECONNREFUSED')) {
+        error(`Cannot reach registry to look up app ID. You appear to be offline.\nRegistry URL: ${REGISTRY_URL}\n\nTo install from a URL directly, use:\n  citadel-app install <git-url>`);
+      } else {
+        error(`Failed to fetch registry: ${err.message}`);
+      }
+    }
+
+    if (registry && Array.isArray(registry.apps)) {
+      const app = registry.apps.find(a => a.id === source);
+      if (app && app.repo_url) {
+        log(`Found "${app.name}" in registry`, 'green');
+        source = app.repo_url;
+      } else if (app) {
+        error(`App "${source}" found in registry but has no repository URL.`);
+      } else {
+        error(`App "${source}" not found in registry.\nRun 'citadel-app search' to list available apps, or install directly from a URL:\n  citadel-app install <git-url>`);
+      }
+    }
   }
 
   log(`Installing from: ${source}`, 'blue');
@@ -1348,6 +1726,14 @@ async function installCommand(source) {
     info('Running migrations...');
     await runMigrations(appId);
 
+    // Sync app routes to host
+    info('Syncing app routes...');
+    try {
+      await syncAppRoutes(appId);
+    } catch (err) {
+      warn(`Route sync warning: ${err.message}`);
+    }
+
     // Success
     success(`App "${manifest.name}" installed successfully!`);
     log(`\nApp URL: http://localhost:3000/apps/${appId}`, 'green');
@@ -1366,6 +1752,98 @@ async function installCommand(source) {
     }
     throw err;
   }
+}
+
+// INFO COMMAND
+async function infoCommand(appId) {
+  if (!appId) {
+    error('Usage: citadel-app info <app-id>');
+  }
+
+  log(`Fetching info for: ${appId}`, 'blue');
+
+  let registry;
+  try {
+    const response = await fetch(REGISTRY_URL);
+    if (!response.ok) {
+      throw new Error(`Registry returned ${response.status}: ${response.statusText}`);
+    }
+    registry = await response.json();
+  } catch (err) {
+    if (err.message.includes('fetch failed') || err.message.includes('ENOTFOUND') || err.message.includes('ECONNREFUSED')) {
+      error(`Cannot reach registry. You appear to be offline.\nRegistry URL: ${REGISTRY_URL}`);
+    } else {
+      error(`Failed to fetch registry: ${err.message}`);
+    }
+  }
+
+  if (!registry || !Array.isArray(registry.apps)) {
+    error('Invalid registry format: expected { apps: [...] }');
+  }
+
+  const app = registry.apps.find(a => a.id === appId);
+  if (!app) {
+    error(`App "${appId}" not found in registry.\nRun 'citadel-app search' to list available apps.`);
+  }
+
+  // Check if already installed
+  const installedApps = await getInstalledAppIds();
+  const isInstalled = installedApps.includes(appId);
+
+  // Display app info
+  log('');
+  log(`${colors.cyan}${colors.bold}${app.name || appId}${colors.reset}`);
+  log(`${colors.dim}ID: ${app.id}${colors.reset}`, 'cyan');
+  log('');
+
+  if (app.description) {
+    log(app.description);
+    log('');
+  }
+
+  info(`Version: ${app.version || 'N/A'}`);
+  info(`Author: ${app.author || 'Unknown'}`);
+  info(`Repository: ${app.repo_url || 'N/A'}`);
+  
+  if (app.tags && app.tags.length > 0) {
+    info(`Tags: ${app.tags.join(', ')}`);
+  }
+
+  if (app.manifest_version) {
+    info(`Manifest: ${app.manifest_version}`);
+  }
+
+  // Show permissions if available
+  if (app.permissions) {
+    log('');
+    log('Permissions:', 'cyan');
+    for (const [key, value] of Object.entries(app.permissions)) {
+      if (typeof value === 'object') {
+        const perms = Object.entries(value)
+          .filter(([, v]) => v)
+          .map(([k]) => k)
+          .join(', ');
+        if (perms) {
+          info(`  ${key}: ${perms}`);
+        }
+      } else if (value) {
+        info(`  ${key}: ${value}`);
+      }
+    }
+  }
+
+  // Installation status
+  log('');
+  if (isInstalled) {
+    log(`${colors.green}✓ Installed${colors.reset}`);
+    log(`  Run: citadel-app update ${appId}`);
+  } else {
+    log(`${colors.yellow}Not installed${colors.reset}`);
+    log(`  Install: citadel-app install ${appId}`);
+  }
+
+  log('');
+  info(`Registry: ${REGISTRY_URL}`);
 }
 
 // SEARCH COMMAND
@@ -1454,6 +1932,309 @@ async function searchCommand(query, options = {}) {
   info('To view details: citadel-app info <app-id>');
 }
 
+// FORK COMMAND
+async function forkCommand(sourceAppId, newAppId, options = {}) {
+  if (!sourceAppId || !newAppId) {
+    error('Usage: citadel-app fork <source-app-id> <new-app-id>');
+  }
+
+  // Validate source app ID
+  const sourceCheck = validateAppId(sourceAppId);
+  if (!sourceCheck.valid) {
+    error(`Invalid source app ID: ${sourceCheck.error}`);
+  }
+
+  // Validate new app ID
+  const newIdCheck = validateAppId(newAppId);
+  if (!newIdCheck.valid) {
+    error(`Invalid new app ID: ${newIdCheck.error}`);
+  }
+
+  // Check if new app ID is already taken
+  const installedApps = await getInstalledAppIds();
+  if (installedApps.includes(newAppId)) {
+    error(`App "${newAppId}" already exists. Choose a different app ID.`);
+  }
+
+  log(`Forking ${sourceAppId} → ${newAppId}`, 'blue');
+
+  let sourceDir = null;
+  let isLocalSource = false;
+  let tempDir = null;
+
+  // Check if source is installed locally
+  const localSourceDir = path.join(APPS_DIR, sourceAppId);
+  try {
+    await fs.access(path.join(localSourceDir, 'app.yaml'));
+    sourceDir = localSourceDir;
+    isLocalSource = true;
+    info(`Found local source app: ${localSourceDir}`);
+  } catch {
+    // Not installed locally, try to find in registry
+    info(`Source app not installed locally. Looking up in registry...`);
+    
+    let registry;
+    try {
+      const response = await fetch(REGISTRY_URL);
+      if (!response.ok) {
+        throw new Error(`Registry returned ${response.status}`);
+      }
+      registry = await response.json();
+    } catch (err) {
+      error(`Cannot reach registry to find source app. Ensure you're online or install the source app first.`);
+    }
+
+    const sourceApp = registry?.apps?.find(a => a.id === sourceAppId);
+    if (!sourceApp) {
+      error(`Source app "${sourceAppId}" not found in registry.`);
+    }
+
+    if (!sourceApp.repo_url) {
+      error(`Source app found but has no repository URL.`);
+    }
+
+    info(`Found in registry: ${sourceApp.name}`);
+    info(`Repository: ${sourceApp.repo_url}`);
+
+    // Clone to temp directory
+    tempDir = path.join(DATA_DIR, 'temp', `fork-${Date.now()}`);
+    await fs.mkdir(tempDir, { recursive: true });
+    
+    info('Cloning source repository...');
+    await gitClone(sourceApp.repo_url, tempDir);
+    sourceDir = tempDir;
+  }
+
+  // Read and validate source manifest
+  const sourceManifestPath = path.join(sourceDir, 'app.yaml');
+  let manifest;
+  try {
+    manifest = await readManifest(sourceManifestPath);
+  } catch (err) {
+    if (tempDir) await fs.rm(tempDir, { recursive: true, force: true });
+    error(`Failed to read source manifest: ${err.message}`);
+  }
+
+  info(`Source: ${manifest.name} v${manifest.version}`);
+
+  // Create target directory
+  const targetDir = path.join(APPS_DIR, newAppId);
+  try {
+    await fs.access(targetDir);
+    if (tempDir) await fs.rm(tempDir, { recursive: true, force: true });
+    error(`Target directory already exists: ${targetDir}`);
+  } catch {
+    // expected: does not exist
+  }
+
+  // Copy source to target
+  info(`Creating fork at: ${targetDir}`);
+  await copyDir(sourceDir, targetDir);
+
+  // Update manifest with new app ID
+  manifest.id = newAppId;
+  manifest.name = newAppId
+    .split('-')
+    .filter(Boolean)
+    .map((p) => p[0].toUpperCase() + p.slice(1))
+    .join(' ');
+  
+  // Add fork metadata
+  manifest.forked_from = sourceAppId;
+  manifest.version = '0.1.0'; // Reset version for fork
+
+  // Write updated manifest
+  const newManifestPath = path.join(targetDir, 'app.yaml');
+  await fs.writeFile(newManifestPath, yaml.stringify(manifest), 'utf8');
+
+  // Initialize as new git repo (remove .git if cloned, or reinitialize)
+  const gitDir = path.join(targetDir, '.git');
+  try {
+    await fs.access(gitDir);
+    info('Removing source git history...');
+    await fs.rm(gitDir, { recursive: true, force: true });
+  } catch {
+    // No .git directory
+  }
+
+  // Initialize new git repo
+  info('Initializing new git repository...');
+  try {
+    await new Promise((resolve, reject) => {
+      const proc = spawn('git', ['init'], {
+        cwd: targetDir,
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+      
+      let stderr = '';
+      proc.stderr.on('data', (data) => { stderr += data; });
+      
+      proc.on('close', (code) => {
+        if (code === 0) {
+          resolve();
+        } else {
+          reject(new Error(stderr));
+        }
+      });
+    });
+    success('Git repository initialized');
+  } catch (err) {
+    log(`Warning: Failed to initialize git repo: ${err.message}`, 'yellow');
+  }
+
+  // Clean up temp directory if used
+  if (tempDir) {
+    await fs.rm(tempDir, { recursive: true, force: true });
+  }
+
+  // Run migrations for the new app (fresh DB)
+  info('Running migrations for new app...');
+  try {
+    await runMigrations(newAppId);
+  } catch (err) {
+    log(`Warning: Migration failed: ${err.message}`, 'yellow');
+    info('You may need to run migrations manually: citadel-app migrate ' + newAppId);
+  }
+
+  // Success
+  success(`App "${newAppId}" forked successfully!`);
+  info(`Source: ${sourceAppId}`);
+  info(`Location: ${targetDir}`);
+  log(`\n${colors.cyan}Next steps:${colors.reset}`);
+  info('1. Review the forked app files');
+  info(`2. Customize the app as needed`);
+  info(`3. Edit files in: ${targetDir}`);
+  log(`\nApp URL: http://localhost:3000/apps/${newAppId}`, 'green');
+}
+
+// QUOTA COMMAND
+async function quotaCommand(appId, options = {}) {
+  // Import core module for quota functions
+  const corePath = path.join(REPO_ROOT, 'core', 'dist', 'index.js');
+  let core;
+  try {
+    core = await import(corePath);
+  } catch (err) {
+    error(`Failed to load core module: ${err.message}. Make sure to run 'npm run build' in the core directory.`);
+  }
+
+  // Show all quotas if --all flag or no appId
+  if (options.all || !appId) {
+    log('Storage quotas for all apps:', 'blue');
+    log('');
+    
+    const quotas = core.getQuotaStatus ? core.getQuotaStatus() : [];
+    
+    if (quotas.length === 0) {
+      info('No apps with storage data found.');
+      info(`Default quota: ${process.env.CITADEL_DEFAULT_QUOTA_MB || '500'} MB per app`);
+      return;
+    }
+
+    // Calculate column widths
+    const appWidth = Math.max(8, ...quotas.map(q => q.app_id.length));
+    
+    // Print header
+    log(`${colors.bold}${'App ID'.padEnd(appWidth)}  ${'Used'.padStart(12)}  ${'Limit'.padStart(12)}  ${'Usage %'.padStart(8)}  ${'Source'}${colors.reset}`);
+    log('-'.repeat(appWidth + 12 + 12 + 8 + 10));
+
+    // Print each quota
+    for (const q of quotas) {
+      const appIdPadded = q.app_id.padEnd(appWidth);
+      const used = formatBytes(q.used_bytes).padStart(12);
+      const limit = formatBytes(q.quota_bytes).padStart(12);
+      const percent = `${q.used_percent.toFixed(1)}%`.padStart(8);
+      const source = q.is_default ? 'default' : 'custom';
+      
+      // Color-code by usage
+      let color = 'green';
+      if (q.used_percent >= 90) color = 'red';
+      else if (q.used_percent >= 75) color = 'yellow';
+      
+      log(`${appIdPadded}  ${used}  ${limit}  ${percent}  ${source}`, color);
+    }
+    
+    log('');
+    info(`Default quota: ${process.env.CITADEL_DEFAULT_QUOTA_MB || '500'} MB per app`);
+    info('Set custom quota: citadel-app quota <app-id> --set=<mb>');
+    return;
+  }
+
+  // Validate app ID
+  const idCheck = validateAppId(appId);
+  if (!idCheck.valid) {
+    // Allow 'citadel' as a special case for system app
+    if (appId !== 'citadel') {
+      error(idCheck.error);
+    }
+  }
+
+  // Set quota if --set flag provided
+  if (options.set !== undefined) {
+    const quotaMb = parseInt(options.set, 10);
+    if (isNaN(quotaMb) || quotaMb < 1) {
+      error('Quota must be a positive number (in MB)');
+    }
+
+    log(`Setting quota for ${appId}...`, 'blue');
+    
+    try {
+      if (core.setQuota) {
+        core.setQuota(appId, quotaMb);
+        success(`Quota for "${appId}" set to ${quotaMb} MB`);
+      } else {
+        error('Quota management not available in core module');
+      }
+    } catch (err) {
+      error(`Failed to set quota: ${err.message}`);
+    }
+    return;
+  }
+
+  // Show quota for specific app
+  log(`Storage quota for: ${appId}`, 'blue');
+  log('');
+
+  const quotaMb = core.getQuota ? core.getQuota(appId) : (parseInt(process.env.CITADEL_DEFAULT_QUOTA_MB || '500', 10));
+  const usage = core.getAppStorageUsage ? core.getAppStorageUsage(appId) : 0;
+  const quotaBytes = quotaMb * 1024 * 1024;
+  const usedPercent = quotaBytes > 0 ? (usage / quotaBytes) * 100 : 0;
+
+  info(`Quota: ${quotaMb} MB (${formatBytes(quotaBytes)})`);
+  info(`Used:  ${formatBytes(usage)}`);
+  info(`Free:  ${formatBytes(quotaBytes - usage)}`);
+  info(`Usage: ${usedPercent.toFixed(2)}%`);
+  
+  // Visual bar
+  const barWidth = 40;
+  const filled = Math.round((usedPercent / 100) * barWidth);
+  const empty = barWidth - filled;
+  const bar = '█'.repeat(filled) + '░'.repeat(empty);
+  
+  let color = 'green';
+  if (usedPercent >= 90) color = 'red';
+  else if (usedPercent >= 75) color = 'yellow';
+  
+  log('');
+  log(`[${bar}] ${usedPercent.toFixed(1)}%`, color);
+  log('');
+  info(`To change quota: citadel-app quota ${appId} --set=<mb>`);
+}
+
+// Helper to format bytes
+function formatBytes(bytes) {
+  const units = ['B', 'KB', 'MB', 'GB'];
+  let size = bytes;
+  let unitIndex = 0;
+  
+  while (size >= 1024 && unitIndex < units.length - 1) {
+    size /= 1024;
+    unitIndex++;
+  }
+  
+  return `${size.toFixed(2)} ${units[unitIndex]}`;
+}
+
 // MAIN
 async function main() {
   const args = process.argv.slice(2);
@@ -1469,6 +2250,7 @@ async function main() {
     template: args.find(a => a.startsWith('--template='))?.split('=')[1],
     listTemplates: args.includes('--list-templates'),
     tag: args.find(a => a.startsWith('--tag='))?.split('=')[1],
+    set: args.find(a => a.startsWith('--set='))?.split('=')[1],
   };
 
   // Ensure apps directory exists
@@ -1494,13 +2276,25 @@ async function main() {
     case 'create':
       await createCommand(arg, flags);
       break;
+    case 'templates':
+      await templatesCommand();
+      break;
     case 'dev':
       await devCommand(arg, flags);
+      break;
+    case 'info':
+      await infoCommand(arg);
       break;
     case 'search':
       // For search, arg might be a flag like --tag=xyz, so handle it properly
       const searchArg = arg && !arg.startsWith('--') ? arg : null;
       await searchCommand(searchArg, flags);
+      break;
+    case 'fork':
+      await forkCommand(arg, args[2], flags);
+      break;
+    case 'quota':
+      await quotaCommand(arg, flags);
       break;
     case 'help':
     case '--help':
@@ -1510,17 +2304,19 @@ async function main() {
 ${colors.cyan}Citadel App CLI${colors.reset}
 
 Commands:
-  install <git-url|local-path>  Install an app from git or local path
+  install <git-url|local-path|app-id>  Install an app from git, local path, or registry ID
   uninstall <app-id>            Remove an installed app
   update <app-id>               Update an installed app (git pull)
   update --all                  Update all git-installed apps
+  fork <source-id> <new-id>     Fork an existing app into a new app
   migrate <app-id>              Run migrations for an app
   migrate --all                 Run migrations for all apps
   migrate:rollback <app-id>     Rollback the last migration for an app
   migrate:rollback <app-id> --steps=N  Rollback N migrations
   create <app-id> [--template=<name>]  Create a new app from template (default: blank)
-  create --list-templates       List available templates
+  templates                     List all available templates (local + community)
   dev <path-to-app>             Start dev mode for local app development
+  info <app-id>                 Show detailed info for a registry app
   search [query]                Search for apps in the registry
   search --tag=<tag>            Filter apps by tag
 
@@ -1529,7 +2325,7 @@ Options:
   --force                       Skip confirmation prompts
   --all                         Update all apps (with update command)
   --steps=N                     Number of migrations to rollback
-  --template=<name>             Template to use for create (blank, crud)
+  --template=<name>             Template to use for create (blank, crud, or community)
   --list-templates              List available templates
   --tag=<tag>                   Filter by tag (with search command)
 
@@ -1539,6 +2335,10 @@ Environment:
   CITADEL_REGISTRY_URL  Registry URL (default: GitHub raw content)
 
 Examples:
+  citadel-app templates                     List all templates
+  citadel-app create my-app                 Create from blank template
+  citadel-app create my-app --template=crud Create from crud template
+  citadel-app install my-app-id             Install from registry by ID
   citadel-app install https://github.com/user/my-citadel-app.git
   citadel-app install ./path/to/local-app
   citadel-app uninstall my-app
@@ -1553,6 +2353,7 @@ Examples:
   citadel-app create my-app --template=crud
   citadel-app create --list-templates
   citadel-app dev ./my-local-app
+  citadel-app info my-app-id                Show app details
   citadel-app search                    List all apps
   citadel-app search notes              Search for "notes"
   citadel-app search --tag=productivity Filter by tag

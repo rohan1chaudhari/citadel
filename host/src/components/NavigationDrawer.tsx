@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useTheme } from '@/lib/theme';
 
 export type App = {
@@ -14,6 +15,11 @@ export type App = {
 interface NavigationDrawerProps {
   apps: App[];
   currentAppId?: string;
+}
+
+interface AuthStatus {
+  enabled: boolean;
+  authenticated: boolean;
 }
 
 // Theme toggle button component
@@ -67,7 +73,37 @@ function ThemeToggle() {
 
 export function NavigationDrawer({ apps, currentAppId }: NavigationDrawerProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [authStatus, setAuthStatus] = useState<AuthStatus | null>(null);
   const { isDark } = useTheme();
+  const router = useRouter();
+
+  // Fetch auth status
+  useEffect(() => {
+    fetch('/api/auth/status')
+      .then(res => res.json())
+      .then(data => {
+        if (data.ok) {
+          setAuthStatus({
+            enabled: data.enabled,
+            authenticated: data.authenticated,
+          });
+        }
+      })
+      .catch(() => {
+        // Auth endpoint may not exist in older versions
+        setAuthStatus({ enabled: false, authenticated: true });
+      });
+  }, []);
+
+  const handleLogout = async () => {
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' });
+      router.push('/login');
+      router.refresh();
+    } catch (error) {
+      console.error('Logout failed:', error);
+    }
+  };
 
   // Close drawer on escape key
   useEffect(() => {
@@ -308,6 +344,32 @@ export function NavigationDrawer({ apps, currentAppId }: NavigationDrawerProps) 
               </div>
             </div>
           </Link>
+
+          {/* Logout Button - only shown when auth is enabled */}
+          {authStatus?.enabled && authStatus?.authenticated && (
+            <>
+              <div className="my-3 border-t border-zinc-100 dark:border-zinc-800" />
+              <button
+                onClick={() => {
+                  handleLinkClick();
+                  handleLogout();
+                }}
+                className="w-full flex items-center gap-3 px-3 py-2.5 min-h-[44px] rounded-lg transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300"
+              >
+                <div className="w-10 h-10 rounded-xl bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center">
+                  <svg className="w-5 h-5 text-zinc-600 dark:text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                  </svg>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="font-medium truncate">Logout</div>
+                  <div className="text-xs truncate text-zinc-500 dark:text-zinc-400">
+                    End session
+                  </div>
+                </div>
+              </button>
+            </>
+          )}
         </nav>
       </aside>
     </>

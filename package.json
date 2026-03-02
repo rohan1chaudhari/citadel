@@ -9,6 +9,7 @@
   ],
   "scripts": {
     "citadel-app": "node scripts/citadel-app.mjs",
+    "sync-routes": "node scripts/sync-app-routes.mjs",
     "docs:dev": "vitepress dev docs",
     "docs:build": "vitepress build docs",
     "docs:preview": "vitepress preview docs"
