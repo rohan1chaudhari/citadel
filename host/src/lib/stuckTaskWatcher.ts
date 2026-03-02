@@ -3,7 +3,7 @@ import { ensureScrumBoardSchema, releaseAgentLock } from '@/lib/scrumBoardSchema
 
 const APP_ID = 'scrum-board';
 const WATCH_INTERVAL_MS = 10 * 60 * 1000; // 10 minutes
-const STALE_AFTER_MS = 45 * 60 * 1000; // 45 minutes
+const STALE_AFTER_MS = 20 * 60 * 1000; // 20 minutes
 
 let watcherInterval: NodeJS.Timeout | null = null;
 let isRunning = false;
