@@ -12,6 +12,9 @@
     "docs:build": "vitepress build docs",
     "docs:preview": "vitepress preview docs"
   },
+  "dependencies": {
+    "yaml": "^2.8.2"
+  },
   "devDependencies": {
     "mermaid": "^11.12.3",
     "vitepress": "^1.6.4",
