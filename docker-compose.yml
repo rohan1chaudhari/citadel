@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  citadel:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ghcr.io/rohan1chaudhari/citadel:latest
+    ports:
+      - "${CITADEL_PORT:-3000}:3000"
+    volumes:
+      - ./data:/app/data
+      - ./apps:/app/apps
+    environment:
+      - NODE_ENV=production
+      - CITADEL_DATA_ROOT=/app/data
+      - CITADEL_APPS_DIR=/app/apps
+      - CITADEL_BACKUP_RETENTION=${CITADEL_BACKUP_RETENTION:-7}
+      - CITADEL_BACKUP_INTERVAL_HOURS=${CITADEL_BACKUP_INTERVAL_HOURS:-24}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - CITADEL_SKIP_SETUP=${CITADEL_SKIP_SETUP:-false}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped

@@ -34,7 +34,8 @@ export default withMermaid(
           items: [
             { text: 'Build an app', link: '/how-to/build-an-app' },
             { text: 'Create and install an app', link: '/how-to/create-and-install-app' },
-            { text: 'Manage app runtime', link: '/how-to/runtime-manager' }
+            { text: 'Manage app runtime', link: '/how-to/runtime-manager' },
+            { text: 'Deploy', link: '/how-to/deploy' }
           ]
         },
         {
