@@ -1,10 +1,11 @@
 import { NextResponse } from 'next/server';
-import { ensureScrumBoardSchema, getActiveLock } from '@/lib/scrumBoardSchema';
+import { ensureScrumBoardSchema, getActiveLock, reconcileAgentLock } from '@/lib/scrumBoardSchema';
 
 export const runtime = 'nodejs';
 
 export async function GET() {
   ensureScrumBoardSchema();
+  reconcileAgentLock();
   const lock = getActiveLock();
   
   return NextResponse.json({

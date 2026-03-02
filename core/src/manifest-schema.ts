@@ -391,6 +391,10 @@ export const MANIFEST_JSON_SCHEMA = {
       type: 'boolean',
       description: 'Hide from home grid',
     },
+    widget: {
+      type: 'boolean',
+      description: 'Enable home screen widget for this app',
+    },
     manifest_version: {
       type: 'string',
       default: '1.0',

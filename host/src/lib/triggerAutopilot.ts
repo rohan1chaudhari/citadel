@@ -1,6 +1,6 @@
 import { audit } from '@citadel/core';
 import { dbQuery, dbExec } from '@citadel/core';
-import { getSetting, acquireAgentLock, isAgentLocked, getActiveLock, createSession, updateSessionStatus } from '@/lib/scrumBoardSchema';
+import { getSetting, acquireAgentLock, isAgentLocked, getActiveLock, createSession, updateSessionStatus, releaseAgentLockFor } from '@/lib/scrumBoardSchema';
 import { getRunner, getDefaultRunner, AgentRunner } from '@/lib/agentRunners';
 import type { AgentTask } from '@/lib/agentRunner';
 
@@ -337,6 +337,14 @@ Execution contract:
       eligibleCount,
     };
   } catch (err: any) {
+    // Ensure lock/session cleanup on trigger failure
+    try {
+      releaseAgentLockFor(highestTask.id, sessionId);
+      updateSessionStatus(sessionId, 'failed', `Autopilot trigger failed: ${err?.message || 'unknown error'}`);
+    } catch {
+      // best-effort cleanup
+    }
+
     audit(APP_ID, 'scrum.trigger_agent_failed', { appId: targetAppId, error: err?.message });
     return {
       ok: false,

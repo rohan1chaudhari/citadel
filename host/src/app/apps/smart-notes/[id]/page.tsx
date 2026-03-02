@@ -6,6 +6,8 @@ import { notFound } from 'next/navigation';
 import { EditorClient } from './EditorClient';
 
 export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
 const APP_ID = 'smart-notes';
 
 export default async function EditNotePage({ params }: { params: Promise<{ id: string }> }) {

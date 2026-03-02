@@ -7,6 +7,8 @@ import PhotoCaptureButton from './PhotoCaptureButton';
 import VoiceCaptureButton from './VoiceCaptureButton';
 
 export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
 const APP_ID = 'smart-notes';
 
 export default async function SmartNotesListPage() {

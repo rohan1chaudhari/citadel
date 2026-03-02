@@ -2,6 +2,7 @@ import { DatabaseSync } from 'node:sqlite';
 import fs from 'node:fs';
 import path from 'node:path';
 import { appDbPath } from './paths.js';
+import { evaluateWorkflows } from './workflows.js';
 
 const CITADEL_APP_ID = 'citadel';
 const RETENTION_DAYS = 90;
@@ -85,6 +86,11 @@ export function audit(appId: string, event: string, payload: Record<string, unkn
     // Fail silently - don't break app functionality if audit logging fails
     console.error('Audit DB write failed:', e);
   }
+  
+  // Trigger workflow evaluation (fire-and-forget, don't block)
+  evaluateWorkflows(appId, event, payload).catch((err) => {
+    console.error('[workflows] Evaluation failed:', err);
+  });
 }
 
 // Test-only: clear DB cache to allow fresh connections

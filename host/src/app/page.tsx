@@ -31,6 +31,7 @@ export default async function HomePage() {
             {apps.length} app{apps.length === 1 ? '' : 's'} installed
           </div>
           <div className="flex items-center gap-4">
+            <LinkA href="/browse">Browse Apps →</LinkA>
             <LinkA href="/permissions">Permissions</LinkA>
             <LinkA href="/status">View System Status →</LinkA>
           </div>

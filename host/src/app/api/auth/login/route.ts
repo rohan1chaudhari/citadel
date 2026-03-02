@@ -13,6 +13,7 @@ import {
   setPassphrase,
   createSession,
   getSessionCookie,
+  getPassphraseHash,
 } from '@citadel/core';
 
 export async function POST(request: Request) {
@@ -66,7 +67,7 @@ export async function POST(request: Request) {
     }
 
     // Verify passphrase
-    const storedHash = require('@citadel/core').getPassphraseHash();
+    const storedHash = getPassphraseHash();
     if (!storedHash) {
       return NextResponse.json(
         { ok: false, error: 'Authentication not configured' },

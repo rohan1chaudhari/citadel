@@ -137,6 +137,24 @@ From Scrum Board for target app only:
 - Failed (retry): `await retryTask(taskId, attemptCount, error, comment)`
 - Failed (final): `await failTask(taskId, error, comment)`
 
+### Post-completion verification (REQUIRED on success)
+After marking a task `done`, autopilot must:
+1. Restart the dev server to clear stale chunks/cache.
+2. Verify health endpoint: `GET /api/health` returns `ok: true`.
+3. Verify the changed surface (endpoint/page/flow touched by the task).
+4. If restart/verification fails, add an `[AUTOPILOT_FAILED]` or `[AUTOPILOT_BLOCKED]` comment with details.
+
+Recommended commands:
+```bash
+pkill -f "next dev -p 3000" || true
+pkill -f "next-server" || true
+cd /home/rohanchaudhari/personal/citadel/host
+rm -rf .next
+nohup npm run dev > /tmp/citadel-dev.log 2>&1 &
+sleep 8
+curl -s http://localhost:3000/api/health
+```
+
 | Result | Action |
 |--------|--------|
 | Success | Move to `done`, comment `[AUTOPILOT_DONE]` |

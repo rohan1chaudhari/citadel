@@ -6,6 +6,8 @@ import Link from 'next/link';
 import { CopyButton } from './CopyButton';
 
 export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
 const APP_ID = 'promo-kit';
 
 interface Post {

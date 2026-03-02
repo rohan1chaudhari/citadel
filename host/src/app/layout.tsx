@@ -74,14 +74,21 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
       throw new Error(`Startup health check failed - cannot start server: ${err?.message ?? err}`);
     }
 
-    // Detect potential mass data loss from previous incidents
-    const massLossCheck = await detectMassDataLoss();
-    if (massLossCheck.detected) {
-      console.error('[data-protection] WARNING: Potential data loss detected:', massLossCheck.details);
-      console.error('[data-protection] Affected apps:', massLossCheck.affectedApps?.join(', '));
-      console.error('[data-protection] Check backups before proceeding');
-      // Don't block startup, but log prominently
-    }
+    // Detect potential mass data loss from previous incidents (non-blocking)
+    // Run this in the background so it doesn't slow first page load.
+    setTimeout(() => {
+      detectMassDataLoss()
+        .then((massLossCheck) => {
+          if (massLossCheck.detected) {
+            console.error('[data-protection] WARNING: Potential data loss detected:', massLossCheck.details);
+            console.error('[data-protection] Affected apps:', massLossCheck.affectedApps?.join(', '));
+            console.error('[data-protection] Check backups before proceeding');
+          }
+        })
+        .catch((err) => {
+          console.error('[data-protection] Mass data loss check failed:', err);
+        });
+    }, 0);
 
     // Run migrations for all apps on startup (app-level migrations)
     runAllMigrations().catch(err => console.error('Migration error:', err));

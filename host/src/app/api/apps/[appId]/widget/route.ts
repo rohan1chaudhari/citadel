@@ -34,24 +34,8 @@ export async function GET(_req: Request, ctx: { params: Promise<{ appId: string 
       );
     }
 
-    // Try to fetch app-specific widget data if the app implements it
-    try {
-      // Dynamically import and call the app's widget handler if it exists
-      const appWidgetPath = `../../../apps/${appId}/widget`;
-      const appWidget = await import(appWidgetPath).catch(() => null);
-      
-      if (appWidget?.getWidgetData) {
-        const widgetData = await appWidget.getWidgetData();
-        return NextResponse.json({
-          ok: true,
-          appId,
-          title: widgetData.title || manifest.name,
-          data: widgetData.data,
-        });
-      }
-    } catch {
-      // App doesn't implement custom widget, fall through to defaults
-    }
+    // Note: App-specific widget handlers would be implemented here
+    // For now, we use the default widget data based on app activity
 
     // Default widget data based on app type
     const defaultData = await getDefaultWidgetData(appId, manifest.name);

@@ -12,6 +12,9 @@ interface AppHealth {
   lastActivity: string | null;
   dbWarning: boolean;
   storageWarning: boolean;
+  quotaMb: number;
+  quotaBytes: number;
+  quotaUsedPercent: number;
 }
 
 interface BackupInfo {
@@ -187,79 +190,118 @@ export default function StatusPageClient({ apps, backups, latestBackup }: Status
               {apps.map((app) => (
                 <div
                   key={app.id}
-                  className="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900"
+                  className="flex flex-col p-4 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900"
                 >
-                  <div className="mb-3 sm:mb-0">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">{app.name}</span>
-                      <span className="text-xs text-zinc-500 dark:text-zinc-400 font-mono">{app.id}</span>
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-3">
+                    <div className="mb-3 sm:mb-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">{app.name}</span>
+                        <span className="text-xs text-zinc-500 dark:text-zinc-400 font-mono">{app.id}</span>
+                      </div>
+                      <div className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
+                        Last activity: {formatTimeAgo(app.lastActivity)}
+                      </div>
                     </div>
-                    <div className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
-                      Last activity: {formatTimeAgo(app.lastActivity)}
+
+                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 text-right sm:text-left">
+                      <div className="text-right">
+                        <div
+                          className={`text-xs ${
+                            app.dbWarning ? 'text-amber-600 dark:text-amber-400 font-medium' : 'text-zinc-500 dark:text-zinc-400'
+                          }`}
+                        >
+                          DB Size
+                          {app.dbWarning && ' ⚠️'}
+                        </div>
+                        <div className="text-sm font-medium text-zinc-900 dark:text-zinc-100">{formatBytes(app.dbSize)}</div>
+                      </div>
+
+                      <div className="text-right">
+                        <div
+                          className={`text-xs ${
+                            app.storageWarning ? 'text-amber-600 dark:text-amber-400 font-medium' : 'text-zinc-500 dark:text-zinc-400'
+                          }`}
+                        >
+                          Storage
+                          {app.storageWarning && ' ⚠️'}
+                        </div>
+                        <div className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                          {formatBytes(app.storageSize)}
+                        </div>
+                      </div>
+
+                      <div className="text-right">
+                        <div className="text-xs text-zinc-500 dark:text-zinc-400">API Calls (24h)</div>
+                        <div className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                          {app.auditCount.toLocaleString()}
+                        </div>
+                      </div>
+
+                      <div className="text-right">
+                        <div className="text-xs text-zinc-500 dark:text-zinc-400">Export</div>
+                        <a
+                          href={`/api/apps/citadel/export/${app.id}`}
+                          className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
+                          title={`Export ${app.name} data as zip`}
+                        >
+                          Download ↓
+                        </a>
+                      </div>
+
+                      <div className="text-right">
+                        <div className="text-xs text-zinc-500 dark:text-zinc-400">Import</div>
+                        <button
+                          onClick={() => handleImportClick(app.id)}
+                          disabled={importingApp === app.id}
+                          className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 disabled:text-zinc-400 dark:disabled:text-zinc-600 disabled:cursor-not-allowed"
+                          title={`Import data to ${app.name} from zip`}
+                        >
+                          {importingApp === app.id ? 'Importing...' : 'Upload ↑'}
+                        </button>
+                        <input
+                          ref={fileInputRef}
+                          type="file"
+                          accept=".zip"
+                          className="hidden"
+                          onChange={(e) => handleFileSelect(app.id, e)}
+                        />
+                      </div>
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 text-right sm:text-left">
-                    <div className="text-right">
-                      <div
-                        className={`text-xs ${
-                          app.dbWarning ? 'text-amber-600 dark:text-amber-400 font-medium' : 'text-zinc-500 dark:text-zinc-400'
+                  {/* Quota Bar */}
+                  <div className="mt-2 pt-3 border-t border-zinc-100 dark:border-zinc-800">
+                    <div className="flex items-center justify-between text-xs mb-1">
+                      <span className="text-zinc-500 dark:text-zinc-400">
+                        Quota: {formatBytes(app.storageSize)} / {formatBytes(app.quotaBytes)}
+                        {app.quotaUsedPercent >= 90
+                          ? ' 🔴'
+                          : app.quotaUsedPercent >= 75
+                          ? ' 🟡'
+                          : ''}
+                      </span>
+                      <span
+                        className={`font-medium ${
+                          app.quotaUsedPercent >= 90
+                            ? 'text-red-600 dark:text-red-400'
+                            : app.quotaUsedPercent >= 75
+                            ? 'text-amber-600 dark:text-amber-400'
+                            : 'text-green-600 dark:text-green-400'
                         }`}
                       >
-                        DB Size
-                        {app.dbWarning && ' ⚠️'}
-                      </div>
-                      <div className="text-sm font-medium text-zinc-900 dark:text-zinc-100">{formatBytes(app.dbSize)}</div>
+                        {app.quotaUsedPercent.toFixed(1)}%
+                      </span>
                     </div>
-
-                    <div className="text-right">
+                    <div className="w-full h-2 bg-zinc-200 dark:bg-zinc-700 rounded-full overflow-hidden">
                       <div
-                        className={`text-xs ${
-                          app.storageWarning ? 'text-amber-600 dark:text-amber-400 font-medium' : 'text-zinc-500 dark:text-zinc-400'
+                        className={`h-full rounded-full transition-all duration-300 ${
+                          app.quotaUsedPercent >= 90
+                            ? 'bg-red-500'
+                            : app.quotaUsedPercent >= 75
+                            ? 'bg-amber-500'
+                            : 'bg-green-500'
                         }`}
-                      >
-                        Storage
-                        {app.storageWarning && ' ⚠️'}
-                      </div>
-                      <div className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
-                        {formatBytes(app.storageSize)}
-                      </div>
-                    </div>
-
-                    <div className="text-right">
-                      <div className="text-xs text-zinc-500 dark:text-zinc-400">API Calls (24h)</div>
-                      <div className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
-                        {app.auditCount.toLocaleString()}
-                      </div>
-                    </div>
-
-                    <div className="text-right">
-                      <div className="text-xs text-zinc-500 dark:text-zinc-400">Export</div>
-                      <a
-                        href={`/api/apps/citadel/export/${app.id}`}
-                        className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
-                        title={`Export ${app.name} data as zip`}
-                      >
-                        Download ↓
-                      </a>
-                    </div>
-
-                    <div className="text-right">
-                      <div className="text-xs text-zinc-500 dark:text-zinc-400">Import</div>
-                      <button
-                        onClick={() => handleImportClick(app.id)}
-                        disabled={importingApp === app.id}
-                        className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 disabled:text-zinc-400 dark:disabled:text-zinc-600 disabled:cursor-not-allowed"
-                        title={`Import data to ${app.name} from zip`}
-                      >
-                        {importingApp === app.id ? 'Importing...' : 'Upload ↑'}
-                      </button>
-                      <input
-                        ref={fileInputRef}
-                        type="file"
-                        accept=".zip"
-                        className="hidden"
-                        onChange={(e) => handleFileSelect(app.id, e)}
+                        style={{ width: `${Math.min(app.quotaUsedPercent, 100)}%` }}
                       />
                     </div>
                   </div>

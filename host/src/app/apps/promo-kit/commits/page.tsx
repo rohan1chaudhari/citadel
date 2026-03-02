@@ -6,6 +6,8 @@ import { execSync } from 'child_process';
 import { revalidatePath } from 'next/cache';
 
 export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
 const APP_ID = 'promo-kit';
 const REPO_ROOT = '/home/rohanchaudhari/personal/citadel';
 

@@ -3,6 +3,7 @@ import path from 'node:path';
 import { listApps } from '@citadel/core';
 import { appDbPath, appDataRoot } from '@citadel/core';
 import { dbQuery } from '@citadel/core';
+import { getQuota, getAppStorageUsage } from '@citadel/core';
 import { listBackups, getLatestBackup, formatBytes } from '@/lib/backup';
 import StatusPageClient from './StatusPageClient';
 
@@ -75,6 +76,11 @@ export default async function StatusPage() {
       ]);
 
       const auditStats = getAuditStats(app.id);
+      
+      // Get quota info
+      const quotaMb = getQuota(app.id);
+      const quotaBytes = quotaMb * 1024 * 1024;
+      const usedPercent = quotaBytes > 0 ? (storageSize / quotaBytes) * 100 : 0;
 
       return {
         ...app,
@@ -84,6 +90,9 @@ export default async function StatusPage() {
         lastActivity: auditStats.lastActivity,
         dbWarning: dbSize > WARNING_DB_SIZE,
         storageWarning: storageSize > WARNING_STORAGE_SIZE,
+        quotaMb,
+        quotaBytes,
+        quotaUsedPercent: Math.round(usedPercent * 100) / 100,
       };
     })
   );

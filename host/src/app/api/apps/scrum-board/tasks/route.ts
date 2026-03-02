@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { dbExec, dbQuery } from '@citadel/core';
 import { audit } from '@citadel/core';
-import { ensureScrumBoardSchema, getOrCreateBoardId, normalizePriority, normalizeStatus, releaseAgentLock, updateSessionStatus, type SessionStatus } from '@/lib/scrumBoardSchema';
+import { ensureScrumBoardSchema, getOrCreateBoardId, normalizePriority, normalizeStatus, releaseAgentLockFor, updateSessionStatus, type SessionStatus } from '@/lib/scrumBoardSchema';
 
 export const runtime = 'nodejs';
 const APP_ID = 'scrum-board';
@@ -282,18 +282,21 @@ export async function PATCH(req: Request) {
   // Release agent lock and update session status if task moved to a terminal state
   if (body?.status != null) {
     const newStatus = normalizeStatus(body.status);
-    const terminalStatuses = ['done', 'failed', 'waiting', 'validating'];
+    const terminalStatuses = ['done', 'failed', 'waiting', 'validating', 'blocked', 'needs_input'];
     if (terminalStatuses.includes(newStatus)) {
-      releaseAgentLock();
+      // Defensive unlock by task/session identifiers
+      releaseAgentLockFor(id, sessionId ?? row.session_id);
       
       // Also update session status to match task status (if task has a session)
-      const taskSessionId = row.session_id;
+      const taskSessionId = sessionId ?? row.session_id;
       if (taskSessionId) {
         const sessionStatusMap: Record<string, SessionStatus> = {
           'done': 'completed',
           'failed': 'failed',
           'waiting': 'waiting',
-          'validating': 'validating'
+          'validating': 'validating',
+          'blocked': 'failed',
+          'needs_input': 'waiting'
         };
         const sessionStatus = sessionStatusMap[newStatus];
         if (sessionStatus) {

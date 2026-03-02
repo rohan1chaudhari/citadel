@@ -335,6 +335,61 @@ export function releaseAgentLock(): void {
 }
 
 /**
+ * Release agent lock for a specific task/session defensively.
+ * Useful when terminal status was reached but lock cleanup was missed.
+ */
+export function releaseAgentLockFor(taskId?: number | null, sessionId?: string | null): void {
+  if (taskId != null && sessionId) {
+    dbExec(APP_ID, `DELETE FROM agent_locks WHERE task_id = ? OR session_id = ?`, [taskId, sessionId]);
+    return;
+  }
+  if (taskId != null) {
+    dbExec(APP_ID, `DELETE FROM agent_locks WHERE task_id = ?`, [taskId]);
+    return;
+  }
+  if (sessionId) {
+    dbExec(APP_ID, `DELETE FROM agent_locks WHERE session_id = ?`, [sessionId]);
+    return;
+  }
+  releaseAgentLock();
+}
+
+/**
+ * Reconcile lock state against task/session terminal states.
+ * Clears stale lock rows that should no longer be active.
+ */
+export function reconcileAgentLock(): { cleared: boolean; reason?: string } {
+  const now = new Date().toISOString();
+  // Cleanup expired lock rows first
+  dbExec(APP_ID, `DELETE FROM agent_locks WHERE expires_at <= ?`, [now]);
+
+  const lock = getActiveLock();
+  if (!lock) return { cleared: false };
+
+  // If task is terminal, lock must be cleared
+  if (lock.task_id != null) {
+    const task = dbQuery<{ status: string }>(APP_ID, `SELECT status FROM tasks WHERE id = ? LIMIT 1`, [lock.task_id])[0];
+    const terminalTaskStatuses = new Set(['done', 'failed', 'blocked', 'needs_input', 'validating', 'waiting']);
+    if (!task || terminalTaskStatuses.has(String(task.status))) {
+      releaseAgentLockFor(lock.task_id, lock.session_id);
+      return { cleared: true, reason: `task_terminal:${task?.status ?? 'missing'}` };
+    }
+  }
+
+  // If session is terminal, lock must be cleared
+  if (lock.session_id) {
+    const session = dbQuery<{ status: string }>(APP_ID, `SELECT status FROM sessions WHERE id = ? LIMIT 1`, [lock.session_id])[0];
+    const terminalSessionStatuses = new Set(['completed', 'failed', 'waiting', 'validating', 'archived']);
+    if (!session || terminalSessionStatuses.has(String(session.status))) {
+      releaseAgentLockFor(lock.task_id, lock.session_id);
+      return { cleared: true, reason: `session_terminal:${session?.status ?? 'missing'}` };
+    }
+  }
+
+  return { cleared: false };
+}
+
+/**
  * Get task info for the currently locked task.
  */
 export function getLockedTaskInfo(): { taskId: number; sessionId: string } | null {

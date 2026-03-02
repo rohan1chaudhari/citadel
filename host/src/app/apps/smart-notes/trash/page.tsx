@@ -3,6 +3,8 @@ import { dbExec, dbQuery } from '@citadel/core';
 import { ensureSmartNotesSchema } from '@/lib/smartNotesSchema';
 
 export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
 const APP_ID = 'smart-notes';
 
 function ensureSchema() {

@@ -4,6 +4,8 @@ import { dbExec, dbQuery } from '@citadel/core';
 import { redirect } from 'next/navigation';
 
 export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
 const APP_ID = 'smart-notes';
 
 export default async function NewNotePage() {
