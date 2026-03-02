@@ -6,7 +6,7 @@
     "author": "Citadel Team",
     "version": "0.1.0",
     "tags": ["notes", "ai", "productivity"],
-    "screenshot": "/images/showcase/smart-notes.png",
+    "screenshot": "https://raw.githubusercontent.com/rohan1chaudhari/citadel/main/docs/images/showcase/smart-notes.png",
     "repository": "https://github.com/rohan1chaudhari/citadel/tree/main/apps/smart-notes",
     "manifest_version": "1.0",
     "verified": true,

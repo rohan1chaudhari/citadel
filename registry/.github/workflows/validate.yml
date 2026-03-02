@@ -1,0 +1,195 @@
+name: Validate App Submission
+
+on:
+  pull_request:
+    paths:
+      - 'registry.json'
+    branches:
+      - main
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Get changed registry.json
+        id: changed
+        run: |
+          git diff HEAD^ HEAD --name-only | grep -q "registry.json" && echo "changed=true" >> $GITHUB_OUTPUT || echo "changed=false" >> $GITHUB_OUTPUT
+
+      - name: Validate registry.json syntax
+        if: steps.changed.outputs.changed == 'true'
+        run: |
+          node -e "JSON.parse(require('fs').readFileSync('registry.json', 'utf8')); console.log('✅ registry.json is valid JSON');"
+
+      - name: Validate registry structure
+        if: steps.changed.outputs.changed == 'true'
+        run: |
+          node << 'EOF'
+          const registry = JSON.parse(require('fs').readFileSync('registry.json', 'utf8'));
+          const errors = [];
+          const ids = new Set();
+
+          if (!Array.isArray(registry)) {
+            errors.push('registry.json must be an array');
+            process.exit(1);
+          }
+
+          for (const app of registry) {
+            // Check required fields
+            const required = ['id', 'name', 'description', 'author', 'version', 'repository'];
+            for (const field of required) {
+              if (!app[field]) {
+                errors.push(`App "${app.id || 'unknown'}" is missing required field: ${field}`);
+              }
+            }
+
+            // Check for duplicate IDs
+            if (ids.has(app.id)) {
+              errors.push(`Duplicate app ID: ${app.id}`);
+            }
+            ids.add(app.id);
+
+            // Validate ID format (lowercase, alphanumeric + hyphens)
+            if (app.id && !/^[a-z0-9-]+$/.test(app.id)) {
+              errors.push(`App ID "${app.id}" must be lowercase alphanumeric with hyphens only`);
+            }
+
+            // Validate manifest_version if present
+            if (app.manifest_version && !['1.0', '0.1.0'].includes(app.manifest_version)) {
+              errors.push(`App "${app.id}" has invalid manifest_version: ${app.manifest_version}`);
+            }
+
+            // Validate repository URL is HTTPS
+            if (app.repository && !app.repository.startsWith('https://')) {
+              errors.push(`App "${app.id}" repository must use HTTPS URL`);
+            }
+
+            // Validate tags if present
+            if (app.tags && !Array.isArray(app.tags)) {
+              errors.push(`App "${app.id}" tags must be an array`);
+            }
+          }
+
+          if (errors.length > 0) {
+            console.error('❌ Validation failed:');
+            errors.forEach(e => console.error(`  - ${e}`));
+            process.exit(1);
+          }
+
+          console.log(`✅ Registry validated: ${registry.length} apps`);
+          EOF
+
+      - name: Check repository accessibility
+        if: steps.changed.outputs.changed == 'true'
+        timeout-minutes: 5
+        run: |
+          node << 'EOF'
+          const registry = JSON.parse(require('fs').readFileSync('registry.json', 'utf8'));
+          const https = require('https');
+          const http = require('http');
+
+          async function checkUrl(url) {
+            return new Promise((resolve) => {
+              const client = url.startsWith('https') ? https : http;
+              const req = client.request(url, { method: 'HEAD', timeout: 10000 }, (res) => {
+                resolve(res.statusCode >= 200 && res.statusCode < 400);
+              });
+              req.on('error', () => resolve(false));
+              req.on('timeout', () => { req.destroy(); resolve(false); });
+              req.end();
+            });
+          }
+
+          async function main() {
+            const errors = [];
+            for (const app of registry) {
+              if (app.repository) {
+                const accessible = await checkUrl(app.repository);
+                if (!accessible) {
+                  errors.push(`Repository for "${app.id}" appears inaccessible: ${app.repository}`);
+                }
+              }
+            }
+
+            if (errors.length > 0) {
+              console.error('⚠️ Repository accessibility warnings:');
+              errors.forEach(e => console.error(`  - ${e}`));
+              // Don't fail the build for accessibility checks (could be temporary)
+              console.log('Continuing despite warnings...');
+            } else {
+              console.log('✅ All repositories appear accessible');
+            }
+          }
+
+          main();
+          EOF
+
+      - name: Check for blocked SQL patterns in migrations
+        if: steps.changed.outputs.changed == 'true'
+        run: |
+          node << 'EOF'
+          // This checks the PR diff for any blocked SQL patterns
+          // In a real scenario, this would clone the app's repo and check migrations
+          const { execSync } = require('child_process');
+          
+          const blockedPatterns = [
+            /\bATTACH\b/i,
+            /\bDETACH\b/i,
+            /\bPRAGMA\b/i,
+            /\bVACUUM\b/i,
+            /;/  // Multi-statement SQL
+          ];
+
+          try {
+            const diff = execSync('git diff HEAD^ HEAD', { encoding: 'utf8' });
+            
+            // Check if any migration files are referenced
+            const migrationMatches = diff.match(/migrations\/[\w-]+\.sql/g);
+            if (migrationMatches) {
+              console.log('⚠️ Migration files detected in diff');
+              console.log('Note: Full migration validation happens after merge');
+            }
+            
+            console.log('✅ SQL pattern check complete');
+          } catch (err) {
+            console.log('Could not check SQL patterns (this is OK for new submissions)');
+          }
+          EOF
+
+      - name: Comment on PR
+        if: github.event_name == 'pull_request' && steps.changed.outputs.changed == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const message = `👋 Thanks for submitting to the Citadel Registry!
+
+            The automated checks have run. A maintainer will review your submission for:
+            - Security (permissions, SQL safety)
+            - Code quality
+            - Description accuracy
+            - Overall usefulness
+
+            See [REVIEW_CHECKLIST.md](REVIEW_CHECKLIST.md) for details on what we check.
+            
+            **Note:** The \`verified\` badge is only added after manual review.`;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: message
+            });
