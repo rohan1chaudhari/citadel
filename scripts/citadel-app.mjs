@@ -31,6 +31,10 @@ const DEFAULT_APPS_DIR = path.join(REPO_ROOT, 'apps');
 const APPS_DIR = process.env.CITADEL_APPS_DIR || DEFAULT_APPS_DIR;
 const DATA_DIR = process.env.CITADEL_DATA_ROOT || path.join(REPO_ROOT, 'data');
 
+// Registry configuration
+const DEFAULT_REGISTRY_URL = 'https://raw.githubusercontent.com/openclaw/citadel-registry/main/registry.json';
+const REGISTRY_URL = process.env.CITADEL_REGISTRY_URL || DEFAULT_REGISTRY_URL;
+
 // Colors for terminal output
 const colors = {
   reset: '\x1b[0m',
@@ -39,6 +43,7 @@ const colors = {
   yellow: '\x1b[33m',
   blue: '\x1b[34m',
   cyan: '\x1b[36m',
+  bold: '\x1b[1m',
 };
 
 function log(msg, color = 'reset') {
@@ -1363,6 +1368,92 @@ async function installCommand(source) {
   }
 }
 
+// SEARCH COMMAND
+async function searchCommand(query, options = {}) {
+  log('Fetching registry...', 'blue');
+  
+  let registry;
+  try {
+    const response = await fetch(REGISTRY_URL);
+    if (!response.ok) {
+      throw new Error(`Registry returned ${response.status}: ${response.statusText}`);
+    }
+    registry = await response.json();
+  } catch (err) {
+    if (err.message.includes('fetch failed') || err.message.includes('ENOTFOUND') || err.message.includes('ECONNREFUSED')) {
+      error(`Cannot reach registry. You appear to be offline.\nRegistry URL: ${REGISTRY_URL}`);
+    } else {
+      error(`Failed to fetch registry: ${err.message}`);
+    }
+  }
+
+  if (!registry || !Array.isArray(registry.apps)) {
+    error('Invalid registry format: expected { apps: [...] }');
+  }
+
+  let apps = registry.apps;
+
+  // Filter by tag if specified
+  if (options.tag) {
+    const tag = options.tag.toLowerCase();
+    apps = apps.filter(app => 
+      app.tags && app.tags.some(t => t.toLowerCase() === tag)
+    );
+  }
+
+  // Filter by query if specified
+  if (query) {
+    const q = query.toLowerCase();
+    apps = apps.filter(app => 
+      (app.name && app.name.toLowerCase().includes(q)) ||
+      (app.description && app.description.toLowerCase().includes(q)) ||
+      (app.tags && app.tags.some(t => t.toLowerCase().includes(q)))
+    );
+  }
+
+  if (apps.length === 0) {
+    log('No apps found matching your criteria.', 'yellow');
+    return;
+  }
+
+  // Sort by name
+  apps.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+
+  // Display results
+  log(`\n${colors.cyan}Found ${apps.length} app${apps.length === 1 ? '' : 's'}:${colors.reset}\n`);
+
+  // Calculate column widths
+  const nameWidth = Math.max(4, ...apps.map(a => (a.name || '').length));
+  const versionWidth = Math.max(7, ...apps.map(a => (a.version || '').length));
+  const authorWidth = Math.max(6, ...apps.map(a => (a.author || '').length));
+
+  // Print header
+  const header = `${colors.bold}${'Name'.padEnd(nameWidth)}  ${'Version'.padEnd(versionWidth)}  ${'Author'.padEnd(authorWidth)}  Description${colors.reset}`;
+  log(header);
+  log('-'.repeat(header.length - colors.bold.length - colors.reset.length));
+
+  // Print each app
+  for (const app of apps) {
+    const name = (app.name || app.id || 'Unknown').padEnd(nameWidth);
+    const version = (app.version || 'N/A').padEnd(versionWidth);
+    const author = (app.author || 'Unknown').padEnd(authorWidth);
+    const desc = (app.description || '').slice(0, 40) + ((app.description || '').length > 40 ? '...' : '');
+    
+    log(`${name}  ${version}  ${author}  ${desc}`);
+  }
+
+  // Print footer info
+  log('');
+  info(`Registry: ${REGISTRY_URL}`);
+  info(`Total apps in registry: ${registry.apps.length}`);
+  if (query || options.tag) {
+    info(`Filters: ${query ? `query="${query}"` : ''} ${options.tag ? `tag="${options.tag}"` : ''}`);
+  }
+  log('');
+  info('To install an app: citadel-app install <app-id>');
+  info('To view details: citadel-app info <app-id>');
+}
+
 // MAIN
 async function main() {
   const args = process.argv.slice(2);
@@ -1377,6 +1468,7 @@ async function main() {
     steps: parseInt(args.find(a => a.startsWith('--steps='))?.split('=')[1] || '1', 10),
     template: args.find(a => a.startsWith('--template='))?.split('=')[1],
     listTemplates: args.includes('--list-templates'),
+    tag: args.find(a => a.startsWith('--tag='))?.split('=')[1],
   };
 
   // Ensure apps directory exists
@@ -1405,6 +1497,11 @@ async function main() {
     case 'dev':
       await devCommand(arg, flags);
       break;
+    case 'search':
+      // For search, arg might be a flag like --tag=xyz, so handle it properly
+      const searchArg = arg && !arg.startsWith('--') ? arg : null;
+      await searchCommand(searchArg, flags);
+      break;
     case 'help':
     case '--help':
     case '-h':
@@ -1424,6 +1521,8 @@ Commands:
   create <app-id> [--template=<name>]  Create a new app from template (default: blank)
   create --list-templates       List available templates
   dev <path-to-app>             Start dev mode for local app development
+  search [query]                Search for apps in the registry
+  search --tag=<tag>            Filter apps by tag
 
 Options:
   --delete-data                 Delete app data when uninstalling
@@ -1432,10 +1531,12 @@ Options:
   --steps=N                     Number of migrations to rollback
   --template=<name>             Template to use for create (blank, crud)
   --list-templates              List available templates
+  --tag=<tag>                   Filter by tag (with search command)
 
 Environment:
-  CITADEL_APPS_DIR    Apps directory (default: ../apps)
-  CITADEL_DATA_ROOT   Data directory (default: ../data)
+  CITADEL_APPS_DIR      Apps directory (default: ../apps)
+  CITADEL_DATA_ROOT     Data directory (default: ../data)
+  CITADEL_REGISTRY_URL  Registry URL (default: GitHub raw content)
 
 Examples:
   citadel-app install https://github.com/user/my-citadel-app.git
@@ -1452,6 +1553,9 @@ Examples:
   citadel-app create my-app --template=crud
   citadel-app create --list-templates
   citadel-app dev ./my-local-app
+  citadel-app search                    List all apps
+  citadel-app search notes              Search for "notes"
+  citadel-app search --tag=productivity Filter by tag
       `);
   }
 }
