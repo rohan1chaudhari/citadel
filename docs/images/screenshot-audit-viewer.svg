@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="400" viewBox="0 0 640 400">
+  <rect width="640" height="400" fill="#fafafa"/>
+  <rect x="0" y="0" width="640" height="50" fill="#1a1a2e"/>
+  <text x="20" y="32" fill="#fff" font-family="system-ui" font-size="16" font-weight="bold">Audit Log</text>
+  <rect x="20" y="70" width="200" height="30" rx="4" fill="#fff" stroke="#ddd"/>
+  <text x="30" y="90" fill="#666" font-size="12">Filter by app...</text>
+  <rect x="20" y="120" width="600" height="50" rx="4" fill="#fff" stroke="#e5e5e5"/>
+  <rect x="30" y="135" width="8" height="20" rx="2" fill="#22c55e"/>
+  <text x="50" y="150" fill="#333" font-size="13">smart-notes: create_note — Just now</text>
+  <rect x="20" y="180" width="600" height="50" rx="4" fill="#fff" stroke="#e5e5e5"/>
+  <rect x="30" y="195" width="8" height="20" rx="2" fill="#3b82f6"/>
+  <text x="50" y="210" fill="#333" font-size="13">gym-tracker: log_workout — 2 min ago</text>
+  <rect x="20" y="240" width="600" height="50" rx="4" fill="#fff" stroke="#e5e5e5"/>
+  <rect x="30" y="255" width="8" height="20" rx="2" fill="#f59e0b"/>
+  <text x="50" y="270" fill="#333" font-size="13">scrum-board: update_task — 5 min ago</text>
+  <rect x="20" y="300" width="600" height="50" rx="4" fill="#fff" stroke="#e5e5e5"/>
+  <rect x="30" y="315" width="8" height="20" rx="2" fill="#8b5cf6"/>
+  <text x="50" y="330" fill="#333" font-size="13">mood-tracker: log_entry — 1 hour ago</text>
+  <text x="320" y="385" text-anchor="middle" fill="#aaa" font-size="12">[Placeholder Screenshot]</text>
+</svg>
