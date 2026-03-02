@@ -42,6 +42,7 @@ export default withMermaid(
           items: [
             { text: 'Architecture', link: '/architecture' },
             { text: 'App spec', link: '/app-spec' },
+            { text: 'API Reference', link: '/api-reference' },
             { text: 'CLI', link: '/cli' },
             { text: 'Agent runner guide', link: '/agent-runner-guide' },
             { text: 'Manifest changelog', link: '/manifest-changelog' }
