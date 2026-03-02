@@ -6,6 +6,7 @@ import { listApps } from '@citadel/core';
 import { cleanupOldAuditLogs } from '@citadel/core';
 import { runAllMigrations } from '@citadel/core';
 import { startBackupScheduler, runBackupIfNeeded } from '@/lib/backup';
+import { startStuckTaskWatcher } from '@/lib/stuckTaskWatcher';
 import { ThemeProvider } from '@/lib/theme';
 
 export const viewport: Viewport = {
@@ -46,6 +47,9 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
 
   // Start backup scheduler (runs immediately and every 24h)
   startBackupScheduler();
+
+  // Sweep stale in_progress tasks (runs immediately and every 10m)
+  startStuckTaskWatcher();
 
   return (
     <html lang="en" suppressHydrationWarning>
