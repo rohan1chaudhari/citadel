@@ -74,25 +74,25 @@ Smart Notes · Gym Tracker · Scrum Board · French Translator · Friend Tracker
 ### Home Grid
 The main dashboard showing all installed apps:
 
-![Home Grid](docs/images/screenshot-home-grid.svg)
+![Home Grid](docs/images/screenshot-home-grid.png)
 *The Citadel home page displays installed apps in a clean grid layout*
 
 ### App View (Smart Notes)
 Example of an app running inside Citadel:
 
-![Smart Notes App](docs/images/screenshot-app-view.svg)
+![Smart Notes App](docs/images/screenshot-app-view.png)
 *Smart Notes — a note-taking app with AI-powered features*
 
 ### Audit Viewer
 Track every action across all apps:
 
-![Audit Viewer](docs/images/screenshot-audit-viewer.svg)
+![Audit Viewer](docs/images/screenshot-audit-viewer.png)
 *Complete audit trail of app actions with filtering and search*
 
 ### Permission Consent
 Apps request permissions before accessing data:
 
-![Permission Screen](docs/images/screenshot-permissions.svg)
+![Permission Screen](docs/images/screenshot-permissions.png)
 *Explicit user consent for app permissions*
 
 ## Architecture
