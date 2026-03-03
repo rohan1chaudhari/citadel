@@ -51,16 +51,12 @@ export function matchesDomainPattern(hostname: string, pattern: string): boolean
     return true;
   }
   
-  // Wildcard match: *.example.com matches subdomains of example.com
+  // Wildcard match: *.example.com matches any subdomain depth of example.com
   if (normalizedPattern.startsWith('*.')) {
     const baseDomain = normalizedPattern.slice(2); // Remove "*."
-    
-    // Check if hostname ends with base domain and has at least one subdomain
-    if (normalizedHostname.endsWith(`.${baseDomain}`)) {
-      const subdomain = normalizedHostname.slice(0, -baseDomain.length - 1);
-      // Must have at least one character in subdomain (no empty subdomains)
-      return subdomain.length > 0 && !subdomain.includes('.');
-    }
+
+    // Must be a true subdomain (base domain itself should not match)
+    return normalizedHostname.endsWith(`.${baseDomain}`);
   }
   
   return false;
@@ -77,11 +73,12 @@ export async function getNetworkAllowlist(appId: string): Promise<string[] | nul
     return null;
   }
   
-  const network = manifest.permissions?.network;
+  // Prefer root-level `network` (P4-07), fall back to legacy `permissions.network`
+  const network = manifest.network ?? manifest.permissions?.network;
   if (!network) {
     return null;
   }
-  
+
   // Empty array means no outbound access (deny-by-default)
   return network;
 }
@@ -139,8 +136,10 @@ export async function checkNetworkPolicy(
  * @param reason - Why the request was blocked
  */
 export function logBlockedRequest(appId: string, url: string, reason: string): void {
+  const targetDomain = extractHostname(url);
   audit(appId, 'network_request_blocked', {
     url,
+    target_domain: targetDomain,
     reason,
     timestamp: new Date().toISOString(),
   });

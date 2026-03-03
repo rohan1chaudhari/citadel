@@ -142,6 +142,11 @@ export type EndpointConfig = {
  * This represents the canonical format for app.yaml files
  */
 export type AppManifest = {
+  /**
+   * Allowed outbound domains (deny-by-default if omitted or empty)
+   * Supports wildcards like *.openai.com
+   */
+  network?: string[];
   /** 
    * Unique app identifier 
    * Format: lowercase alphanumeric with hyphens, 1-64 chars
@@ -318,6 +323,14 @@ export const MANIFEST_JSON_SCHEMA = {
       type: 'string',
       format: 'uri',
       description: 'URL to project homepage',
+    },
+    network: {
+      type: 'array',
+      items: {
+        type: 'string',
+        pattern: '^[a-z0-9.*-]+$',
+      },
+      description: 'Allowed outbound domains (root-level policy, deny-by-default when omitted)',
     },
     permissions: {
       type: 'object',

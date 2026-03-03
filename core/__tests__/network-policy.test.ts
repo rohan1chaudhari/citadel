@@ -47,7 +47,7 @@ describe('network-policy', () => {
 
     it('matches different subdomains with wildcard', () => {
       expect(matchesDomainPattern('beta.openai.com', '*.openai.com')).toBe(true);
-      expect(matchesDomainPattern('v1.api.openai.com', '*.openai.com')).toBe(false); // only single level
+      expect(matchesDomainPattern('v1.api.openai.com', '*.openai.com')).toBe(true); // any subdomain depth
     });
 
     it('does not match base domain with wildcard pattern', () => {

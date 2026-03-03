@@ -195,3 +195,13 @@ export {
   type WorkflowActionResult,
 } from './workflows.js';
 
+// Data protection
+export {
+  protectAllDatabases,
+  unprotectAllDatabases,
+  detectMassDataLoss,
+  blockDangerousOperation,
+  type DataProtectionResult,
+  type MassDataLossCheck,
+} from './data-protection.js';
+
