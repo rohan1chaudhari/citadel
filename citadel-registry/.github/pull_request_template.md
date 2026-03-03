@@ -2,25 +2,35 @@
 
 Thank you for submitting an app to the Citadel Registry!
 
-## Checklist
+## Submission Details
+
+- **App ID**: <!-- e.g., my-awesome-app -->
+- **Repository**: <!-- https://github.com/username/repo -->
+- **Author**: <!-- Your name or handle -->
+- **Description**: <!-- One-line description -->
+
+## Required Checklist
 
 - [ ] I have read the [submission guidelines](../README.md#submitting-an-app)
-- [ ] My app has a valid `app.yaml` manifest with all required fields
-- [ ] My app installs and runs correctly with `citadel-app install`
-- [ ] The repository is publicly accessible
+- [ ] `registry.json` entry includes required fields (`id`, `name`, `description`, `repo_url`, `author`, `tags`, `version`, `manifest_version`)
+- [ ] The app repository is publicly accessible on GitHub
+- [ ] Repository contains a valid `app.yaml` with required manifest fields (`id`, `name`, `version`, `permissions`)
+- [ ] I verified migrations do **not** contain blocked SQL (e.g., `ATTACH`)
+- [ ] I can install the app with `citadel-app install <app-id>`
 - [ ] I am the author or have permission to submit this app
-- [ ] The app ID is unique and follows naming conventions (lowercase, hyphens allowed)
 
-## App Details
+## Reviewer Checklist (maintainers)
 
-**App ID**: <!-- e.g., my-awesome-app -->
-**Repository**: <!-- https://github.com/username/repo -->
-**Author**: <!-- Your name or handle -->
-**Description**: <!-- One-line description -->
+- [ ] Metadata is accurate and app ID is unique
+- [ ] CI validation passed (manifest + repo reachability + migration SQL guardrail)
+- [ ] Security review done (permissions minimal, no obvious abuse patterns)
+- [ ] App quality review done (description matches behavior, basic functionality works)
+- [ ] Decision recorded (merge / request changes / reject with reason)
 
-## Verification
+## Optional Verification Request
 
-<!-- Link to a screenshot or demo if available -->
+<!-- Only checked by maintainers after review. -->
+- [ ] Requesting `verified: true` badge consideration
 
 ## Notes
 

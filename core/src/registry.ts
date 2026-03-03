@@ -194,6 +194,7 @@ async function readManifest(manifestPath: string): Promise<AppManifest | null> {
     manifest_version: obj.manifest_version ?? '1.0',
     permissions: obj.permissions,
     hidden: obj.hidden,
+    widget: obj.widget,
     author: obj.author,
     homepage: obj.homepage,
     icon: obj.icon,

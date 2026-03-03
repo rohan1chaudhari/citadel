@@ -140,15 +140,15 @@ export async function updateTask(
     priority: TaskPriority;
     assignee: string;
     due_at: string;
-    session_id: string;
+    session_id: string | null;
     attempt_count: number;
     max_attempts: number;
-    claimed_by: string;
-    claimed_at: string;
-    last_error: string;
-    last_run_at: string;
-    needs_input_questions: string;
-    input_deadline_at: string;
+    claimed_by: string | null;
+    claimed_at: string | null;
+    last_error: string | null;
+    last_run_at: string | null;
+    needs_input_questions: string | null;
+    input_deadline_at: string | null;
     validation_rounds: number;
     comment: string; // Add a comment alongside the update
   }>
@@ -242,8 +242,13 @@ export async function blockTask(
   reason: string,
   comment: string
 ): Promise<TaskUpdateResponse> {
+  // Workflow policy: blocked tasks are returned to backlog with explicit reason.
   return updateTask(taskId, {
-    status: 'blocked',
+    status: 'backlog',
+    last_error: `Blocked: ${reason}`,
+    claimed_by: null,
+    claimed_at: null,
+    session_id: null,
     comment: `${comment}\n\nBlock reason: ${reason}`,
   });
 }
@@ -261,6 +266,9 @@ export async function retryTask(
     status: 'todo',
     attempt_count: attemptCount + 1,
     last_error: error,
+    claimed_by: null,
+    claimed_at: null,
+    session_id: null,
     comment,
   });
 }

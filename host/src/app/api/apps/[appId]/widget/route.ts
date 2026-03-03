@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { assertAppId, getAppManifest } from '@citadel/core';
-import { dbQuery } from '@citadel/core';
+import { getDefaultWidgetData } from '@/lib/widgets';
 
 export const runtime = 'nodejs';
 
@@ -55,34 +55,3 @@ export async function GET(_req: Request, ctx: { params: Promise<{ appId: string 
   }
 }
 
-/**
- * Generate default widget data based on app activity
- */
-async function getDefaultWidgetData(appId: string, appName: string): Promise<{ title: string; data: string }> {
-  // Try to get recent activity count from audit log
-  try {
-    const today = new Date().toISOString().split('T')[0];
-    const rows = dbQuery<{ count: number }>(
-      'citadel',
-      `SELECT COUNT(*) as count FROM audit_log 
-       WHERE app_id = ? AND ts >= ?`,
-      [appId, today]
-    );
-    const count = rows[0]?.count ?? 0;
-    
-    if (count > 0) {
-      return {
-        title: appName,
-        data: `${count} actions today`,
-      };
-    }
-  } catch {
-    // Audit log might not exist, ignore
-  }
-
-  // Default fallback
-  return {
-    title: appName,
-    data: 'Ready',
-  };
-}

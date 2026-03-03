@@ -1,6 +1,8 @@
-'use client';
-
-import { useEffect, useState } from 'react';
+type AppItem = {
+  id: string;
+  name: string;
+  widget?: boolean;
+};
 
 type WidgetData = {
   appId: string;
@@ -8,67 +10,45 @@ type WidgetData = {
   data: string;
 };
 
-export function WidgetSection({ apps }: { apps: { id: string; name: string; widget?: boolean }[] }) {
-  const [widgets, setWidgets] = useState<WidgetData[]>([]);
-  const [loading, setLoading] = useState(true);
+type WidgetResponse = {
+  ok: boolean;
+  title?: string;
+  data?: string;
+};
 
-  // Filter apps that have widgets enabled
+export async function WidgetSection({ apps }: { apps: AppItem[] }) {
   const widgetApps = apps.filter((app) => app.widget);
-
-  useEffect(() => {
-    async function loadWidgets() {
-      if (widgetApps.length === 0) {
-        setLoading(false);
-        return;
-      }
-
-      const widgetData: WidgetData[] = [];
-
-      for (const app of widgetApps) {
-        try {
-          const res = await fetch(`/api/apps/${app.id}/widget`);
-          if (res.ok) {
-            const json = await res.json();
-            if (json.ok) {
-              widgetData.push({
-                appId: app.id,
-                title: json.title || app.name,
-                data: json.data || '',
-              });
-            }
-          }
-        } catch (err) {
-          // Silently skip widgets that fail to load
-          console.warn(`Failed to load widget for ${app.id}:`, err);
-        }
-      }
-
-      setWidgets(widgetData);
-      setLoading(false);
-    }
-
-    loadWidgets();
-  }, [apps]);
 
   if (widgetApps.length === 0) {
     return null;
   }
 
-  if (loading) {
-    return (
-      <div className="mt-8 mb-4">
-        <h3 className="text-sm font-semibold text-zinc-500 dark:text-zinc-400 mb-3">Widgets</h3>
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-          {widgetApps.map((app) => (
-            <div
-              key={app.id}
-              className="bg-zinc-100 dark:bg-zinc-800 rounded-lg p-3 h-20 animate-pulse"
-            />
-          ))}
-        </div>
-      </div>
-    );
-  }
+  const settled = await Promise.allSettled(
+    widgetApps.map(async (app): Promise<WidgetData> => {
+      const response = await fetch(`http://localhost:3000/api/apps/${app.id}/widget`, {
+        cache: 'no-store',
+      });
+
+      if (!response.ok) {
+        throw new Error(`Widget endpoint unavailable for ${app.id}`);
+      }
+
+      const payload = (await response.json()) as WidgetResponse;
+      if (!payload.ok || !payload.title || payload.data === undefined) {
+        throw new Error(`Invalid widget payload for ${app.id}`);
+      }
+
+      return {
+        appId: app.id,
+        title: payload.title,
+        data: payload.data,
+      };
+    })
+  );
+
+  const widgets = settled
+    .filter((r): r is PromiseFulfilledResult<WidgetData> => r.status === 'fulfilled')
+    .map((r) => r.value);
 
   if (widgets.length === 0) {
     return null;

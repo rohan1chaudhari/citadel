@@ -279,28 +279,29 @@ export async function PATCH(req: Request) {
     ]
   );
 
-  // Release agent lock and update session status if task moved to a terminal state
+  // Release agent lock + settle session whenever a claimed in_progress task leaves in_progress
   if (body?.status != null) {
     const newStatus = normalizeStatus(body.status);
-    const terminalStatuses = ['done', 'failed', 'waiting', 'validating', 'blocked', 'needs_input'];
-    if (terminalStatuses.includes(newStatus)) {
-      // Defensive unlock by task/session identifiers
-      releaseAgentLockFor(id, sessionId ?? row.session_id);
-      
-      // Also update session status to match task status (if task has a session)
-      const taskSessionId = sessionId ?? row.session_id;
+    const taskSessionId = sessionId ?? row.session_id;
+
+    if (row.status === 'in_progress' && newStatus !== 'in_progress') {
+      // Defensive unlock by task/session identifiers for all completion/failure/rollback outcomes
+      releaseAgentLockFor(id, taskSessionId);
+
+      // Map task status transitions to session terminal/waiting states
       if (taskSessionId) {
         const sessionStatusMap: Record<string, SessionStatus> = {
-          'done': 'completed',
-          'failed': 'failed',
-          'waiting': 'waiting',
-          'validating': 'validating',
-          'blocked': 'failed',
-          'needs_input': 'waiting'
+          done: 'completed',
+          failed: 'failed',
+          waiting: 'waiting',
+          validating: 'validating',
+          // retry/backlog/todo still end current attempt/session
+          todo: 'failed',
+          backlog: 'failed',
         };
-        const sessionStatus = sessionStatusMap[newStatus];
-        if (sessionStatus) {
-          updateSessionStatus(taskSessionId, sessionStatus);
+        const mapped = sessionStatusMap[newStatus];
+        if (mapped) {
+          updateSessionStatus(taskSessionId, mapped);
         }
       }
     }

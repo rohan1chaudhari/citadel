@@ -6,7 +6,7 @@
 **Apps:** `smart-notes`, `gym-tracker`, `soumil-mood-tracker`  
 **Meta:** `scrum-board` (board maintenance), `citadel` (host/platform — control plane, not a user app)
 
-Task statuses: `todo` → `in_progress` → `done`/`needs_input`/`blocked`/`failed`
+Task statuses: `todo` → `in_progress` → `done`/`failed` (with `backlog` used for blocked/deferred outcomes)
 
 ## Inputs (cron must provide)
 - `app_id`, `app_name`, `cron_job_id`, `cron_run_ts`
@@ -139,7 +139,7 @@ From Scrum Board for target app only:
 
 ### Post-completion verification (REQUIRED on success)
 After marking a task `done`, autopilot must:
-1. Restart the dev server to clear stale chunks/cache.
+1. Restart the **dev server** (never production server) to clear stale chunks/cache.
 2. Verify health endpoint: `GET /api/health` returns `ok: true`.
 3. Verify the changed surface (endpoint/page/flow touched by the task).
 4. If restart/verification fails, add an `[AUTOPILOT_FAILED]` or `[AUTOPILOT_BLOCKED]` comment with details.
@@ -158,9 +158,9 @@ curl -s http://localhost:3000/api/health
 | Result | Action |
 |--------|--------|
 | Success | Move to `done`, comment `[AUTOPILOT_DONE]` |
-| Needs human | Move to `needs_input`, comment `[AUTOPILOT_NEEDS_INPUT]` |
-| Blocked external | Move to `blocked`, comment `[AUTOPILOT_BLOCKED]` |
-| Failed | Increment `attempt_count`, move to `todo` (or `failed` if max reached), comment `[AUTOPILOT_FAILED]` |
+| Needs human | Move to `backlog`, add clear questions in comment `[AUTOPILOT_NEEDS_INPUT]` |
+| Blocked external | Move to `backlog`, set `last_error`, comment `[AUTOPILOT_BLOCKED]` |
+| Failed | Increment `attempt_count`, move to `todo` (or `failed` if max reached), clear claim/session, comment `[AUTOPILOT_FAILED]` |
 
 ## Comment Template
 ```
@@ -188,11 +188,12 @@ Exactly one task per run. Stop after first completion/block/fail.
 
 ## Lock Management
 
-The API automatically handles agent lock release when tasks move to terminal states:
+The API automatically handles agent lock release whenever a claimed `in_progress` task leaves `in_progress` (including retries/backlog handoff), especially for:
 - `done`
 - `failed`
-- `blocked`
-- `needs_input`
+- `todo` (retry)
+- `backlog` (blocked/deferred)
+- `waiting`
 - `validating`
 
 **Do NOT** manually release locks or query the `agent_locks` table directly.
