@@ -11,6 +11,8 @@ services:
     volumes:
       - ./data:/app/data
       - ./apps:/app/apps
+    env_file:
+      - .env
     environment:
       - NODE_ENV=production
       - CITADEL_DATA_ROOT=/app/data
