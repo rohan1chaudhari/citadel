@@ -28,3 +28,17 @@ npm run citadel-app -- install external-apps/my-app --url http://localhost:4020
 ```
 
 Open: `http://localhost:3000/apps/my-app`
+
+## 4) Install official apps (extraction-ready flow)
+
+As apps move to standalone repos, install them via CLI:
+
+```bash
+node scripts/citadel-app.mjs install <repo-url>
+```
+
+See target app repos + install commands in `apps/README.md`.
+
+## Data safety note (important)
+
+Before extracting/uninstalling any app, export and verify backups for that app first. Never delete `data/apps/<appId>/` without a verified backup.

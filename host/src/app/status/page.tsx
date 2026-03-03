@@ -3,8 +3,9 @@ import path from 'node:path';
 import { listApps } from '@citadel/core';
 import { appDbPath, appDataRoot } from '@citadel/core';
 import { dbQuery } from '@citadel/core';
-import { getQuota, getAppStorageUsage } from '@citadel/core';
-import { listBackups, getLatestBackup, formatBytes } from '@/lib/backup';
+import { getQuota } from '@citadel/core';
+import { listBackups, getLatestBackup } from '@/lib/backup';
+import { statfs } from 'node:fs/promises';
 import StatusPageClient from './StatusPageClient';
 
 export const runtime = 'nodejs';
@@ -62,6 +63,79 @@ function getAuditStats(appId: string): { count: number; lastActivity: string | n
   }
 }
 
+async function getAppHealthStatus(appId: string): Promise<{ accessible: boolean; error?: string }> {
+  try {
+    const dbPath = appDbPath(appId);
+    try {
+      await fs.access(dbPath, fs.constants.R_OK);
+      // Try a simple query to verify DB is accessible
+      dbQuery(appId, 'SELECT 1');
+      return { accessible: true };
+    } catch (e) {
+      // DB doesn't exist yet - check if directory is accessible
+      const dataDir = appDataRoot(appId);
+      try {
+        await fs.access(dataDir, fs.constants.R_OK);
+        return { accessible: true }; // No DB yet but directory is OK
+      } catch {
+        return { accessible: true }; // Will be created on first use
+      }
+    }
+  } catch (e) {
+    return { accessible: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+async function getDiskUsage() {
+  try {
+    const dataDir = process.env.CITADEL_DATA_ROOT || path.resolve(process.cwd(), '../data');
+    const stats = await statfs(dataDir);
+    const total = stats.blocks * stats.bsize;
+    const available = stats.bavail * stats.bsize;
+    const used = total - available;
+    return {
+      total,
+      used,
+      available,
+      percentUsed: Math.round((used / total) * 100 * 100) / 100,
+      path: dataDir,
+    };
+  } catch (e) {
+    return null;
+  }
+}
+
+function getRecentErrors(limit: number = 10) {
+  try {
+    const oneDayAgo = new Date();
+    oneDayAgo.setDate(oneDayAgo.getDate() - 1);
+    const cutoff = oneDayAgo.toISOString();
+
+    const results = dbQuery<
+      { id: number; ts: string; app_id: string; event: string; payload: string }
+    >(
+      'citadel',
+      `SELECT id, ts, app_id, event, payload 
+       FROM audit_log 
+       WHERE (event LIKE '%error%' OR event LIKE '%failed%' OR event LIKE '%fail%' OR payload LIKE '%error%')
+         AND ts > ?
+       ORDER BY ts DESC
+       LIMIT ?`,
+      [cutoff, limit]
+    );
+
+    return results.map((r) => ({
+      id: r.id,
+      ts: r.ts,
+      appId: r.app_id,
+      event: r.event,
+      payload: JSON.parse(r.payload || '{}'),
+    }));
+  } catch {
+    return [];
+  }
+}
+
 export default async function StatusPage() {
   const apps = await listApps(true);
 
@@ -70,13 +144,14 @@ export default async function StatusPage() {
       const dbPath = appDbPath(app.id);
       const storagePath = appDataRoot(app.id);
 
-      const [dbSize, storageSize] = await Promise.all([
+      const [dbSize, storageSize, healthStatus] = await Promise.all([
         getFileSize(dbPath),
         getDirectorySize(storagePath),
+        getAppHealthStatus(app.id),
       ]);
 
       const auditStats = getAuditStats(app.id);
-      
+
       // Get quota info
       const quotaMb = getQuota(app.id);
       const quotaBytes = quotaMb * 1024 * 1024;
@@ -93,6 +168,8 @@ export default async function StatusPage() {
         quotaMb,
         quotaBytes,
         quotaUsedPercent: Math.round(usedPercent * 100) / 100,
+        dbAccessible: healthStatus.accessible,
+        dbError: healthStatus.error,
       };
     })
   );
@@ -103,11 +180,27 @@ export default async function StatusPage() {
     getLatestBackup(),
   ]);
 
+  // Fetch system metrics
+  const diskUsage = await getDiskUsage();
+  const recentErrors = getRecentErrors(10);
+
+  // Memory usage
+  const memUsage = process.memoryUsage();
+
   return (
     <StatusPageClient
       apps={appHealthData}
       backups={backups}
       latestBackup={latestBackup}
+      diskUsage={diskUsage}
+      memoryUsage={{
+        rss: memUsage.rss,
+        heapTotal: memUsage.heapTotal,
+        heapUsed: memUsage.heapUsed,
+      }}
+      nodeVersion={process.version}
+      uptimeSec={Math.floor(process.uptime())}
+      recentErrors={recentErrors}
     />
   );
 }

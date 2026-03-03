@@ -92,7 +92,7 @@ export async function runMigrationsForApp(appId: string): Promise<MigrationResul
   await fs.mkdir(dataDir, { recursive: true });
 
   // Connect to citadel DB to track migrations
-  const citadelDbPath = path.join(dataRoot(), 'citadel.sqlite');
+  const citadelDbPath = path.join(dataRoot(), 'citadel', 'app.db');
   const citadelDb = new DatabaseSync(citadelDbPath);
 
   try {
@@ -197,7 +197,7 @@ export async function getMigrationStatus(appId: string): Promise<{
   const migrationsDir = path.join(appsDir(), appId, 'migrations');
   const allMigrations = await getMigrationFiles(migrationsDir);
 
-  const citadelDbPath = path.join(dataRoot(), 'citadel.sqlite');
+  const citadelDbPath = path.join(dataRoot(), 'citadel', 'app.db');
   const citadelDb = new DatabaseSync(citadelDbPath);
 
   try {
@@ -262,7 +262,7 @@ export async function rollbackMigrationsForApp(appId: string, steps: number = 1)
   }
 
   // Connect to citadel DB to track migrations
-  const citadelDbPath = path.join(dataRoot(), 'citadel.sqlite');
+  const citadelDbPath = path.join(dataRoot(), 'citadel', 'app.db');
   const citadelDb = new DatabaseSync(citadelDbPath);
 
   try {

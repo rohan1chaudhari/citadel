@@ -56,14 +56,16 @@ Each app gets its own database and storage. Apps declare permissions in `app.yam
 ```
 host/       → Next.js control plane
 core/       → @citadel/core (db, storage, audit, permissions)
-apps/       → App packages (manifest + migrations)
+apps/       → App packages (transitioning to standalone repos; see apps/README.md)
 templates/  → Starter templates
 scripts/    → citadel-app CLI
 ```
 
-## Built-in apps
+## Official apps
 
 Smart Notes · Gym Tracker · Scrum Board · French Translator · Friend Tracker · Promo Kit · Mood Tracker
+
+Install/extraction status and commands: [apps/README.md](apps/README.md)
 
 ## Screenshots
 

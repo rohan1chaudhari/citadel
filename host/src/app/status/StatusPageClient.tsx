@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Card, LinkA, Shell } from '@/components/Shell';
 
 interface AppHealth {
@@ -15,6 +15,8 @@ interface AppHealth {
   quotaMb: number;
   quotaBytes: number;
   quotaUsedPercent: number;
+  dbAccessible: boolean;
+  dbError?: string;
 }
 
 interface BackupInfo {
@@ -24,14 +26,42 @@ interface BackupInfo {
   path: string;
 }
 
+interface DiskUsage {
+  total: number;
+  used: number;
+  available: number;
+  percentUsed: number;
+  path: string;
+}
+
+interface MemoryUsage {
+  rss: number;
+  heapTotal: number;
+  heapUsed: number;
+}
+
+interface ErrorEntry {
+  id: number;
+  ts: string;
+  appId: string;
+  event: string;
+  payload: Record<string, unknown>;
+}
+
 interface StatusPageClientProps {
   apps: AppHealth[];
   backups: BackupInfo[];
   latestBackup: BackupInfo | null;
+  diskUsage: DiskUsage | null;
+  memoryUsage: MemoryUsage;
+  nodeVersion: string;
+  uptimeSec: number;
+  recentErrors: ErrorEntry[];
 }
 
-const WARNING_DB_SIZE = 100 * 1024 * 1024; // 100MB
-const WARNING_STORAGE_SIZE = 1024 * 1024 * 1024; // 1GB
+const WARNING_DB_SIZE = 100 * 1024 * 1024;
+const WARNING_STORAGE_SIZE = 1024 * 1024 * 1024;
+const REFRESH_INTERVAL = 30000;
 
 function formatBytes(bytes: number): string {
   if (bytes === 0) return '0 B';
@@ -57,15 +87,23 @@ function formatTimeAgo(ts: string | null): string {
   return date.toLocaleDateString();
 }
 
+function formatDuration(seconds: number): string {
+  const days = Math.floor(seconds / 86400);
+  const hours = Math.floor((seconds % 86400) / 3600);
+  const mins = Math.floor((seconds % 3600) / 60);
+  const secs = seconds % 60;
+
+  if (days > 0) return `${days}d ${hours}h ${mins}m`;
+  if (hours > 0) return `${hours}h ${mins}m ${secs}s`;
+  return `${mins}m ${secs}s`;
+}
+
 function formatBackupTime(isoTimestamp: string): string {
-  // Convert filename timestamp (2026-03-01T02-51-00-000Z) to readable format
   try {
     const date = new Date(isoTimestamp);
     if (isNaN(date.getTime())) {
-      // Try parsing the filename format
       const fixed = isoTimestamp.replace(/(\d{2})-(\d{2})-(\d{2})/, '$1:$2:$3');
-      const d = new Date(fixed);
-      if (!isNaN(d.getTime())) return formatTimeAgo(fixed);
+      return formatTimeAgo(fixed);
     }
     return formatTimeAgo(isoTimestamp);
   } catch {
@@ -73,7 +111,16 @@ function formatBackupTime(isoTimestamp: string): string {
   }
 }
 
-export default function StatusPageClient({ apps, backups, latestBackup }: StatusPageClientProps) {
+export default function StatusPageClient({
+  apps,
+  backups,
+  latestBackup,
+  diskUsage,
+  memoryUsage,
+  nodeVersion,
+  uptimeSec,
+  recentErrors,
+}: StatusPageClientProps) {
   const [importingApp, setImportingApp] = useState<string | null>(null);
   const [importStatus, setImportStatus] = useState<{
     type: 'success' | 'error';
@@ -81,7 +128,22 @@ export default function StatusPageClient({ apps, backups, latestBackup }: Status
   } | null>(null);
   const [showConfirm, setShowConfirm] = useState(false);
   const [pendingImport, setPendingImport] = useState<{ appId: string; file: File } | null>(null);
+  const [currentUptime, setCurrentUptime] = useState(uptimeSec);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      window.location.reload();
+    }, REFRESH_INTERVAL);
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentUptime((prev) => prev + 1);
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
 
   const handleImportClick = (appId: string) => {
     setImportingApp(appId);
@@ -92,7 +154,6 @@ export default function StatusPageClient({ apps, backups, latestBackup }: Status
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Validate file is a zip
     if (!file.name.endsWith('.zip')) {
       setImportStatus({ type: 'error', message: 'Please select a zip file' });
       return;
@@ -100,8 +161,6 @@ export default function StatusPageClient({ apps, backups, latestBackup }: Status
 
     setPendingImport({ appId, file });
     setShowConfirm(true);
-
-    // Reset file input so same file can be selected again
     e.target.value = '';
   };
 
@@ -115,9 +174,7 @@ export default function StatusPageClient({ apps, backups, latestBackup }: Status
     try {
       const response = await fetch(`/api/apps/${appId}/import`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/zip',
-        },
+        headers: { 'Content-Type': 'application/zip' },
         body: file,
       });
 
@@ -128,7 +185,6 @@ export default function StatusPageClient({ apps, backups, latestBackup }: Status
           type: 'success',
           message: `Import successful! ${result.filesRestored} file(s) restored.${result.backupPath ? ` Backup saved to: ${result.backupPath}` : ''}`,
         });
-        // Refresh page after successful import to show updated stats
         setTimeout(() => window.location.reload(), 2000);
       } else {
         setImportStatus({
@@ -152,11 +208,18 @@ export default function StatusPageClient({ apps, backups, latestBackup }: Status
     setImportingApp(null);
   };
 
+  const healthyApps = apps.filter((a) => a.dbAccessible).length;
+  const unhealthyApps = apps.filter((a) => !a.dbAccessible).length;
+
   return (
     <>
       <Shell title="System Status" subtitle="Health checks and app metrics">
         <div className="grid gap-4">
-          {/* Import Status Messages */}
+          <div className="flex items-center justify-between text-xs text-zinc-500 dark:text-zinc-400">
+            <span>Auto-refreshes every 30 seconds</span>
+            <span>Uptime: {formatDuration(currentUptime)}</span>
+          </div>
+
           {importStatus && (
             <div
               className={`p-4 rounded-lg border ${
@@ -177,7 +240,152 @@ export default function StatusPageClient({ apps, backups, latestBackup }: Status
             </div>
           )}
 
-          {/* App Health Dashboard */}
+          <Card>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">System Overview</h2>
+              <div className="flex items-center gap-2">
+                <span
+                  className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${
+                    unhealthyApps === 0
+                      ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                      : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+                  }`}
+                >
+                  {unhealthyApps === 0 ? 'All Systems Healthy' : `${unhealthyApps} App${unhealthyApps !== 1 ? 's' : ''} Unhealthy`}
+                </span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              <div className="p-3 rounded-lg bg-zinc-50 dark:bg-zinc-800/50">
+                <div className="text-xs text-zinc-500 dark:text-zinc-400">Node.js</div>
+                <div className="text-sm font-medium text-zinc-900 dark:text-zinc-100">{nodeVersion}</div>
+              </div>
+              <div className="p-3 rounded-lg bg-zinc-50 dark:bg-zinc-800/50">
+                <div className="text-xs text-zinc-500 dark:text-zinc-400">Uptime</div>
+                <div className="text-sm font-medium text-zinc-900 dark:text-zinc-100">{formatDuration(currentUptime)}</div>
+              </div>
+              <div className="p-3 rounded-lg bg-zinc-50 dark:bg-zinc-800/50">
+                <div className="text-xs text-zinc-500 dark:text-zinc-400">Total Apps</div>
+                <div className="text-sm font-medium text-zinc-900 dark:text-zinc-100">{apps.length}</div>
+              </div>
+              <div className="p-3 rounded-lg bg-zinc-50 dark:bg-zinc-800/50">
+                <div className="text-xs text-zinc-500 dark:text-zinc-400">Healthy Apps</div>
+                <div className={`text-sm font-medium ${unhealthyApps === 0 ? 'text-green-600 dark:text-green-400' : 'text-amber-600 dark:text-amber-400'}`}>
+                  {healthyApps}/{apps.length}
+                </div>
+              </div>
+            </div>
+          </Card>
+
+          {diskUsage && (
+            <Card>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Disk Usage</h2>
+                <span className="text-xs text-zinc-500 dark:text-zinc-400 font-mono">{diskUsage.path}</span>
+              </div>
+
+              <div className="grid grid-cols-3 gap-4 mb-4">
+                <div>
+                  <div className="text-xs text-zinc-500 dark:text-zinc-400">Total</div>
+                  <div className="text-sm font-medium text-zinc-900 dark:text-zinc-100">{formatBytes(diskUsage.total)}</div>
+                </div>
+                <div>
+                  <div className="text-xs text-zinc-500 dark:text-zinc-400">Used</div>
+                  <div className="text-sm font-medium text-zinc-900 dark:text-zinc-100">{formatBytes(diskUsage.used)}</div>
+                </div>
+                <div>
+                  <div className="text-xs text-zinc-500 dark:text-zinc-400">Available</div>
+                  <div className="text-sm font-medium text-zinc-900 dark:text-zinc-100">{formatBytes(diskUsage.available)}</div>
+                </div>
+              </div>
+
+              <div className="mt-2">
+                <div className="flex items-center justify-between text-xs mb-1">
+                  <span className="text-zinc-500 dark:text-zinc-400">Usage</span>
+                  <span
+                    className={`font-medium ${
+                      diskUsage.percentUsed >= 90
+                        ? 'text-red-600 dark:text-red-400'
+                        : diskUsage.percentUsed >= 75
+                        ? 'text-amber-600 dark:text-amber-400'
+                        : 'text-green-600 dark:text-green-400'
+                    }`}
+                  >
+                    {diskUsage.percentUsed.toFixed(1)}%
+                  </span>
+                </div>
+                <div className="w-full h-2 bg-zinc-200 dark:bg-zinc-700 rounded-full overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all duration-300 ${
+                      diskUsage.percentUsed >= 90
+                        ? 'bg-red-500'
+                        : diskUsage.percentUsed >= 75
+                        ? 'bg-amber-500'
+                        : 'bg-green-500'
+                    }`}
+                    style={{ width: `${Math.min(diskUsage.percentUsed, 100)}%` }}
+                  />
+                </div>
+              </div>
+            </Card>
+          )}
+
+          <Card>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Memory Usage</h2>
+            </div>
+
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <div className="text-xs text-zinc-500 dark:text-zinc-400">RSS</div>
+                <div className="text-sm font-medium text-zinc-900 dark:text-zinc-100">{formatBytes(memoryUsage.rss)}</div>
+              </div>
+              <div>
+                <div className="text-xs text-zinc-500 dark:text-zinc-400">Heap Total</div>
+                <div className="text-sm font-medium text-zinc-900 dark:text-zinc-100">{formatBytes(memoryUsage.heapTotal)}</div>
+              </div>
+              <div>
+                <div className="text-xs text-zinc-500 dark:text-zinc-400">Heap Used</div>
+                <div className="text-sm font-medium text-zinc-900 dark:text-zinc-100">{formatBytes(memoryUsage.heapUsed)}</div>
+              </div>
+            </div>
+          </Card>
+
+          {recentErrors.length > 0 && (
+            <Card>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Recent Errors (24h)</h2>
+                <span className="text-xs text-zinc-500 dark:text-zinc-400">{recentErrors.length} error{recentErrors.length !== 1 ? 's' : ''}</span>
+              </div>
+
+              <div className="space-y-2 max-h-64 overflow-y-auto">
+                {recentErrors.map((error) => (
+                  <div
+                    key={error.id}
+                    className="p-3 rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/20"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-medium text-red-700 dark:text-red-400">{error.event}</span>
+                      <span className="text-xs text-zinc-500 dark:text-zinc-400">{formatTimeAgo(error.ts)}</span>
+                    </div>
+                    <div className="text-xs text-zinc-600 dark:text-zinc-400 mt-1">
+                      App: <span className="font-mono">{error.appId}</span>
+                    </div>
+                    {Object.keys(error.payload).length > 0 && (
+                      <details className="mt-2">
+                        <summary className="text-xs text-zinc-500 cursor-pointer">Details</summary>
+                        <pre className="mt-1 text-xs text-zinc-600 dark:text-zinc-400 overflow-x-auto">
+                          {JSON.stringify(error.payload, null, 2)}
+                        </pre>
+                      </details>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </Card>
+          )}
+
           <Card>
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">App Health Dashboard</h2>
@@ -195,8 +403,17 @@ export default function StatusPageClient({ apps, backups, latestBackup }: Status
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-3">
                     <div className="mb-3 sm:mb-0">
                       <div className="flex items-center gap-2">
+                        <span
+                          className={`w-2 h-2 rounded-full ${
+                            app.dbAccessible ? 'bg-green-500' : 'bg-red-500'
+                          }`}
+                          title={app.dbAccessible ? 'Database accessible' : 'Database error'}
+                        />
                         <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">{app.name}</span>
                         <span className="text-xs text-zinc-500 dark:text-zinc-400 font-mono">{app.id}</span>
+                        {!app.dbAccessible && (
+                          <span className="text-xs text-red-600 dark:text-red-400 font-medium">(DB Error)</span>
+                        )}
                       </div>
                       <div className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
                         Last activity: {formatTimeAgo(app.lastActivity)}
@@ -211,7 +428,7 @@ export default function StatusPageClient({ apps, backups, latestBackup }: Status
                           }`}
                         >
                           DB Size
-                          {app.dbWarning && ' ⚠️'}
+                          {app.dbWarning && ' '}
                         </div>
                         <div className="text-sm font-medium text-zinc-900 dark:text-zinc-100">{formatBytes(app.dbSize)}</div>
                       </div>
@@ -223,7 +440,7 @@ export default function StatusPageClient({ apps, backups, latestBackup }: Status
                           }`}
                         >
                           Storage
-                          {app.storageWarning && ' ⚠️'}
+                          {app.storageWarning && ' '}
                         </div>
                         <div className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
                           {formatBytes(app.storageSize)}
@@ -244,7 +461,7 @@ export default function StatusPageClient({ apps, backups, latestBackup }: Status
                           className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
                           title={`Export ${app.name} data as zip`}
                         >
-                          Download ↓
+                          Download
                         </a>
                       </div>
 
@@ -256,7 +473,7 @@ export default function StatusPageClient({ apps, backups, latestBackup }: Status
                           className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 disabled:text-zinc-400 dark:disabled:text-zinc-600 disabled:cursor-not-allowed"
                           title={`Import data to ${app.name} from zip`}
                         >
-                          {importingApp === app.id ? 'Importing...' : 'Upload ↑'}
+                          {importingApp === app.id ? 'Importing...' : 'Upload'}
                         </button>
                         <input
                           ref={fileInputRef}
@@ -269,15 +486,14 @@ export default function StatusPageClient({ apps, backups, latestBackup }: Status
                     </div>
                   </div>
 
-                  {/* Quota Bar */}
                   <div className="mt-2 pt-3 border-t border-zinc-100 dark:border-zinc-800">
                     <div className="flex items-center justify-between text-xs mb-1">
                       <span className="text-zinc-500 dark:text-zinc-400">
                         Quota: {formatBytes(app.storageSize)} / {formatBytes(app.quotaBytes)}
                         {app.quotaUsedPercent >= 90
-                          ? ' 🔴'
+                          ? ' '
                           : app.quotaUsedPercent >= 75
-                          ? ' 🟡'
+                          ? ' '
                           : ''}
                       </span>
                       <span
@@ -312,7 +528,7 @@ export default function StatusPageClient({ apps, backups, latestBackup }: Status
             {apps.some((a) => a.dbWarning || a.storageWarning) && (
               <div className="mt-4 p-3 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800">
                 <p className="text-xs text-amber-800 dark:text-amber-200">
-                  <span className="font-medium">⚠️ Storage warnings:</span> Apps marked with ⚠️ have
+                  <span className="font-medium">Storage warnings:</span> Apps marked with  have
                   exceeded recommended size limits (DB &gt; {formatBytes(WARNING_DB_SIZE)} or Storage
                   &gt; {formatBytes(WARNING_STORAGE_SIZE)}).
                 </p>
@@ -320,7 +536,6 @@ export default function StatusPageClient({ apps, backups, latestBackup }: Status
             )}
           </Card>
 
-          {/* Backup Status */}
           <Card>
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Backup Status</h2>
@@ -353,7 +568,7 @@ export default function StatusPageClient({ apps, backups, latestBackup }: Status
                         Show all {backups.length} backups
                       </span>
                       <span className="text-xs text-zinc-400 dark:text-zinc-500 group-open:rotate-180 transition-transform">
-                        ▼
+                        v
                       </span>
                     </summary>
                     <div className="mt-2 grid gap-2">
@@ -398,7 +613,7 @@ export default function StatusPageClient({ apps, backups, latestBackup }: Status
                   className="flex items-center justify-between p-3 rounded-lg border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
                 >
                   <span className="text-sm font-medium text-zinc-900 dark:text-zinc-100">{app.name}</span>
-                  <span className="text-xs text-zinc-500 dark:text-zinc-400">/api/apps/{app.id}/health →</span>
+                  <span className="text-xs text-zinc-500 dark:text-zinc-400">/api/apps/{app.id}/health</span>
                 </a>
               ))}
             </div>
@@ -407,7 +622,7 @@ export default function StatusPageClient({ apps, backups, latestBackup }: Status
           <Card>
             <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 mb-4">Settings</h2>
             <div className="flex flex-wrap gap-3">
-              <LinkA href="/permissions">App Permissions →</LinkA>
+              <LinkA href="/permissions">App Permissions</LinkA>
             </div>
           </Card>
 
@@ -425,7 +640,6 @@ export default function StatusPageClient({ apps, backups, latestBackup }: Status
         </div>
       </Shell>
 
-      {/* Confirmation Dialog */}
       {showConfirm && pendingImport && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-zinc-900 rounded-lg shadow-xl max-w-md w-full p-6">
@@ -436,7 +650,7 @@ export default function StatusPageClient({ apps, backups, latestBackup }: Status
             </p>
             <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg p-3 mb-4">
               <p className="text-xs text-amber-800 dark:text-amber-200">
-                <span className="font-medium">⚠️ Warning:</span> This will overwrite all existing
+                <span className="font-medium">Warning:</span> This will overwrite all existing
                 data for this app. A backup will be created automatically before importing.
               </p>
             </div>

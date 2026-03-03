@@ -2072,7 +2072,7 @@ async function quotaCommand(appId, options = {}) {
   
   // Visual bar
   const barWidth = 40;
-  const filled = Math.round((usedPercent / 100) * barWidth);
+  const filled = Math.min(barWidth, Math.max(0, Math.round((usedPercent / 100) * barWidth)));
   const empty = barWidth - filled;
   const bar = '█'.repeat(filled) + '░'.repeat(empty);
   

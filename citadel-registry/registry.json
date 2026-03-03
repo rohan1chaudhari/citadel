@@ -1,62 +1,104 @@
-[
-  {
-    "id": "smart-notes",
-    "name": "Smart Notes",
-    "description": "AI-powered note taking with voice input and photo attachments",
-    "repo_url": "https://github.com/rohan1chaudhari/citadel-smart-notes",
-    "author": "Citadel Team",
-    "tags": ["notes", "ai", "productivity"],
-    "version": "0.1.0",
-    "manifest_version": "1.0"
-  },
-  {
-    "id": "gym-tracker",
-    "name": "Gym Tracker",
-    "description": "Track workouts, exercises, and gym sessions",
-    "repo_url": "https://github.com/rohan1chaudhari/citadel-gym-tracker",
-    "author": "Citadel Team",
-    "tags": ["fitness", "health", "tracking"],
-    "version": "0.1.0",
-    "manifest_version": "1.0"
-  },
-  {
-    "id": "scrum-board",
-    "name": "Scrum Board",
-    "description": "Project management with tasks, priorities, and autopilot integration",
-    "repo_url": "https://github.com/rohan1chaudhari/citadel-scrum-board",
-    "author": "Citadel Team",
-    "tags": ["project-management", "automation", "productivity"],
-    "version": "0.1.0",
-    "manifest_version": "1.0"
-  },
-  {
-    "id": "mood-tracker",
-    "name": "Mood Tracker",
-    "description": "Track daily mood with scores and notes",
-    "repo_url": "https://github.com/rohan1chaudhari/citadel-mood-tracker",
-    "author": "Citadel Community",
-    "tags": ["health", "wellness", "tracking"],
-    "version": "0.1.0",
-    "manifest_version": "1.0"
-  },
-  {
-    "id": "friend-tracker",
-    "name": "Friend Tracker",
-    "description": "Keep track of friends and interactions",
-    "repo_url": "https://github.com/rohan1chaudhari/citadel-friend-tracker",
-    "author": "Citadel Team",
-    "tags": ["social", "tracking", "personal"],
-    "version": "0.1.0",
-    "manifest_version": "1.0"
-  },
-  {
-    "id": "french-translator",
-    "name": "French Translator",
-    "description": "Real-time French to English voice translation",
-    "repo_url": "https://github.com/rohan1chaudhari/citadel-french-translator",
-    "author": "Citadel Team",
-    "tags": ["translation", "language", "voice"],
-    "version": "0.1.0",
-    "manifest_version": "1.0"
-  }
-]
+{
+  "version": "1.0.0",
+  "updated_at": "2026-03-03T02:27:00Z",
+  "apps": [
+    {
+      "id": "smart-notes",
+      "name": "Smart Notes",
+      "description": "AI-powered note-taking app with embeddings-based search, auto-tagging, and semantic clustering.",
+      "repo_url": "https://github.com/rohan1chaudhari/citadel-smart-notes",
+      "author": "Citadel Team",
+      "tags": ["notes", "ai", "search", "productivity"],
+      "version": "0.1.0",
+      "manifest_version": "1.0",
+      "homepage": "/apps/smart-notes",
+      "icon": "/app-logos/smart-notes-logo.png"
+    },
+    {
+      "id": "gym-tracker",
+      "name": "Gym Tracker",
+      "description": "Workout logging and progress tracking with exercise history, PR tracking, and rest timers.",
+      "repo_url": "https://github.com/rohan1chaudhari/citadel-gym-tracker",
+      "author": "Citadel Team",
+      "tags": ["fitness", "health", "tracking", "workout"],
+      "version": "0.1.0",
+      "manifest_version": "1.0",
+      "homepage": "/apps/gym-tracker",
+      "icon": "/app-logos/gym-tracker-logo.png"
+    },
+    {
+      "id": "scrum-board",
+      "name": "Scrum Board",
+      "description": "Project management with tasks, priorities, and autopilot integration.",
+      "repo_url": "https://github.com/rohan1chaudhari/citadel-scrum-board",
+      "author": "Citadel Team",
+      "tags": ["project-management", "automation", "productivity"],
+      "version": "0.1.0",
+      "manifest_version": "1.0",
+      "homepage": "/apps/scrum-board",
+      "icon": "/app-logos/scrum-board-logo.png"
+    },
+    {
+      "id": "mood-tracker",
+      "name": "Mood Tracker",
+      "description": "Daily mood and energy tracking with trends and insights.",
+      "repo_url": "https://github.com/rohan1chaudhari/citadel-mood-tracker",
+      "author": "Citadel Community",
+      "tags": ["health", "wellness", "tracking"],
+      "version": "0.1.0",
+      "manifest_version": "1.0",
+      "homepage": "/apps/mood-tracker",
+      "icon": "/app-logos/mood-tracker-logo.png"
+    },
+    {
+      "id": "friend-tracker",
+      "name": "Friend Tracker",
+      "description": "Keep track of your relationships — last contact, reminders, and conversation notes.",
+      "repo_url": "https://github.com/rohan1chaudhari/citadel-friend-tracker",
+      "author": "Citadel Team",
+      "tags": ["social", "relationships", "reminders"],
+      "version": "0.1.0",
+      "manifest_version": "1.0",
+      "homepage": "/apps/friend-tracker",
+      "icon": "/app-logos/friend-tracker-logo.png"
+    },
+    {
+      "id": "french-translator",
+      "name": "French Translator",
+      "description": "Real-time French to English voice translation.",
+      "repo_url": "https://github.com/rohan1chaudhari/citadel-french-translator",
+      "author": "Citadel Team",
+      "tags": ["translation", "language", "voice"],
+      "version": "0.1.0",
+      "manifest_version": "1.0",
+      "homepage": "/apps/french-translator",
+      "icon": "/app-logos/french-translator-logo.png"
+    }
+  ],
+  "templates": [
+    {
+      "id": "blank",
+      "name": "Blank",
+      "description": "Minimal app with basic structure",
+      "repo_url": "https://github.com/rohan1chaudhari/citadel-template-blank"
+    },
+    {
+      "id": "crud",
+      "name": "CRUD",
+      "description": "Full CRUD app with list, create, edit, and delete",
+      "repo_url": "https://github.com/rohan1chaudhari/citadel-template-crud"
+    },
+    {
+      "id": "ai",
+      "name": "AI",
+      "description": "App with AI API integration",
+      "repo_url": "https://github.com/rohan1chaudhari/citadel-template-ai"
+    },
+    {
+      "id": "dashboard",
+      "name": "Dashboard",
+      "description": "Read-only data display with charts placeholder",
+      "repo_url": "https://github.com/rohan1chaudhari/citadel-template-dashboard"
+    }
+  ]
+}

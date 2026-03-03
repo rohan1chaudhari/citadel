@@ -1,69 +1,36 @@
 # Citadel Registry
 
-The official registry for Citadel apps. This repository contains the JSON index of available apps that can be installed via the Citadel CLI.
+The official app registry for [Citadel](https://github.com/rohan1chaudhari/citadel) — a local-first, self-hosted app platform.
 
-## Quick Start
+## Browse Apps
 
-Browse and install apps:
+See `registry.json` for the full list of available apps.
 
-```bash
-# List all available apps
-citadel-app search
+## Submit Your App
 
-# Install an app
-citadel-app install smart-notes
+Want to add your app to the registry? Follow these steps:
 
-# Or install directly from the registry URL
-citadel-app install https://github.com/rohan1chaudhari/citadel-smart-notes
+### 1. Build Your App
+
+Create a Citadel app with the required structure:
+
+```
+my-app/
+├── app.yaml              # App manifest (required)
+├── migrations/           # Database migrations
+│   └── 001_initial.sql
+├── page.tsx              # Main app page (Next.js component)
+├── api/                  # API routes
+│   └── route.ts
+└── README.md             # App documentation
 ```
 
-## Submitting an App
-
-### Requirements
-
-1. **Public Repository**: Your app must be in a public GitHub repository
-2. **Valid Manifest**: Must include an `app.yaml` with required fields
-3. **Migrations**: Must include SQL migrations in a `migrations/` folder
-4. **Safe SQL**: Migrations must not contain `ATTACH`, `DETACH`, `PRAGMA`, or `VACUUM`
-5. **Functionality**: App must be functional and have a clear purpose
-
-### Submission Steps
-
-1. Fork this repository
-2. Add your app entry to `registry.json`
-3. Create a pull request using the provided template
-4. Wait for automated checks to pass
-5. A maintainer will review your submission
-
-### App Entry Format
-
-```json
-{
-  "id": "my-app",
-  "name": "My App",
-  "description": "A short description of what the app does",
-  "author": "Your Name",
-  "version": "0.1.0",
-  "tags": ["productivity", "notes"],
-  "screenshot": "https://example.com/screenshot.png",
-  "repository": "https://github.com/username/citadel-my-app",
-  "manifest_version": "1.0",
-  "verified": false
-}
-```
-
-**Note:** Do not set `verified: true` yourself. This is added by maintainers after review.
-
-### App Manifest Example
-
-Your app's `app.yaml` should look like this:
+Your `app.yaml` must include:
 
 ```yaml
 id: my-app
 name: My App
-description: A short description of what the app does
-version: 0.1.0
-manifest_version: "1.0"
+version: 1.0.0
 permissions:
   db:
     read: true
@@ -71,71 +38,87 @@ permissions:
   storage:
     read: true
     write: false
-  ai: false
 ```
 
-## Registry Schema
+### 2. Publish to GitHub
 
-| Field | Required | Description |
-|-------|----------|-------------|
-| `id` | Yes | Unique lowercase identifier (alphanumeric + hyphens) |
-| `name` | Yes | Display name for the app |
-| `description` | Yes | Short description (1-2 sentences) |
-| `author` | Yes | Author name or GitHub username |
-| `version` | Yes | Semver version string |
-| `tags` | No | Array of tag strings for categorization |
-| `screenshot` | No | URL to screenshot image |
-| `repository` | Yes | HTTPS URL to the app's repository |
-| `manifest_version` | Yes | Manifest format version (`1.0` or `0.1.0`) |
-| `verified` | No | Set by maintainers after review |
-| `added_at` | No | ISO timestamp of when added to registry |
+Push your app to a public GitHub repository. The repo must be accessible without authentication.
 
-## Verified Badge
+### 3. Open a Pull Request
 
-Apps marked with `"verified": true` have been reviewed by maintainers for:
-- Security (safe SQL, no malicious code)
-- Quality (functional, good UX)
-- Accuracy (description matches functionality)
+1. Fork this repository
+2. Add your app entry to `registry.json`:
 
-Only maintainers can add the verified badge.
+```json
+{
+  "id": "my-app",
+  "name": "My App",
+  "description": "A short description of what your app does (max 150 chars).",
+  "repo_url": "https://github.com/YOUR_USERNAME/citadel-my-app",
+  "author": "YOUR_USERNAME",
+  "tags": ["productivity", "tools"],
+  "version": "1.0.0",
+  "manifest_version": "1.0"
+}
+```
 
-## Review Process
+3. Submit a pull request with a clear description of your app
 
-1. **Automated Checks**: CI validates JSON syntax, manifest fields, and SQL safety
-2. **Security Review**: Maintainer checks for blocked SQL patterns and security issues
-3. **Quality Review**: Maintainer tests the app and checks code quality
-4. **Approval**: If all checks pass, the app is merged and the `verified` badge may be added
+### Listing Criteria
 
-See [REVIEW_CHECKLIST.md](REVIEW_CHECKLIST.md) for the full checklist.
+Apps in the registry must meet these standards:
 
-## Rejection Reasons
+- ✅ Publicly accessible GitHub repo
+- ✅ Valid `app.yaml` manifest
+- ✅ Unique app ID (not already in registry)
+- ✅ Clear name and description
+- ✅ Working migrations (no destructive SQL)
+- ✅ README with installation and usage instructions
 
-Submissions may be rejected for:
-- Security violations (blocked SQL, malicious code)
-- Technical issues (broken, missing manifest)
-- Quality concerns (not functional, poor UX)
-- Duplication (clone of existing app)
-- Inappropriate content
+### Validation
 
-See [REJECTION_REASONS.md](REJECTION_REASONS.md) for details.
+Our CI automatically checks:
 
-## Using the Registry
+- `repo_url` is reachable
+- `app.yaml` exists and is valid YAML
+- Required fields are present
+- App ID is unique in the registry
 
-The registry is fetched by:
-- The Citadel CLI (`citadel-app search`)
-- The Citadel host UI (browse apps page)
-- The docs site (showcase page)
+## Registry Format
 
-Registry URL: `https://raw.githubusercontent.com/rohan1chaudhari/citadel-registry/main/registry.json`
+```json
+{
+  "version": "1.0.0",
+  "updated_at": "2026-03-03T00:00:00Z",
+  "apps": [
+    {
+      "id": "app-id",
+      "name": "App Name",
+      "description": "App description",
+      "repo_url": "https://github.com/user/repo",
+      "author": "username",
+      "tags": ["tag1", "tag2"],
+      "version": "1.0.0",
+      "manifest_version": "1.0",
+      "homepage": "/apps/app-id",
+      "icon": "/app-logos/app-id-logo.png"
+    }
+  ]
+}
+```
 
-## Development
+## Install Apps
 
-Validate the registry locally:
+Use the Citadel CLI:
 
 ```bash
-node -e "JSON.parse(require('fs').readFileSync('registry.json', 'utf8')); console.log('✅ Valid JSON');"
+# Install from registry
+citadel-app install smart-notes
+
+# Or install directly from URL
+citadel-app install https://github.com/user/my-citadel-app
 ```
 
 ## License
 
-This registry is provided as-is. Apps listed here are owned by their respective authors and licensed under their own terms.
+Registry data is provided as-is. Individual apps are licensed under their own terms.

@@ -1,80 +1,54 @@
-[
-  {
-    "id": "smart-notes",
-    "name": "Smart Notes",
-    "description": "AI-powered note taking with voice input and photo attachments",
-    "author": "Citadel Team",
-    "version": "0.1.0",
-    "tags": ["notes", "ai", "productivity"],
-    "screenshot": "https://raw.githubusercontent.com/rohan1chaudhari/citadel/main/docs/images/showcase/smart-notes.png",
-    "repository": "https://github.com/rohan1chaudhari/citadel/tree/main/apps/smart-notes",
-    "manifest_version": "1.0",
-    "verified": true,
-    "added_at": "2026-03-01T00:00:00Z"
-  },
-  {
-    "id": "gym-tracker",
-    "name": "Gym Tracker",
-    "description": "Track workouts, exercises, and gym sessions",
-    "author": "Citadel Team",
-    "version": "0.1.0",
-    "tags": ["fitness", "health", "tracking"],
-    "screenshot": null,
-    "repository": "https://github.com/rohan1chaudhari/citadel/tree/main/apps/gym-tracker",
-    "manifest_version": "1.0",
-    "verified": true,
-    "added_at": "2026-03-01T00:00:00Z"
-  },
-  {
-    "id": "scrum-board",
-    "name": "Scrum Board",
-    "description": "Project management with tasks, priorities, and autopilot integration",
-    "author": "Citadel Team",
-    "version": "0.1.0",
-    "tags": ["project-management", "automation", "productivity"],
-    "screenshot": null,
-    "repository": "https://github.com/rohan1chaudhari/citadel/tree/main/apps/scrum-board",
-    "manifest_version": "1.0",
-    "verified": true,
-    "added_at": "2026-03-01T00:00:00Z"
-  },
-  {
-    "id": "soumil-mood-tracker",
-    "name": "Mood Tracker",
-    "description": "Track daily mood with scores and notes",
-    "author": "Soumil",
-    "version": "0.1.0",
-    "tags": ["health", "wellness", "tracking"],
-    "screenshot": null,
-    "repository": "https://github.com/rohan1chaudhari/citadel/tree/main/apps/soumil-mood-tracker",
-    "manifest_version": "1.0",
-    "verified": true,
-    "added_at": "2026-03-01T00:00:00Z"
-  },
-  {
-    "id": "friend-tracker",
-    "name": "Friend Tracker",
-    "description": "Keep track of friends and interactions",
-    "author": "Citadel Team",
-    "version": "0.1.0",
-    "tags": ["social", "tracking", "personal"],
-    "screenshot": null,
-    "repository": "https://github.com/rohan1chaudhari/citadel/tree/main/apps/friend-tracker",
-    "manifest_version": "1.0",
-    "verified": true,
-    "added_at": "2026-03-01T00:00:00Z"
-  },
-  {
-    "id": "french-translator",
-    "name": "French Translator",
-    "description": "Real-time French to English voice translation",
-    "author": "Citadel Team",
-    "version": "0.1.0",
-    "tags": ["translation", "language", "voice"],
-    "screenshot": null,
-    "repository": "https://github.com/rohan1chaudhari/citadel/tree/main/apps/french-translator",
-    "manifest_version": "1.0",
-    "verified": true,
-    "added_at": "2026-03-01T00:00:00Z"
-  }
-]
+{
+  "version": "1.0.0",
+  "updated_at": "2026-03-03T02:27:00Z",
+  "apps": [
+    {
+      "id": "smart-notes",
+      "name": "Smart Notes",
+      "description": "AI-powered note-taking app with embeddings-based search, auto-tagging, and semantic clustering.",
+      "repo_url": "https://github.com/rohan1chaudhari/citadel-smart-notes",
+      "author": "rohan1chaudhari",
+      "tags": ["notes", "ai", "search", "productivity"],
+      "version": "1.0.0",
+      "manifest_version": "1.0",
+      "homepage": "/apps/smart-notes",
+      "icon": "/app-logos/smart-notes-logo.png"
+    },
+    {
+      "id": "gym-tracker",
+      "name": "Gym Tracker",
+      "description": "Workout logging and progress tracking with exercise history, PR tracking, and rest timers.",
+      "repo_url": "https://github.com/rohan1chaudhari/citadel-gym-tracker",
+      "author": "rohan1chaudhari",
+      "tags": ["fitness", "health", "tracking", "workout"],
+      "version": "1.0.0",
+      "manifest_version": "1.0",
+      "homepage": "/apps/gym-tracker",
+      "icon": "/app-logos/gym-tracker-logo.png"
+    },
+    {
+      "id": "friend-tracker",
+      "name": "Friend Tracker",
+      "description": "Keep track of your relationships — last contact, reminders, and conversation notes.",
+      "repo_url": "https://github.com/rohan1chaudhari/citadel-friend-tracker",
+      "author": "rohan1chaudhari",
+      "tags": ["social", "relationships", "reminders"],
+      "version": "1.0.0",
+      "manifest_version": "1.0",
+      "homepage": "/apps/friend-tracker",
+      "icon": "/app-logos/friend-tracker-logo.png"
+    },
+    {
+      "id": "soumil-mood-tracker",
+      "name": "Soumil Mood Tracker",
+      "description": "Daily mood and energy tracking with trends and insights.",
+      "repo_url": "https://github.com/rohan1chaudhari/citadel-soumil-mood-tracker",
+      "author": "rohan1chaudhari",
+      "tags": ["health", "mood", "tracking", "wellness"],
+      "version": "1.0.0",
+      "manifest_version": "1.0",
+      "homepage": "/apps/soumil-mood-tracker",
+      "icon": "/app-logos/soumil-mood-tracker-logo.png"
+    }
+  ]
+}

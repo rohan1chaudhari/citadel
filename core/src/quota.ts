@@ -14,7 +14,7 @@ let citadelDb: DatabaseSync | null = null;
 
 function getCitadelDb(): DatabaseSync {
   if (!citadelDb) {
-    const citadelDbPath = path.join(dataRoot(), 'citadel.sqlite');
+    const citadelDbPath = path.join(dataRoot(), 'citadel', 'app.db');
     citadelDb = new DatabaseSync(citadelDbPath);
     ensureQuotaTable(citadelDb);
   }

@@ -1,0 +1,14 @@
+id: scrum-board
+name: Scrum Board
+version: 0.1.0
+manifest_version: "1.0"
+hidden: false
+permissions:
+  db:
+    read: true
+    write: true
+  storage:
+    read: false
+    write: false
+  ai: true
+connectors: []

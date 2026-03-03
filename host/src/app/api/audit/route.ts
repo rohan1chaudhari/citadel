@@ -7,7 +7,7 @@ import { errorResponse } from '@/lib/apiResponse';
 export const runtime = 'nodejs';
 
 const DATA_ROOT = process.env.CITADEL_DATA_ROOT ?? path.join(process.cwd(), '..', 'data');
-const CITADEL_DB_PATH = path.join(DATA_ROOT, 'apps', 'citadel', 'db.sqlite');
+const CITADEL_DB_PATH = path.join(DATA_ROOT, 'citadel', 'app.db');
 
 function getCitadelDb(): DatabaseSync {
   fs.mkdirSync(path.dirname(CITADEL_DB_PATH), { recursive: true });
