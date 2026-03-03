@@ -11,8 +11,8 @@ import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
+import { DatabaseSync } from 'node:sqlite';
 import { dataRoot, appDataRoot } from './paths.js';
-import { dbQuery } from './db.js';
 import { listApps } from './registry.js';
 import { audit } from './audit.js';
 
@@ -307,38 +307,50 @@ export async function detectMassDataLoss(): Promise<MassDataLossCheck> {
     // Get all apps including hidden
     const apps = await listApps(true);
     
-    // Check each app's database
+    // Check each app's database using direct SQLite access (bypass app permission gates)
     for (const app of apps) {
       const appId = app.id;
       const dbPath = path.join(appDataRoot(appId), 'db.sqlite');
-      
+
       try {
-        // Try to get row count from app's main table
-        // This is a heuristic - apps should have migrations table or entries
-        const rows = dbQuery<{ count: number }>(
-          appId,
-          "SELECT count(*) as count FROM sqlite_master WHERE type='table'"
-        );
-        
-        if (rows.length === 0 || rows[0].count === 0) {
-          // No tables - potential data loss
-          affectedApps.push(appId);
+        if (!fs.existsSync(dbPath)) {
+          // Missing DB can be normal for never-used apps; don't flag as data loss by default
+          continue;
+        }
+
+        const db = new DatabaseSync(dbPath, { readOnly: true });
+        try {
+          const row = db
+            .prepare("SELECT COUNT(*) as count FROM sqlite_master WHERE type='table'")
+            .get() as { count?: number } | undefined;
+
+          if (!row || Number(row.count ?? 0) === 0) {
+            affectedApps.push(appId);
+          }
+        } finally {
+          db.close();
         }
       } catch {
-        // DB doesn't exist or is corrupted
+        // DB exists but unreadable/corrupt
         affectedApps.push(appId);
       }
     }
 
-    // Check citadel DB specifically
+    // Check citadel host DB specifically
     try {
-      const citadelTables = dbQuery<{ count: number }>(
-        'citadel',
-        "SELECT count(*) as count FROM sqlite_master WHERE type='table'"
-      );
-      
-      if (citadelTables.length === 0 || citadelTables[0].count === 0) {
-        affectedApps.push('citadel');
+      const citadelDbPath = path.join(dataRoot(), 'citadel.sqlite');
+      if (fs.existsSync(citadelDbPath)) {
+        const db = new DatabaseSync(citadelDbPath, { readOnly: true });
+        try {
+          const row = db
+            .prepare("SELECT COUNT(*) as count FROM sqlite_master WHERE type='table'")
+            .get() as { count?: number } | undefined;
+          if (!row || Number(row.count ?? 0) === 0) {
+            affectedApps.push('citadel');
+          }
+        } finally {
+          db.close();
+        }
       }
     } catch {
       affectedApps.push('citadel');
